@@ -1,0 +1,41 @@
+[package]
+name = "cas"
+version = "0.1.0"
+edition = "2024"
+description = "A sandbox for exploring reversible block cellular automata"
+
+[dependencies]
+# The sibling checkout (../bevy) is pinned to the 0.19.1 release; its examples are the API reference.
+bevy = { path = "../bevy", default-features = false, features = [
+  # core app + platform (`x11` runs under XWayland too; native Wayland is the crate's `wayland` feature)
+  "default_app",
+  "std",
+  "multi_threaded",
+  "bevy_winit",
+  "x11",
+  # rendering + UI
+  "ui_bevy_render",
+  "bevy_picking",
+  "ui_picking",
+  "scene",
+  "default_font",
+  "png",
+  # the dark-themed widget set
+  "bevy_feathers",
+] }
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+
+[features]
+default = ["wayland"]
+# Native Wayland windows; needs libwayland-dev at build time (`--no-default-features` to go without).
+wayland = ["bevy/wayland"]
+# Faster incremental builds while iterating: `cargo run --features dev`.
+dev = ["bevy/dynamic_linking"]
+
+# Bevy's recommended dev profile: optimise dependencies once, keep our own crate quick to compile.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

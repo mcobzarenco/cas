@@ -1,0 +1,5 @@
+/target
+# The reference book (Morita, "Reversible World of Cellular Automata") is too big to commit.
+/docs/*.pdf
+# Test-rig screenshots.
+/shots/

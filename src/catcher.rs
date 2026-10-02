@@ -14,7 +14,7 @@ use bevy::{
         controls::{FeathersButton, FeathersScrollbar},
         cursor::EntityCursor,
         palette,
-        theme::{ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor, ThemedText},
+        theme::{ThemeTextColor, ThemedText},
         tokens,
     },
     picking::hover::Hovered,
@@ -30,7 +30,7 @@ use crate::{
     pattern::{Analyser, Cell, Heading, Motion, settled, to_rle},
     rules::BlockRule,
     sim::{Departure, SimSystems, Universe, rule_changed},
-    ui::{caption, group_digits, toggle},
+    ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
     view::{ALIVE, DEAD},
 };
 
@@ -249,20 +249,7 @@ fn identify(mut universe: ResMut<Universe>, mut catcher: ResMut<Catcher>) {
 pub fn catcher_panel() -> impl Scene {
     bsn! {
         #Catcher
-        Node {
-            display: Display::None,
-            width: px(CATCHER_WIDTH),
-            height: percent(100),
-            flex_direction: FlexDirection::Column,
-            flex_shrink: 0.0,
-            padding: px(16),
-            row_gap: px(12),
-            border: UiRect { right: px(1) },
-        }
-        CatcherPanel
-        ThemeBackgroundColor(tokens::PANE_BODY_BG)
-        ThemeBorderColor(tokens::PANE_HEADER_BORDER)
-        Children [
+        side_panel(CATCHER_WIDTH, bsn_list![
             (
                 Node {
                     flex_direction: FlexDirection::Row,
@@ -270,15 +257,7 @@ pub fn catcher_panel() -> impl Scene {
                     justify_content: JustifyContent::SpaceBetween,
                 }
                 Children [
-                    (
-                        Text("Spaceships")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(fonts::BOLD),
-                            font_size: FontSize::Px(16.0),
-                            weight: FontWeight::BOLD,
-                        }
-                        TextColor(palette::WHITE)
-                    ),
+                    panel_title(Aspect::Pattern, "Spaceships"),
                     (
                         #CatcherClose
                         @FeathersButton {
@@ -374,7 +353,8 @@ pub fn catcher_panel() -> impl Scene {
                     (#CatcherNote caption("") Note Node { flex_grow: 1.0, flex_basis: px(0) }),
                 ]
             ),
-        ]
+        ])
+        CatcherPanel
     }
 }
 
@@ -440,6 +420,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
     let name = Name::new(format!("Kind{index}"));
     let row = KindRow(index);
     let (caught, share) = (Figure::Caught(index), Share(index));
+    let bar = Aspect::Pattern.color();
     let (travelled, period) = motion.speed();
     // Which way it flies, by the signs of its displacement.
     const ARROWS: [[&str; 3]; 3] = [["↖", "↑", "↗"], ["←", "", "→"], ["↙", "↓", "↘"]];
@@ -514,7 +495,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                         height: percent(100),
                         border_radius: BorderRadius::MAX,
                     }
-                    BackgroundColor(palette::ACCENT)
+                    BackgroundColor(bar)
                     template_value(Pickable::IGNORE)
                     template_value(share)
                 )]

@@ -18,7 +18,7 @@ use crate::{
     catcher::Catcher,
     editor::RuleEditor,
     sim::{Playback, Rng, Settings, SimSystems, Universe},
-    ui::Control,
+    ui::{Aspect, Control},
     view::{ViewState, WHEEL_ZOOM},
 };
 
@@ -66,6 +66,15 @@ pub enum Toggle {
 }
 
 impl Toggle {
+    pub fn aspect(self) -> Aspect {
+        match self {
+            Toggle::Reverse => Aspect::Time,
+            Toggle::HideVacuum | Toggle::ShowGrid | Toggle::ShowBlocks => Aspect::View,
+            Toggle::OpenBorder => Aspect::World,
+            Toggle::Catching => Aspect::Pattern,
+        }
+    }
+
     pub fn get(self, playback: &Playback, settings: &Settings, universe: &Universe) -> bool {
         match self {
             Toggle::Reverse => playback.reverse,

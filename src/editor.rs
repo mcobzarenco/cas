@@ -16,8 +16,7 @@ use bevy::{
         controls::{FeathersButton, FeathersTextInput, FeathersTextInputContainer},
         cursor::EntityCursor,
         palette,
-        theme::{ThemeBackgroundColor, ThemeBorderColor, ThemedText},
-        tokens,
+        theme::ThemedText,
     },
     input_focus::InputFocus,
     picking::hover::Hovered,
@@ -30,11 +29,11 @@ use bevy::{
 use crate::{
     rules::{BlockRule, Population, Reversed, Symmetry},
     sim::{Rng, SimSystems, Universe, rule_changed},
-    ui::{caption, readout, section},
+    ui::{Aspect, caption, panel_title, readout, section, side_panel},
     view::{ALIVE, DEAD},
 };
 
-pub const EDITOR_WIDTH: f32 = 372.0;
+pub const EDITOR_WIDTH: f32 = 376.0;
 
 /// Side of one cell in the little block pictures.
 const CELL: f32 = 12.0;
@@ -216,20 +215,7 @@ pub fn editor_panel() -> impl Scene {
     let orbits: Vec<_> = ORBITS.iter().map(|orbit| orbit_row(orbit)).collect();
     bsn! {
         #RuleEditor
-        Node {
-            display: Display::None,
-            width: px(EDITOR_WIDTH),
-            height: percent(100),
-            flex_direction: FlexDirection::Column,
-            flex_shrink: 0.0,
-            padding: px(16),
-            row_gap: px(12),
-            border: UiRect { right: px(1) },
-        }
-        EditorPanel
-        ThemeBackgroundColor(tokens::PANE_BODY_BG)
-        ThemeBorderColor(tokens::PANE_HEADER_BORDER)
-        Children [
+        side_panel(EDITOR_WIDTH, bsn_list![
             (
                 Node {
                     flex_direction: FlexDirection::Row,
@@ -237,15 +223,7 @@ pub fn editor_panel() -> impl Scene {
                     justify_content: JustifyContent::SpaceBetween,
                 }
                 Children [
-                    (
-                        Text("Rule editor")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(fonts::BOLD),
-                            font_size: FontSize::Px(16.0),
-                            weight: FontWeight::BOLD,
-                        }
-                        TextColor(palette::WHITE)
-                    ),
+                    panel_title(Aspect::Rule, "Rule editor"),
                     (
                         #EditorClose
                         @FeathersButton {
@@ -352,7 +330,8 @@ pub fn editor_panel() -> impl Scene {
                 caption("The outcome of each block, block 0 first (cells count 1, 2, 4, 8: top-left, top-right, bottom-left, bottom-right). Type or paste a table or a preset name."),
                 (caption("") template_value(EditorText::Status)),
             ]),
-        ]
+        ])
+        EditorPanel
     }
 }
 
@@ -614,7 +593,7 @@ fn sync_editor(
     }
     for (outcome, hovered, mut frame) in &mut outcomes {
         frame.0 = if editor.selected == Some(outcome.0) {
-            palette::ACCENT
+            Aspect::Rule.color()
         } else if hovered.0 {
             palette::LIGHT_GRAY_2
         } else {

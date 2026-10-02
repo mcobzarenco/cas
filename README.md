@@ -46,6 +46,12 @@ Useful flags: `--rule critters` (a preset: `single-rotation`, `critters`, `bbm`,
 
 ### Controls
 
+The panel sorts the controls into five cards by what they are about, and each of these aspects
+has a colour that comes back wherever it shows up: rose for the **rule** (the rule editor, the
+outline of the blocks on the grid), teal for the **world** (the edge of the grid), blue for
+**time**, amber for the **pattern** (the cells, the spaceship list, the edge of the grid while it
+catches them). The **view** card is grey: the automaton knows nothing of how it is drawn.
+
 Every control shows its shortcut next to its label. Shortcuts are the characters the keys type,
 so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing.
 
@@ -196,7 +202,7 @@ Example: `shot a; step 500; step -500; expect_gen 0; shot b` produces two byte-i
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
 | `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events |
 | `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays |
-| `src/ui.rs` | the control panel (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes), custom sliders on the headless `Slider` widget, widget↔state sync |
+| `src/ui.rs` | the control panel as cards, one per aspect, and the aspects' colours (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes); sliders and checkboxes on the headless widgets, widget↔state sync |
 | `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the analysis read-out, the rule string and clipboard |
 | `src/rig.rs`, `rig/*.cas` | the script-driven test rig and the scripts that exercise the app |
 

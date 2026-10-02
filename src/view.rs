@@ -20,14 +20,20 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
-use crate::sim::{Settings, SimSystems, Universe};
+use crate::{
+    sim::{Settings, SimSystems, Universe},
+    ui::Aspect,
+};
 
 pub const ALIVE: Color = Color::srgb(1.0, 0.769, 0.42);
 pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
 pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
-/// The outline of the grid: faint, and in the colour of the cells while it catches them.
-const EDGE: (Color, f32) = (Color::WHITE, 0.09);
-const CATCHING_EDGE: (Color, f32) = (ALIVE, 0.45);
+/// The outline of the grid: the edge of the world, in the colour of the world; in that of the
+/// pattern while it catches cells.
+const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
+const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
+/// The blocks are what the rule rewrites.
+const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.3);
 
 /// Largest zoom, in logical pixels per cell (more when a tiny grid needs it to fit).
 const MAX_ZOOM: f32 = 64.0;
@@ -287,7 +293,7 @@ fn update_material(
         dead: linear(DEAD, 1.0),
         background: linear(BACKGROUND, 1.0),
         grid_color: linear(Color::WHITE, 0.07),
-        block_color: linear(Color::srgb(0.435, 0.694, 1.0), 0.30),
+        block_color: linear(BLOCKS.0, BLOCKS.1),
         edge_color: {
             let (color, alpha) = if universe.catching { CATCHING_EDGE } else { EDGE };
             linear(color, alpha)

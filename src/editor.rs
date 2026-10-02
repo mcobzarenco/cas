@@ -143,8 +143,10 @@ pub fn describe(rule: &BlockRule) -> String {
     if let Some(preset) = rule.preset() {
         return preset.blurb.to_string();
     }
+    // Morita's number, for the rules that have one.
+    let number = rule.espca().map(|number| format!(", ESPCA-{number}")).unwrap_or_default();
     format!(
-        "A custom rule. Population: {}. Symmetry: {}. Vacuum: {}. Reversed: {}.",
+        "A custom rule{number}. Population: {}. Symmetry: {}. Vacuum: {}. Reversed: {}.",
         population(rule),
         symmetry(rule),
         vacuum(rule),
@@ -159,12 +161,13 @@ fn properties(rule: &BlockRule) -> String {
     } else {
         "not interchangeable"
     };
+    let number = rule.espca().map(|number| format!("\nespca       {number}")).unwrap_or_default();
     format!(
         "population  {}\n\
          symmetry    {}\n\
          two states  {two_states}\n\
          vacuum      {}\n\
-         reversed    {}",
+         reversed    {}{number}",
         population(rule),
         symmetry(rule),
         vacuum(rule),
@@ -327,7 +330,7 @@ pub fn editor_panel() -> impl Scene {
                         ),
                     ]
                 ),
-                caption("The outcome of each block, block 0 first (cells count 1, 2, 4, 8: top-left, top-right, bottom-left, bottom-right). Type or paste a table or a preset name."),
+                caption("The outcome of each block, block 0 first (cells count 1, 2, 4, 8: top-left, top-right, bottom-left, bottom-right). Type or paste a table, a preset name, or Morita's number of a rule, like espca-01c5ef."),
                 (caption("") template_value(EditorText::Status)),
             ]),
         ])
@@ -662,8 +665,15 @@ mod tests {
         assert!(describe(&single_rotation).starts_with("Blocks with exactly one live cell"));
         assert_eq!(
             describe(&BlockRule::identity()),
-            "A custom rule. Population: conserved. Symmetry: all rotations and mirrors. \
-             Vacuum: stable. Reversed: the same rule."
+            "A custom rule, ESPCA-08cadf. Population: conserved. Symmetry: all rotations and \
+             mirrors. Vacuum: stable. Reversed: the same rule."
+        );
+        let mut lopsided = BlockRule::identity();
+        lopsided.swap_outcomes(1, 3);
+        assert_eq!(
+            describe(&lopsided),
+            "A custom rule. Population: not conserved. Symmetry: none. Vacuum: stable. \
+             Reversed: the same rule."
         );
         let critters: BlockRule = "critters".parse().unwrap();
         assert_eq!(
@@ -672,7 +682,9 @@ mod tests {
              symmetry    all rotations and mirrors\n\
              two states  not interchangeable\n\
              vacuum      repeats every 2 generations\n\
-             reversed    the rule complemented"
+             reversed    the rule complemented\n\
+             espca       f7ca80"
         );
+        assert!(!properties(&lopsided).contains("espca"));
     }
 }

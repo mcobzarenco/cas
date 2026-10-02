@@ -82,7 +82,10 @@ const ORIENTATIONS: [Orientation; 8] = [
 
 /// Recognises patterns of one rule.
 pub struct Analyser {
-    /// The rule relative to its vacuum, a table for each generation of the vacuum's cycle.
+    /// The rule relative to its vacuum: the tables it goes through, one for each generation
+    /// until they repeat. That can be sooner than the vacuum does: a rule that is its own
+    /// complement acts in one and the same way on what differs from its vacuum, however
+    /// the vacuum flickers underneath.
     tables: Vec<BlockRule>,
     /// The orientations under which the rule looks the same: a pattern turned or flipped by
     /// one of them is the same pattern, travelling another way.
@@ -96,8 +99,15 @@ pub struct Analyser {
 
 impl Analyser {
     pub fn new(rule: &BlockRule) -> Self {
+        let mut tables = rule.relative_to_vacuum();
+        let repeats_after = |period: &usize| {
+            let later = tables.iter().cycle().skip(*period);
+            tables.len().is_multiple_of(*period) && tables.iter().zip(later).all(|(a, b)| a == b)
+        };
+        let period = (1..=tables.len()).find(repeats_after).unwrap_or(tables.len());
+        tables.truncate(period);
         Self {
-            tables: rule.relative_to_vacuum(),
+            tables,
             orientations: ORIENTATIONS
                 .into_iter()
                 .filter(|orientation| rule.commutes_with(orientation.block))
@@ -112,9 +122,9 @@ impl Analyser {
     /// when the pattern was found.
     ///
     /// The canonical form is chosen among the forms the pattern takes through its period, each
-    /// time the vacuum starts its cycle, and every orientation the rule allows, by a fixed
-    /// order: the one travelling furthest right, then furthest down, then with the smallest
-    /// bounding box, then first in reading order of its cells.
+    /// time the tables start over, and every orientation the rule allows, by a fixed order:
+    /// the one travelling furthest right, then furthest down, then with the smallest bounding
+    /// box, then first in reading order of its cells.
     pub fn analyse(&self, cells: &[Cell], phase: usize) -> Option<Motion> {
         let (period, moved, phases) = self.run(cells, phase)?;
         let (canonical, displacement) = phases
@@ -131,15 +141,16 @@ impl Analyser {
         })
     }
 
-    /// The pattern's period, how far it moves in it as found, and its form at the start of
-    /// every cycle of the vacuum along the way.
-    fn run(&self, cells: &[Cell], mut phase: usize) -> Option<(u32, (i32, i32), Vec<Vec<Cell>>)> {
+    /// The pattern's period, how far it moves in it as found, and its form along the way,
+    /// every time the tables start over.
+    fn run(&self, cells: &[Cell], phase: usize) -> Option<(u32, (i32, i32), Vec<Vec<Cell>>)> {
         if cells.is_empty() {
             return None;
         }
+        let mut phase = phase % self.tables.len();
         let mut pattern = cells.to_vec();
         settle(&mut pattern);
-        // Forms are only comparable at the same point of the vacuum's cycle: go to its start.
+        // Forms are only comparable where the same table comes next: go to the first one.
         while phase != 0 {
             advance(&mut pattern, self.tables[phase].table());
             phase = (phase + 1) % self.tables.len();
@@ -514,6 +525,26 @@ mod tests {
     }
 
     #[test]
+    fn a_vacuum_that_only_flickers_is_seen_through() {
+        // ESPCA-fb3510 fills every empty block, but it is its own complement: on what differs
+        // from its vacuum it acts as ESPCA-04caef does, at every generation. A ship is then
+        // the same ship whichever generation it is found in.
+        let flickering = BlockRule::from_espca("fb3510").unwrap();
+        assert_eq!(flickering.vacuum_cycle(), [0, 15]);
+        assert!(flickering.is_complement_symmetric());
+        let analyser = Analyser::new(&flickering);
+        assert_eq!(analyser.tables, [BlockRule::from_espca("04caef").unwrap()]);
+        for rle in ["b2o2$b2o", "3o2$2bo"] {
+            let ship = from_rle(rle).unwrap();
+            let motion = analyser.analyse(&ship, 0).unwrap();
+            assert_ne!(motion.heading(), Heading::Still, "{rle}");
+            assert_eq!(analyser.analyse(&ship, 1), Some(motion), "{rle}");
+        }
+        // Critters is not its own complement: there the two generations differ.
+        assert_eq!(Analyser::new(&rule("critters")).tables.len(), 2);
+    }
+
+    #[test]
     fn orientations_do_to_cells_what_they_do_to_blocks() {
         for orientation in ORIENTATIONS {
             for state in 0..16u8 {
@@ -574,5 +605,191 @@ mod tests {
         assert_eq!(from_rle("2o$bo").unwrap(), [(0, 0), (1, 0), (1, 1)]);
         assert_eq!(to_rle(&[]), "");
         assert!(from_rle("2o!x").is_err());
+    }
+}
+
+/// Patterns from Morita's book, placed as its figures place them: a particle in the top, right,
+/// bottom or left part of the cell in a column and a row of the figure, rows counted from the
+/// top. Together with the rule numbers ([`BlockRule::from_espca`]) they pin down how his
+/// automata lie on the block grid: which way is north, and which way the rules turn.
+#[cfg(test)]
+mod morita {
+    use super::*;
+    use crate::sim::Universe;
+
+    const STILL: (i32, i32) = (0, 0);
+
+    fn rule(number: &str) -> BlockRule {
+        BlockRule::from_espca(number).unwrap()
+    }
+
+    /// Where the particles of a figure are on the block grid. A particle sits on the edge it
+    /// is about to cross, and the edges are the cells here.
+    fn sites(particles: &[(char, i32, i32)]) -> Vec<Cell> {
+        let site = |&(part, column, row): &(char, i32, i32)| {
+            // The book's y points up.
+            let (x, y) = (column, -row);
+            match part {
+                'T' => (x + y, x - y - 1),
+                'R' => (x + y, x - y),
+                'B' => (x + y - 1, x - y),
+                'L' => (x + y - 1, x - y - 1),
+                _ => panic!("{part:?} is not a part of a cell"),
+            }
+        };
+        particles.iter().map(site).collect()
+    }
+
+    /// A figure as a pattern: relative to a corner of the blocks the next step rewrites. Those
+    /// are the cells its particles are about to enter, which have even corners if the
+    /// particles are in cells of even parity, as the book calls it.
+    fn figure(particles: &[(char, i32, i32)]) -> Vec<Cell> {
+        let odd = (particles[0].1 - particles[0].2) & 1;
+        let same_parity = |&(_, column, row): &(char, i32, i32)| (column - row) & 1 == odd;
+        assert!(particles.iter().all(same_parity), "particles that never meet");
+        sites(particles).iter().map(|&(x, y)| (x + odd, y + odd)).collect()
+    }
+
+    /// So many cells east and north in the book, as a displacement here.
+    fn moved(east: i32, north: i32) -> (i32, i32) {
+        (east + north, east - north)
+    }
+
+    /// The period of a pattern and how far it moves in it, as it lies.
+    fn runs(number: &str, cells: &[Cell]) -> Option<(u32, (i32, i32))> {
+        let (period, moved, _) = Analyser::new(&rule(number)).run(cells, 0)?;
+        Some((period, moved))
+    }
+
+    #[test]
+    fn the_figures_do_what_the_book_says() {
+        // Figs. 5.12, 5.13 and 5.41: the rotor, the blinker and the glider-12, which goes one
+        // cell north-east in its period.
+        let rotor = figure(&[('L', 3, 3)]);
+        let blinker = figure(&[('T', 2, 3), ('B', 3, 2)]);
+        let glider_12 = figure(&[('L', 2, 3), ('T', 2, 3), ('L', 3, 4), ('T', 3, 4)]);
+        for number in ["01c5ef", "01caef"] {
+            assert_eq!(runs(number, &rotor), Some((4, STILL)), "{number}");
+            assert_eq!(runs(number, &blinker), Some((2, STILL)), "{number}");
+            assert_eq!(runs(number, &glider_12), Some((12, moved(1, 1))), "{number}");
+        }
+        // Fig. 5.44: five particles going north at a third of the speed of light.
+        let ship = figure(&[('R', 3, 2), ('T', 2, 3), ('L', 2, 3), ('R', 2, 3), ('T', 3, 4)]);
+        assert_eq!(runs("016a7f", &ship), Some((3, moved(0, 1))));
+        // Figs. 5.47 and 5.49: the glider-3 and the glider-5, both going east.
+        let glider_3 = figure(&[('R', 1, 2), ('B', 2, 1), ('R', 2, 1)]);
+        let glider_5 = figure(&[
+            ('L', 2, 1), ('B', 2, 1), ('T', 1, 2), ('R', 1, 2), ('B', 1, 2), ('L', 2, 3), ('T', 2, 3),
+        ]);
+        for number in ["0945df", "09457f"] {
+            assert_eq!(runs(number, &glider_3), Some((3, moved(1, 0))), "{number}");
+        }
+        assert_eq!(runs("098a7f", &glider_5), Some((5, moved(1, 0))));
+        // Fig. 2.9: a cell with a particle in every part has period 6.
+        let full = figure(&[('T', 3, 3), ('R', 3, 3), ('B', 3, 3), ('L', 3, 3)]);
+        assert_eq!(runs("0945df", &full), Some((6, STILL)));
+        // Fig. 5.39: a lone particle flies at the speed of light.
+        assert_eq!(runs("02c5bf", &figure(&[('R', 1, 1)])), Some((1, moved(1, 0))));
+    }
+
+    #[test]
+    fn the_rotor_turns_clockwise() {
+        // Fig. 5.12, frame by frame.
+        let frames = [('L', 3, 3), ('T', 2, 3), ('R', 2, 2), ('B', 3, 2), ('L', 3, 3)];
+        let on_grid = |particle| {
+            let (x, y) = sites(&[particle])[0];
+            ((x + 16) as usize, (y + 16) as usize)
+        };
+        let mut universe = Universe::new(32, 32, rule("01c5ef"));
+        let (x, y) = on_grid(frames[0]);
+        universe.set(x, y, true);
+        for frame in frames {
+            let (x, y) = on_grid(frame);
+            assert!(universe.get(x, y), "{frame:?}");
+            assert_eq!(universe.population(), 1);
+            universe.step(true);
+        }
+    }
+
+    #[test]
+    fn spaceships_have_the_periods_the_book_lists() {
+        let period = |number: &str, rle: &str| {
+            let motion = Analyser::new(&rule(number)).analyse(&from_rle(rle).unwrap(), 0).unwrap();
+            assert_ne!(motion.heading(), Heading::Still, "{rle}");
+            motion.period
+        };
+        // Fig. 5.42 draws spaceships of ESPCA-01caef too small to read off. These are the
+        // ones a search of small patterns turns up, with the periods of the figure.
+        for (rle, expected) in
+            [("2o2$2o", 12), ("2o2$obo", 28), ("$bo$2o2$o", 44), ("b2o$bo$bo", 61), ("2ob2o", 368)]
+        {
+            assert_eq!(period("01caef", rle), expected, "{rle}");
+        }
+        // Likewise Fig. 5.45 for ESPCA-016a7f, and the glider-10 of Fig. 5.54.
+        assert_eq!(period("016a7f", "o2bo$b3o"), 829);
+        assert_eq!(period("098aef", "2o$bo$bo"), 10);
+        // Not in the book: a spaceship of period 17, in ESPCA-098a7f as well.
+        assert_eq!(period("098aef", "obo$b2o"), 17);
+        assert_eq!(period("098a7f", "obo$b2o"), 17);
+    }
+
+    #[test]
+    fn a_cell_grows_into_a_disk() {
+        // Sec. 5.6.2: ESPCA-0925bf "generates disk-like patterns that are very close to true
+        // disks". How far the pattern reaches from where it began is then the same in every
+        // direction, where for a square it would differ by a factor of √2.
+        let mut universe = Universe::new(512, 512, rule("0925bf"));
+        universe.set(256, 256, true);
+        universe.step_by(400);
+        let cells: Vec<(f32, f32)> = (0..512 * 512)
+            .filter(|&i| universe.cells()[i] != 0)
+            .map(|i| ((i % 512) as f32 - 256.0, (i / 512) as f32 - 256.0))
+            .collect();
+        let reach = |direction: u8| {
+            let (sin, cos) = (direction as f32 * std::f32::consts::TAU / 16.0).sin_cos();
+            cells.iter().map(|&(x, y)| x * cos + y * sin).fold(f32::MIN, f32::max)
+        };
+        let reaches: Vec<f32> = (0..16).map(reach).collect();
+        let nearest = reaches.iter().copied().fold(f32::MAX, f32::min);
+        let farthest = reaches.iter().copied().fold(f32::MIN, f32::max);
+        assert!(nearest > 150.0, "it has grown to {nearest}");
+        assert!(farthest / nearest < 1.1, "from {nearest} to {farthest}");
+    }
+
+    #[test]
+    fn guns_fire_as_often_as_the_book_says() {
+        // Sec. 5.5.1: in ESPCA-094x7f a single particle sends out four glider-3's every 8
+        // steps, and backwards in time it does the same.
+        for number in ["09457f", "094a7f"] {
+            for direction in [1, -1] {
+                let mut universe = Universe::new(256, 256, rule(number));
+                universe.set(128, 128, true);
+                universe.step_by(4 * direction);
+                let mut population = universe.population();
+                for _ in 0..8 {
+                    universe.step_by(8 * direction);
+                    assert_eq!(universe.population(), population + 4 * 3, "{number}");
+                    population += 4 * 3;
+                }
+            }
+        }
+        // Fig. 2.11: in ESPCA-0945df this pattern sends out two glider-3's every 10 steps. Its
+        // particles are about to fill two cells, which is two full blocks side by side.
+        let seed = figure(&[
+            ('B', 5, 2), ('R', 4, 3), ('B', 4, 3), ('L', 6, 3),
+            ('R', 3, 4), ('L', 5, 4), ('T', 5, 4), ('T', 4, 5),
+        ]);
+        assert_eq!(to_rle(&settled(&seed)), "4o$4o");
+        let mut universe = Universe::new(256, 256, rule("0945df"));
+        for (x, y) in settled(&seed) {
+            universe.set((128 + x) as usize, (128 + y) as usize, true);
+        }
+        universe.step(true);
+        let mut population = universe.population();
+        for _ in 0..8 {
+            universe.step_by(10);
+            assert_eq!(universe.population(), population + 2 * 3);
+            population += 2 * 3;
+        }
     }
 }

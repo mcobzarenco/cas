@@ -25,6 +25,10 @@
 //! As text, a rule is its table: sixteen comma-separated states, the outcome of state 0 first,
 //! e.g. `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` for Single Rotation. That is the notation of
 //! dmishin's simulator and, with an `MS,D` prefix and `;` separators, of MCell.
+//!
+//! The rules that look the same after a quarter turn have a second name. They are Morita's
+//! *elementary square partitioned cellular automata* seen at 45°, and he numbers them with six
+//! hexadecimal digits, as in ESPCA-01c5ef: see [`BlockRule::from_espca`].
 
 use std::{fmt, str::FromStr};
 
@@ -36,6 +40,17 @@ pub struct Preset {
     pub name: &'static str,
     pub blurb: &'static str,
     pub table: [u8; 16],
+    pub source: Source,
+}
+
+/// Where a preset is from. The rule menu lists them source by source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// The rule collections of dmishin's simulator and of MCell.
+    Collections,
+    /// Morita, *Reversible World of Cellular Automata* (2024), where the rules go by their
+    /// ESPCA numbers ([`BlockRule::from_espca`]).
+    Morita,
 }
 
 impl Preset {
@@ -46,13 +61,14 @@ impl Preset {
 
 /// The rules offered in the rule menu. Tables are the published ones (dmishin's simulator and
 /// the MCell collection use the same numbering); the tests check each blurb against its table.
-pub static PRESETS: [Preset; 10] = [
+pub static PRESETS: [Preset; 19] = [
     Preset {
         id: "single-rotation",
         name: "Single rotation",
         blurb: "Blocks with exactly one live cell rotate 90° clockwise. Population is \
                 conserved and the vacuum is stable.",
         table: [0, 2, 8, 3, 1, 5, 6, 7, 4, 9, 10, 11, 12, 13, 14, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "critters",
@@ -60,6 +76,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "0, 1 or 4 live cells: invert the block. 2: keep it. 3: invert and rotate 180°. \
                 Every empty block fills up, so the vacuum flips on every step.",
         table: [15, 14, 13, 3, 11, 5, 6, 1, 7, 9, 10, 2, 12, 4, 8, 0],
+        source: Source::Collections,
     },
     Preset {
         id: "bbm",
@@ -67,6 +84,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "Margolus' billiard-ball model: a lone cell crosses its block diagonally, two \
                 cells on a diagonal bounce to the other diagonal, everything else stays.",
         table: [0, 8, 4, 3, 2, 5, 9, 7, 1, 6, 10, 11, 12, 13, 14, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "bounce-gas",
@@ -74,6 +92,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "The billiard-ball machine with three-cell blocks turned by 180° as well: a gas \
                 of diagonal particles that bounce off each other.",
         table: [0, 8, 4, 3, 2, 5, 9, 14, 1, 6, 10, 13, 12, 11, 7, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "hpp-gas",
@@ -81,6 +100,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "The HPP lattice gas: every block turns by 180°, so particles fly diagonally, \
                 except head-on pairs, which scatter onto the other diagonal.",
         table: [0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "tron",
@@ -88,6 +108,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "Empty and full blocks swap, every other block stays as it is. The vacuum flips \
                 on every step.",
         table: [15, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0],
+        source: Source::Collections,
     },
     Preset {
         id: "rotations",
@@ -95,6 +116,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "One-cell and three-cell blocks rotate 90° clockwise; two-cell blocks jump to \
                 the opposite side or the other diagonal.",
         table: [0, 2, 8, 12, 1, 10, 9, 11, 4, 6, 5, 14, 3, 7, 13, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "double-rotation",
@@ -102,6 +124,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "One-cell blocks rotate 90° clockwise and three-cell blocks 90° \
                 counter-clockwise; everything else stays.",
         table: [0, 2, 8, 3, 1, 5, 6, 13, 4, 9, 10, 7, 12, 14, 11, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "string-thing",
@@ -109,6 +132,7 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "Only two-cell blocks change: adjacent pairs jump to the opposite side, \
                 diagonal pairs to the other diagonal.",
         table: [0, 1, 2, 12, 4, 10, 9, 7, 8, 6, 5, 11, 3, 13, 14, 15],
+        source: Source::Collections,
     },
     Preset {
         id: "swap-on-diagonal",
@@ -116,6 +140,86 @@ pub static PRESETS: [Preset; 10] = [
         blurb: "Every block turns by 180°: each cell swaps with the one diagonally opposite, \
                 so particles fly diagonally and never interact.",
         table: [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15],
+        source: Source::Collections,
+    },
+    Preset {
+        id: "espca-01c5ef",
+        name: "ESPCA-01c5ef",
+        blurb: "One-cell blocks rotate 90° counter-clockwise, three-cell blocks clockwise, and \
+                two cells on a diagonal jump to the other diagonal. Morita builds reversible \
+                Turing machines in it, with a spaceship of period 12 as the signal.",
+        table: [0, 4, 1, 3, 8, 5, 9, 11, 2, 6, 10, 14, 12, 7, 13, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-01caef",
+        name: "ESPCA-01caef",
+        blurb: "One-cell blocks rotate 90° counter-clockwise and three-cell blocks clockwise: \
+                the mirror image of Double rotation. Rich in spaceships; Morita builds \
+                reversible Turing machines in it.",
+        table: [0, 4, 1, 3, 8, 5, 6, 11, 2, 9, 10, 14, 12, 7, 13, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-02c5bf",
+        name: "ESPCA-02c5bf",
+        blurb: "The billiard-ball machine with three-cell blocks rotated 90° \
+                counter-clockwise. Only lone cells travel, yet Morita shows that it can \
+                simulate every reversible rule of this family.",
+        table: [0, 8, 4, 3, 2, 5, 9, 13, 1, 6, 10, 7, 12, 14, 11, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-016a7f",
+        name: "ESPCA-016a7f",
+        blurb: "One-cell blocks rotate 90° counter-clockwise, pairs side by side clockwise, \
+                three-cell blocks by 180°. Has a spaceship of period 3 and many slow ones.",
+        table: [0, 4, 1, 10, 8, 3, 6, 14, 2, 9, 12, 13, 5, 11, 7, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-0945df",
+        name: "ESPCA-0945df",
+        blurb: "A lone cell gains a neighbour, and two side by side lose it again; two on a \
+                diagonal jump to the other diagonal. Cells are not conserved. Two full blocks \
+                side by side fire two spaceships every 10 steps.",
+        table: [0, 5, 3, 2, 12, 1, 9, 7, 10, 6, 8, 11, 4, 13, 14, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-09457f",
+        name: "ESPCA-09457f",
+        blurb: "ESPCA-0945df with three-cell blocks turned by 180° as well. A single cell is \
+                a gun: it sends out four spaceships every 8 steps, in either direction of \
+                time.",
+        table: [0, 5, 3, 2, 12, 1, 9, 14, 10, 6, 8, 13, 4, 11, 7, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-098aef",
+        name: "ESPCA-098aef",
+        blurb: "A lone cell gains a neighbour, and two side by side lose the first of them; \
+                three-cell blocks rotate 90° clockwise. Cells are not conserved; there are \
+                spaceships of period 10 and 17.",
+        table: [0, 5, 3, 1, 12, 4, 6, 11, 10, 9, 2, 14, 8, 7, 13, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-0925bf",
+        name: "ESPCA-0925bf",
+        blurb: "A lone cell gains a neighbour, two side by side leave one cell on the \
+                opposite side; two on a diagonal jump to the other diagonal, three-cell blocks \
+                rotate 90° counter-clockwise. A single cell grows into a disk.",
+        table: [0, 5, 3, 8, 12, 2, 9, 13, 10, 6, 4, 7, 1, 14, 11, 15],
+        source: Source::Morita,
+    },
+    Preset {
+        id: "espca-0dca8f",
+        name: "ESPCA-0dca8f",
+        blurb: "A lone cell becomes the three cells around the opposite corner, and those \
+                three that cell. A single cell grows into shapes that look like fractals.",
+        table: [0, 7, 11, 3, 13, 5, 6, 1, 14, 9, 10, 2, 12, 4, 8, 15],
+        source: Source::Morita,
     },
 ];
 
@@ -128,6 +232,8 @@ pub enum RuleError {
     Entry(String),
     /// Two block states have the same outcome, so a step could not be undone.
     NotReversible { output: u8, inputs: (u8, u8) },
+    /// Not the number of an ESPCA.
+    Espca(String),
 }
 
 impl fmt::Display for RuleError {
@@ -138,6 +244,11 @@ impl fmt::Display for RuleError {
             Self::NotReversible { output, inputs: (a, b) } => write!(
                 f,
                 "not reversible: blocks {a} and {b} both become {output}"
+            ),
+            Self::Espca(number) => write!(
+                f,
+                "{number:?} is not the number of an ESPCA: six hexadecimal digits like 01c5ef, \
+                 the first and the last 0 or f, the fourth 0, 5, a or f"
             ),
         }
     }
@@ -264,6 +375,51 @@ impl BlockRule {
         self.preset().map_or("Custom", |preset| preset.name)
     }
 
+    /// The rule Morita calls ESPCA-`number` (*Reversible World of Cellular Automata*, 2024).
+    ///
+    /// In an elementary square partitioned automaton every square cell has four parts, each
+    /// holding a particle or not, and a cell's next state depends on the parts of its four
+    /// neighbours that face it. Put a site on every edge between two cells: a particle about
+    /// to cross that edge sits there. A cell then takes in the four sites around it and puts
+    /// four out again, which is a block being rewritten; the cells that do so on even steps
+    /// and the ones in between on odd steps are the two partitions. So such an automaton is
+    /// two block automata that never meet, each drawn turned by 45°: Morita's north is
+    /// up and to the right here.
+    ///
+    /// The six digits give the outcome of a cell with no particle coming in, one, two at a
+    /// right angle, two head-on, three and four; quarter turns supply the other cases.
+    pub fn from_espca(number: &str) -> Result<Self, RuleError> {
+        let not_a_number = || RuleError::Espca(number.to_string());
+        let digits: Vec<u8> = number.chars().filter_map(|c| c.to_digit(16)).map(|d| d as u8).collect();
+        if digits.len() != 6 || number.chars().count() != 6 {
+            return Err(not_a_number());
+        }
+        let mut table = [u8::MAX; 16];
+        for (&incoming, &outgoing) in ESPCA_CASES.iter().zip(&digits) {
+            let (mut before, mut after) = (entering(incoming), leaving(outgoing));
+            for _ in 0..4 {
+                let outcome = &mut table[before as usize];
+                // A case that a turn maps onto itself must have such an outcome as well.
+                if *outcome != u8::MAX && *outcome != after {
+                    return Err(not_a_number());
+                }
+                *outcome = after;
+                (before, after) = (rotate_cw(before), rotate_cw(after));
+            }
+        }
+        Self::new(table)
+    }
+
+    /// The rule's number in Morita's notation, if it has one: it must look the same after a
+    /// quarter turn.
+    pub fn espca(&self) -> Option<String> {
+        let digit = |&incoming: &u8| {
+            let outgoing = parts_leaving(self.table[entering(incoming) as usize]);
+            char::from_digit(outgoing as u32, 16).expect("four bits are a hexadecimal digit")
+        };
+        self.commutes_with(rotate_cw).then(|| ESPCA_CASES.iter().map(digit).collect())
+    }
+
     /// The empty world through time. All its blocks are alike, so one block state describes
     /// it: the state of every block about to be rewritten. It starts at 0 and is back at 0
     /// after as many generations as the cycle is long, sixteen at most.
@@ -382,8 +538,9 @@ impl fmt::Display for BlockRule {
 impl FromStr for BlockRule {
     type Err = String;
 
-    /// Accepts a preset (`critters`, `Single Rotation`, `hpp-gas`, ...) or a table of sixteen
-    /// states separated by commas, semicolons or spaces, optionally with MCell's `MS,D` prefix.
+    /// Accepts a preset (`critters`, `Single Rotation`, `hpp-gas`, ...), Morita's number of a
+    /// rule (`ESPCA-01c5ef`), or a table of sixteen states separated by commas, semicolons or
+    /// spaces, optionally with MCell's `MS,D` prefix.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Presets match however their words are joined: "Single Rotation", "single-rotation".
         let key = |text: &str| -> String {
@@ -398,6 +555,9 @@ impl FromStr for BlockRule {
             .find(|preset| key(preset.id) == wanted || key(preset.name) == wanted)
         {
             return Ok(preset.rule());
+        }
+        if let Some(number) = wanted.strip_prefix("espca") {
+            return Self::from_espca(number).map_err(|error| error.to_string());
         }
 
         let body = s.trim();
@@ -429,6 +589,32 @@ impl FromStr for BlockRule {
         }
         Self::new(table).map_err(|error| error.to_string())
     }
+}
+
+/// The cases the digits of an ESPCA number are for, as Morita writes a cell: its parts top,
+/// right, bottom and left from the highest bit down. A particle in the top part is moving
+/// north.
+const ESPCA_CASES: [u8; 6] = [0b0000, 0b0010, 0b0011, 0b1010, 0b0111, 0b1111];
+
+/// The block that a cell of an ESPCA takes in: its cells top-left, top-right, bottom-left and
+/// bottom-right hold the particles coming from the west, the north, the south and the east,
+/// which are the ones moving east, south, north and west.
+const fn entering(parts: u8) -> u8 {
+    let (north, east, south, west) = (parts >> 3 & 1, parts >> 2 & 1, parts >> 1 & 1, parts & 1);
+    east | south << 1 | north << 2 | west << 3
+}
+
+/// The block that a cell of an ESPCA puts out: the same four places, now holding the
+/// particles that leave towards the west, the north, the south and the east.
+const fn leaving(parts: u8) -> u8 {
+    let (north, east, south, west) = (parts >> 3 & 1, parts >> 2 & 1, parts >> 1 & 1, parts & 1);
+    west | north << 1 | south << 2 | east << 3
+}
+
+/// [`leaving`] the other way round.
+const fn parts_leaving(block: u8) -> u8 {
+    let (west, north, south, east) = (block & 1, block >> 1 & 1, block >> 2 & 1, block >> 3 & 1);
+    north << 3 | east << 2 | south << 1 | west
 }
 
 pub const fn popcount(block: u8) -> u32 {
@@ -594,6 +780,168 @@ mod tests {
         assert_eq!(preset("double-rotation").reversed(), Reversed::Transformed);
     }
 
+    /// The rule as it looks in a mirror.
+    fn mirrored(rule: &BlockRule) -> BlockRule {
+        from_fn(|b| mirror(rule.table()[mirror(b) as usize]))
+    }
+
+    #[test]
+    fn the_rules_of_the_book_do_what_their_blurbs_say() {
+        let diagonal = |b: u8| b == 6 || b == 9;
+        assert_eq!(
+            preset("espca-01c5ef"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_ccw(b),
+                2 if diagonal(b) => complement(b),
+                3 => rotate_cw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-01caef"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_ccw(b),
+                3 => rotate_cw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(preset("espca-01caef"), mirrored(&preset("double-rotation")));
+        assert_eq!(
+            preset("espca-02c5bf"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_180(b),
+                2 if diagonal(b) => complement(b),
+                3 => rotate_ccw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-016a7f"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_ccw(b),
+                2 if !diagonal(b) => rotate_cw(b),
+                3 => rotate_180(b),
+                _ => b,
+            })
+        );
+        // A lone cell gains the next cell counter-clockwise as a neighbour. Of two side by
+        // side, the one that could have gained the other so, and the one it would have gained.
+        let joined = |b: u8| b | rotate_ccw(b);
+        let first = |b: u8| b & rotate_cw(b);
+        let second = |b: u8| b & rotate_ccw(b);
+        assert_eq!(
+            preset("espca-0945df"),
+            from_fn(|b| match popcount(b) {
+                1 => joined(b),
+                2 if diagonal(b) => complement(b),
+                2 => first(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-09457f"),
+            from_fn(|b| match popcount(b) {
+                1 => joined(b),
+                2 if diagonal(b) => complement(b),
+                2 => first(b),
+                3 => rotate_180(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-098aef"),
+            from_fn(|b| match popcount(b) {
+                1 => joined(b),
+                2 if !diagonal(b) => second(b),
+                3 => rotate_cw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-0925bf"),
+            from_fn(|b| match popcount(b) {
+                1 => joined(b),
+                2 if diagonal(b) => complement(b),
+                2 => rotate_180(second(b)),
+                3 => rotate_ccw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("espca-0dca8f"),
+            from_fn(|b| match popcount(b) {
+                1 | 3 => complement(rotate_180(b)),
+                _ => b,
+            })
+        );
+
+        for id in ["espca-01c5ef", "espca-01caef", "espca-02c5bf", "espca-016a7f"] {
+            assert_eq!(preset(id).population(), Population::Conserved, "{id}");
+            assert_eq!(preset(id).symmetry(), Symmetry::Rotations, "{id}");
+        }
+        for id in ["espca-0945df", "espca-09457f", "espca-098aef", "espca-0925bf", "espca-0dca8f"] {
+            assert_eq!(preset(id).population(), Population::NotConserved, "{id}");
+            assert_eq!(preset(id).vacuum_cycle(), [0], "{id}");
+        }
+        // A gun that fires in either direction of time: the rule is its own inverse.
+        assert_eq!(preset("espca-09457f").reversed(), Reversed::SameRule);
+    }
+
+    #[test]
+    fn morita_numbers_name_the_rules_that_look_the_same_after_a_quarter_turn() {
+        // Of the 65 536 ESPCAs, 1536 are reversible, and 128 of those conserve their
+        // particles (Theorem 2.3 of the book).
+        let (mut reversible, mut conservative) = (0, 0);
+        for n in 0..1u32 << 16 {
+            let (u, z) = ([0, 0xf][(n & 1) as usize], [0, 0xf][(n >> 1 & 1) as usize]);
+            let x = [0, 5, 0xa, 0xf][(n >> 2 & 3) as usize];
+            let (v, w, y) = (n >> 4 & 0xf, n >> 8 & 0xf, n >> 12);
+            let number = format!("{u:x}{v:x}{w:x}{x:x}{y:x}{z:x}");
+            match BlockRule::from_espca(&number) {
+                Ok(rule) => {
+                    reversible += 1;
+                    conservative += (rule.population() == Population::Conserved) as u32;
+                    assert!(rule.commutes_with(rotate_cw), "{number}");
+                    assert_eq!(rule.espca(), Some(number));
+                }
+                Err(error) => {
+                    assert!(matches!(error, RuleError::NotReversible { .. }), "{number}: {error}");
+                }
+            }
+        }
+        assert_eq!((reversible, conservative), (1536, 128));
+
+        // A rule without the symmetry has no number.
+        let mut lopsided = BlockRule::identity();
+        lopsided.swap_outcomes(1, 2);
+        assert_eq!(lopsided.espca(), None);
+        // Every particle turning back is nothing happening at all.
+        assert_eq!(BlockRule::from_espca("08cadf"), Ok(BlockRule::identity()));
+    }
+
+    #[test]
+    fn the_presets_have_the_numbers_the_book_gives_them() {
+        // Morita finds his ESPCA-02c5df to be Margolus' automaton (Sec. 6.3), and
+        // ESPCA-04cabf to be the mirror image of ESPCA-01caef (Sec. 5.2.1).
+        assert_eq!(preset("bbm").espca().as_deref(), Some("02c5df"));
+        assert_eq!(preset("double-rotation").espca().as_deref(), Some("04cabf"));
+        // The mirror images of his four universal rules, as listed in Sec. 6.5.
+        for (number, in_a_mirror) in
+            [("01c5ef", "04c5bf"), ("01caef", "04cabf"), ("02c5df", "02c5df"), ("02c5bf", "02c5ef")]
+        {
+            let rule = BlockRule::from_espca(number).unwrap();
+            assert_eq!(mirrored(&rule).espca().as_deref(), Some(in_a_mirror), "{number}");
+        }
+        assert_eq!(preset("single-rotation").espca().as_deref(), Some("04cadf"));
+        assert_eq!(preset("critters").espca().as_deref(), Some("f7ca80"));
+
+        for preset in PRESETS.iter().filter(|preset| preset.source == Source::Morita) {
+            let number = preset.id.strip_prefix("espca-").unwrap();
+            assert_eq!(BlockRule::from_espca(number), Ok(preset.rule()), "{}", preset.id);
+            assert_eq!(preset.name, format!("ESPCA-{number}"));
+        }
+    }
+
     #[test]
     fn every_kind_of_symmetry_is_told_apart() {
         // The identity with two outcomes exchanged keeps exactly the symmetries that map the
@@ -725,7 +1073,11 @@ mod tests {
             "Ms,d0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(),
             Ok(single_rotation.clone())
         );
-        assert_eq!(" 0 2 8 3 1 5 6 7  4 9 10 11 12 13 14 15 ".parse(), Ok(single_rotation));
+        assert_eq!(" 0 2 8 3 1 5 6 7  4 9 10 11 12 13 14 15 ".parse(), Ok(single_rotation.clone()));
+        // Morita's numbers, also of rules that are not presets.
+        for text in ["ESPCA-04cadf", "espca-04cadf", "espca 04CADF", "Espca04cadf"] {
+            assert_eq!(text.parse(), Ok(single_rotation.clone()), "{text}");
+        }
     }
 
     #[test]
@@ -747,6 +1099,12 @@ mod tests {
             BlockRule::new([0; 16]),
             Err(RuleError::NotReversible { output: 0, inputs: (0, 1) })
         );
+        // The book's example of an irreversible ESPCA (Example 2.2), and numbers that are
+        // none: too short, or without the symmetry.
+        assert!(parse("espca-09458f").starts_with("not reversible"));
+        for text in ["espca-01c5e", "espca-01c5eff", "espca-11c5ef", "espca-01c1ef", "espca-01c5eg"] {
+            assert!(parse(text).contains("is not the number of an ESPCA"), "{text}");
+        }
     }
 
     #[test]

@@ -28,7 +28,44 @@ Presets, all reversible:
 | **String thing** | only two-cell blocks change: they are complemented |
 | **Swap on diagonal** | every block turns by 180° |
 
+Rules from Morita's book *Reversible World of Cellular Automata* (2024), which calls them by
+number (see below):
+
+| preset | what it does |
+|--------|--------------|
+| **ESPCA-01c5ef** | one-cell blocks rotate counter-clockwise, three-cell blocks clockwise, diagonal pairs jump to the other diagonal. One of the four rules the book builds reversible Turing machines in; the signal is a spaceship of period 12 |
+| **ESPCA-01caef** | the mirror image of Double rotation, and another of the four. Rich in spaceships |
+| **ESPCA-02c5bf** | the billiard ball machine with three-cell blocks rotated counter-clockwise: the third; the billiard ball machine itself is the fourth, ESPCA-02c5df. Can simulate every reversible rule of the family |
+| **ESPCA-016a7f** | one-cell blocks rotate counter-clockwise, adjacent pairs clockwise, three-cell blocks by 180°. Has a spaceship of period 3 |
+| **ESPCA-0945df** | a lone cell gains a neighbour and two side by side lose it again: cells are not conserved. Oscillators of period 6, 22 and 60, a spaceship of period 3, and a gun: two full blocks side by side |
+| **ESPCA-09457f** | the same with three-cell blocks turned by 180°. A single cell is a gun that sends out four spaceships every 8 steps, forwards and backwards in time |
+| **ESPCA-098aef** | spaceships of period 10 and 17 |
+| **ESPCA-0925bf** | a single cell grows into an almost perfect disk; nobody knows why |
+| **ESPCA-0dca8f** | a single cell grows into shapes that look like fractals |
+
 Anything else is a **custom** rule, made in the rule editor or given as a table.
+
+### Morita's numbers
+
+The rules that look the same after a quarter turn have a second name. Morita studies *elementary
+square partitioned cellular automata* (ESPCA): square cells with four parts, each holding a
+particle or not, where a cell's next state is a function of the parts of its four neighbours that
+face it. Put a site on every edge between two cells, where a particle crosses: a cell takes in the
+four sites around it and puts four out, which is a block being rewritten, and the cells that do so
+on even steps and those in between on odd steps are the two partitions. An ESPCA is therefore two
+block automata that never meet, each drawn turned by 45°: the book's north is up and to the right
+here. Its speeds are the same numbers as the ones shown here, since it counts distance along the
+axes of its grid, which are the diagonals of this one.
+
+He numbers the rules with six hexadecimal digits, the outcomes of a cell with no particle coming
+in, one, two at a right angle, two head-on, three and four. `ESPCA-01c5ef` (or `espca-01c5ef`) is
+accepted wherever a rule is, and the rule editor shows the number of every rule that has one: all
+presets do, Single Rotation is ESPCA-04cadf and Critters ESPCA-f7ca80. There are 1536 such rules.
+
+Three things in the book do not fit. A figure may hold particles of both automata at once (its
+stable patterns do): only those of one fit on a grid here. Its irreversible ESPCAs are not
+permutations. And its triangular automata (ETPCA) and the 81-state one need another lattice and
+more states.
 
 ## Running
 
@@ -39,8 +76,9 @@ cargo run -- --help
 ```
 
 Useful flags: `--rule critters` (a preset: `single-rotation`, `critters`, `bbm`, `bounce-gas`, `hpp-gas`,
-`tron`, `rotations`, `double-rotation`, `string-thing`, `swap-on-diagonal`) or
-`--rule 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15` (any reversible table), `--width 512 --height 512`, `--init blob|soup|empty`,
+`tron`, `rotations`, `double-rotation`, `string-thing`, `swap-on-diagonal`), `--rule espca-01c5ef`
+(Morita's number of a rule) or `--rule 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15` (any reversible table),
+`--width 512 --height 512`, `--init blob|soup|empty`,
 `--density 0.01`, `--seed 7`, `--threads 4`, `--window 1600x1000`, `--vsync auto|on|off` (see
 *Environment notes*).
 
@@ -116,11 +154,12 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
   under (a rule with rotations but no mirrors has a handedness, like Single Rotation); whether
   dead and alive are interchangeable; after how many generations the vacuum repeats; and how the
   rule run backwards relates to the rule run forwards (the same rule, its mirror image, its
-  complement, or something else). For a custom rule the main panel shows the same in a sentence.
-* **Rule string**: the table as text. Type or paste a table or a preset name and it is applied as
-  soon as it is valid (otherwise the reason is shown below the field); **Copy** and **Paste** use the
-  system clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work in the field. While the field has focus
-  the single-key shortcuts are off.
+  complement, or something else); and Morita's number, if the rule has one. For a custom rule
+  the main panel shows the same in a sentence.
+* **Rule string**: the table as text. Type or paste a table, a preset name or Morita's number
+  of a rule and it is applied as soon as it is valid (otherwise the reason is shown below the
+  field); **Copy** and **Paste** use the system clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work
+  in the field. While the field has focus the single-key shortcuts are off.
 
 ### The edge of the grid, and catching spaceships
 
@@ -195,9 +234,9 @@ Example: `shot a; step 500; step -500; expect_gen 0; shot b` produces two byte-i
 
 | file | what |
 |------|------|
-| `src/rules.rs` | rules as permutation tables: presets, text form, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, symmetry, time reversal); tests check each preset against its definition |
+| `src/rules.rs` | rules as permutation tables: presets, text form, Morita's numbers, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, symmetry, time reversal); tests check each preset against its definition and the numbers against the book's statements |
 | `src/sim.rs` | the grid and its stepping kernel, the vacuum kept apart from the cells, resizing, what the edge does (open border, catching), transport and pacing, the system sets that order a frame. Tests hold the kernel against the plain definition of a step, replay the spaceships published with Single Rotation (which pins rotation sense, bit layout and phase to the reference simulator) and run the pacing in a headless app |
-| `src/pattern.rs` | finite patterns on an unbounded plane: period, displacement and canonical form of a pattern left alone, taking apart patterns that only travel together, run-length encoding. Tests use the periods and displacements js-revca's tests give, and hold the analysis against the grid |
+| `src/pattern.rs` | finite patterns on an unbounded plane: period, displacement and canonical form of a pattern left alone, taking apart patterns that only travel together, run-length encoding. Tests use the periods and displacements js-revca's tests give, hold the analysis against the grid, and replay figures of Morita's book (which pins down how his automata lie on the block grid) |
 | `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, counts it by kind for each rule, and shows the panel |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
 | `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events |
@@ -233,6 +272,9 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
   different courses) are one pattern to the catcher. It never comes back to its shape, so it is
   counted as one of the *others* and its ships are missed, which happens a lot in a gas like the
   billiard ball machine.
+* Spaceships that follow each other closely are one pattern to the catcher as well, and a long
+  train of them is debris. The gun of ESPCA-09457f fires such trains: an open border wears them
+  down cell by cell, and what is left of a spaceship blows up. Watch it with the border closed.
 * The spaceship list lives as long as the program; it is not saved.
 * The paused app still redraws every frame; Bevy's reactive update mode would let it idle.
 * Painting and wheel zoom assume a `UiScale` of 1.

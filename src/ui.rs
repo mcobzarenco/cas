@@ -34,7 +34,7 @@ use crate::{
     actions::{Action, Does, Toggle},
     catcher::catcher_panel,
     editor::{RuleEditor, describe, editor_panel},
-    rules::PRESETS,
+    rules::{PRESETS, Source},
     sim::{Pace, Playback, Settings, SimSystems, Universe, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
 };
@@ -725,7 +725,11 @@ fn slider(name: &'static str, control: Control) -> impl Scene {
 
 /// The rule menu, a button for the editor, and what the current rule does.
 fn rule_card() -> impl Scene {
-    let presets: Vec<_> = (0..PRESETS.len()).map(rule_item).collect();
+    let from = |source: Source| -> Vec<_> {
+        let listed = (0..PRESETS.len()).filter(|&index| PRESETS[index].source == source);
+        listed.map(rule_item).collect()
+    };
+    let (collections, morita) = (from(Source::Collections), from(Source::Morita));
     card(Aspect::Rule, None, bsn_list![
         (
             Node {
@@ -748,7 +752,9 @@ fn rule_card() -> impl Scene {
                         (
                             @FeathersMenuPopup
                             Children [
-                                { presets },
+                                { collections },
+                                @FeathersMenuDivider,
+                                { morita },
                                 @FeathersMenuDivider,
                                 (
                                     #RuleItemCustom

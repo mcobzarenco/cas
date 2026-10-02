@@ -733,7 +733,7 @@ fn rule_card() -> impl Scene {
         let listed = (0..PRESETS.len()).filter(|&index| PRESETS[index].source == source);
         listed.map(rule_item).collect()
     };
-    let (collections, morita) = (from(Source::Collections), from(Source::Morita));
+    let (collections, morita, found) = (from(Source::Collections), from(Source::Morita), from(Source::Search));
     card(Aspect::Rule, None, bsn_list![
         (
             Node {
@@ -756,9 +756,14 @@ fn rule_card() -> impl Scene {
                         (
                             @FeathersMenuPopup
                             Children [
+                                menu_heading("FROM THE COLLECTIONS"),
                                 { collections },
                                 @FeathersMenuDivider,
+                                menu_heading("FROM MORITA'S BOOK"),
                                 { morita },
+                                @FeathersMenuDivider,
+                                menu_heading("FOUND BY SEARCH"),
+                                { found },
                                 @FeathersMenuDivider,
                                 (
                                     #RuleItemCustom
@@ -783,6 +788,25 @@ fn rule_card() -> impl Scene {
         ),
         (caption("") template_value(Readout::RuleBlurb)),
     ])
+}
+
+/// The name of a group of items in a menu.
+fn menu_heading(text: &'static str) -> impl Scene {
+    bsn! {
+        Node {
+            padding: UiRect { left: px(8), right: px(8), top: px(5), bottom: px(2) },
+        }
+        Children [(
+            Text(text)
+            TextFont {
+                font: FontSourceTemplate::Handle(fonts::BOLD),
+                font_size: FontSize::Px(9.0),
+                weight: FontWeight::BOLD,
+            }
+            template_value(LetterSpacing::Px(0.5))
+            ThemeTextColor(tokens::TEXT_DIM)
+        )]
+    }
 }
 
 fn rule_item(index: usize) -> impl Scene {

@@ -41,9 +41,9 @@ struct Args {
     #[arg(long, default_value_t = 256)]
     height: usize,
     /// Rule to start with: a preset (single-rotation, critters, bbm, bounce-gas, hpp-gas, tron,
-    /// rotations, double-rotation, string-thing, swap-on-diagonal), Morita's number of a rule
-    /// such as espca-01c5ef, or a table of 16 block states such as
-    /// 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15.
+    /// rotations, double-rotation, string-thing, swap-on-diagonal, or a found one such as
+    /// steady-blob or ship-factory), Morita's number of a rule such as espca-01c5ef, or a
+    /// table of 16 block states such as 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15.
     #[arg(long, default_value = "single-rotation")]
     rule: BlockRule,
     /// Initial pattern: a random square in the middle, a uniform random soup, or nothing.

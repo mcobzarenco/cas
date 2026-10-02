@@ -32,7 +32,7 @@
 
 use std::{fmt, str::FromStr};
 
-/// A named rule from the literature.
+/// A named rule: one from the literature, or one that the search of this project found.
 #[derive(Debug)]
 pub struct Preset {
     /// Stable identifier: accepted on the command line and used to name UI widgets.
@@ -51,6 +51,9 @@ pub enum Source {
     /// Morita, *Reversible World of Cellular Automata* (2024), where the rules go by their
     /// ESPCA numbers ([`BlockRule::from_espca`]).
     Morita,
+    /// Found by going through families of rules ([`crate::search`]), and named here after
+    /// what they do.
+    Search,
 }
 
 impl Preset {
@@ -60,8 +63,9 @@ impl Preset {
 }
 
 /// The rules offered in the rule menu. Tables are the published ones (dmishin's simulator and
-/// the MCell collection use the same numbering); the tests check each blurb against its table.
-pub static PRESETS: [Preset; 19] = [
+/// the MCell collection use the same numbering); the tests check each blurb against its table,
+/// and what a blurb says of a found rule's doings against the rule at work.
+pub static PRESETS: [Preset; 26] = [
     Preset {
         id: "single-rotation",
         name: "Single rotation",
@@ -220,6 +224,64 @@ pub static PRESETS: [Preset; 19] = [
                 three that cell. A single cell grows into shapes that look like fractals.",
         table: [0, 7, 11, 3, 13, 5, 6, 1, 14, 9, 10, 2, 12, 4, 8, 15],
         source: Source::Morita,
+    },
+    Preset {
+        id: "steady-blob",
+        name: "Steady blob",
+        blurb: "Cells are made and unmade, yet a blob settles at one and a half times its cells \
+                and stays there, letting a slow spaceship go now and then.",
+        table: [0, 1, 11, 5, 13, 12, 6, 7, 8, 9, 3, 2, 10, 4, 14, 15],
+        source: Source::Search,
+    },
+    Preset {
+        id: "creeping-blob",
+        name: "Creeping blob",
+        blurb: "Like Steady blob, but the blob keeps growing, ever more slowly: twice its cells \
+                after 30 000 generations. The richer of the two in slow spaceships.",
+        table: [0, 1, 11, 5, 13, 12, 15, 14, 8, 9, 3, 2, 10, 4, 7, 6],
+        source: Source::Search,
+    },
+    Preset {
+        id: "ship-factory",
+        name: "Ship factory",
+        blurb: "A blob stays a blob while it sends out small spaceships by the hundred, at a \
+                third of the speed of light: it makes the cells it loses.",
+        table: [0, 1, 11, 10, 13, 12, 9, 7, 8, 6, 3, 2, 5, 4, 14, 15],
+        source: Source::Search,
+    },
+    Preset {
+        id: "plus-ships",
+        name: "Plus ships",
+        blurb: "A blob takes on the texture of a maze and throws plus-shaped spaceships along \
+                one diagonal. Cells are not conserved, and empty space goes through four states.",
+        table: [15, 8, 13, 3, 11, 5, 9, 14, 1, 0, 10, 2, 12, 4, 7, 6],
+        source: Source::Search,
+    },
+    Preset {
+        id: "four-way-gun",
+        name: "Four-way gun",
+        blurb: "A single cell is a gun: four streams of small spaceships leave it along the \
+                diagonals. A blob turns to noise. This is ESPCA-f6b580.",
+        table: [15, 10, 12, 13, 3, 14, 9, 1, 5, 6, 7, 2, 11, 4, 8, 0],
+        source: Source::Search,
+    },
+    Preset {
+        id: "crossing-fleets",
+        name: "Crossing fleets",
+        blurb: "A blob throws off spaceships in all four diagonal directions, kind after kind, \
+                and what stays behind oscillates with many periods. Cells are conserved, \
+                relative to a vacuum that flips.",
+        table: [15, 7, 13, 10, 14, 3, 6, 1, 11, 9, 12, 4, 5, 8, 2, 0],
+        source: Source::Search,
+    },
+    Preset {
+        id: "diagonal-traffic",
+        name: "Diagonal traffic",
+        blurb: "Spaceships fly both ways along one diagonal, a dozen kinds from one blob. \
+                Single rotation with five of the pairs going round in a cycle and two blocks \
+                of three swapped; cells are conserved.",
+        table: [0, 2, 8, 5, 1, 6, 12, 14, 4, 9, 3, 11, 10, 13, 7, 15],
+        source: Source::Search,
     },
 ];
 
@@ -464,6 +526,19 @@ impl BlockRule {
         }
     }
 
+    /// The weights under which the rule keeps a weighted number of cells, if there are any. A
+    /// cell weighs according to its corner of the block about to be rewritten, and the
+    /// weights of all cells add up to the same at every generation ([`keeps_weight`]). Of
+    /// all such [`weightings`] these are the lightest: all 1 for a rule that simply keeps
+    /// the number of cells.
+    ///
+    /// Under any other the number of cells changes, a heavy cell for two light ones, but only
+    /// within the ratio of the weights: no pattern explodes and none dwindles away.
+    pub fn conserved_weights(&self) -> Option<[u8; 4]> {
+        let tables = self.relative_to_vacuum();
+        weightings().into_iter().find(|weights| tables.iter().all(|rule| keeps_weight(&rule.table, weights)))
+    }
+
     /// Does the rule give the same result whether a block is transformed before or after it?
     pub fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
         (0..16u8).all(|state| {
@@ -643,6 +718,34 @@ const fn parts_leaving(block: u8) -> u8 {
 
 pub const fn popcount(block: u8) -> u32 {
     (block & 0xF).count_ones()
+}
+
+/// No cell needs to weigh more than this in a weighted number of cells: heavier weights, tried
+/// up to 9, bring no rule that these do not.
+pub const HEAVIEST: u8 = 4;
+
+/// Every way to give the corners of a block (top-left, top-right, bottom-left, bottom-right)
+/// weights from 1 to [`HEAVIEST`], the lightest first, without those that only repeat a
+/// lighter one in larger numbers.
+pub fn weightings() -> Vec<[u8; 4]> {
+    let weights = || 1..=HEAVIEST;
+    let all = weights().flat_map(|a| weights().flat_map(move |b| weights().flat_map(move |c| weights().map(move |d| [a, b, c, d]))));
+    let common = |weights: &[u8; 4]| (2..=HEAVIEST).any(|divisor| weights.iter().all(|weight| weight % divisor == 0));
+    let mut all: Vec<[u8; 4]> = all.filter(|weights| !common(weights)).collect();
+    all.sort_by_key(|weights| weights.iter().map(|&weight| weight as u32).sum::<u32>());
+    all
+}
+
+/// What the cells of a block weigh together.
+pub fn weigh(block: u8, weights: &[u8; 4]) -> u32 {
+    (0..4).filter(|corner| block >> corner & 1 == 1).map(|corner| weights[corner] as u32).sum()
+}
+
+/// Does every block weigh the same before and after the table rewrites it? Afterwards its
+/// cells are weighed where the next step finds them: that step's blocks are shifted by a cell
+/// each way, so each cell is in the opposite corner of its new block.
+pub fn keeps_weight(table: &[u8; 16], weights: &[u8; 4]) -> bool {
+    (0..16u8).all(|block| weigh(rotate_180(table[block as usize]), weights) == weigh(block, weights))
 }
 
 /// Exchange dead and alive.
@@ -909,6 +1012,67 @@ mod tests {
         }
         // A gun that fires in either direction of time: the rule is its own inverse.
         assert_eq!(preset("espca-09457f").reversed(), Reversed::SameRule);
+    }
+
+    /// How the found rules are made, as the README has it; their blurbs say what they do,
+    /// which the tests of the search hold them to.
+    #[test]
+    fn the_found_rules_are_made_as_described() {
+        // The diagonal that lone cells gain and lose: top-left and bottom-right.
+        let other_diagonal = 9;
+        let side_by_side = |b: u8| popcount(b) == 2 && b != 6 && b != 9;
+        let steady = from_fn(|b| match b {
+            2 | 4 | 11 | 13 => b ^ other_diagonal,
+            b if side_by_side(b) => rotate_ccw(b),
+            b => b,
+        });
+        assert_eq!(preset("steady-blob"), steady);
+        assert_eq!(
+            preset("creeping-blob"),
+            from_fn(|b| match b {
+                6 | 15 => b ^ other_diagonal,
+                7 | 14 => rotate_180(b),
+                b => steady.table()[b as usize],
+            })
+        );
+        assert_eq!(
+            preset("ship-factory"),
+            from_fn(|b| match b {
+                2 | 4 | 11 | 13 => b ^ other_diagonal,
+                6 | 9 => complement(b),
+                b if side_by_side(b) => anti_transpose(b),
+                b => b,
+            })
+        );
+        // Single Rotation's lone cells, five pairs in a cycle, two blocks of three swapped.
+        let cycle = [3, 5, 6, 12, 10];
+        assert_eq!(
+            preset("diagonal-traffic"),
+            from_fn(|b| match (popcount(b), cycle.iter().position(|&pair| pair == b)) {
+                (1, _) => rotate_cw(b),
+                (_, Some(place)) => cycle[(place + 1) % cycle.len()],
+                _ if b == 7 || b == 14 => rotate_180(b),
+                _ => b,
+            })
+        );
+
+        for id in ["steady-blob", "creeping-blob", "ship-factory", "plus-ships", "four-way-gun"] {
+            assert_eq!(preset(id).population(), Population::NotConserved, "{id}");
+            assert_eq!(preset(id).conserved_weights(), None, "{id}");
+        }
+        assert_eq!(preset("plus-ships").vacuum_cycle(), [0, 15, 6, 9]);
+        assert_eq!(preset("four-way-gun").vacuum_cycle(), [0, 15]);
+        assert_eq!(preset("four-way-gun").espca().as_deref(), Some("f6b580"));
+        assert_eq!(preset("crossing-fleets").population(), Population::ConservedRelativeToVacuum);
+        assert_eq!(preset("crossing-fleets").vacuum_cycle(), [0, 15]);
+        assert_eq!(preset("diagonal-traffic").population(), Population::Conserved);
+        // None of them is a rule of the literature, or another of them, seen another way.
+        for found in PRESETS.iter().filter(|preset| preset.source == Source::Search) {
+            for other in PRESETS.iter().filter(|other| other.id != found.id) {
+                let (a, b) = (found.rule().representative(), other.rule().representative());
+                assert_ne!(a, b, "{} and {}", found.id, other.id);
+            }
+        }
     }
 
     #[test]

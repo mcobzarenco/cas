@@ -43,6 +43,18 @@ number (see below):
 | **ESPCA-0925bf** | a single cell grows into an almost perfect disk; nobody knows why |
 | **ESPCA-0dca8f** | a single cell grows into shapes that look like fractals |
 
+Rules that this project's own search found (see *Searching for rules*), named after what they do:
+
+| preset | what it does |
+|--------|--------------|
+| **Steady blob** | a lone cell top-right or bottom-left gains the two cells of the other diagonal and loses them again, pairs side by side turn counter-clockwise. Cells are not conserved, yet a blob settles at one and a half times its cells and lets a slow spaceship go now and then |
+| **Creeping blob** | Steady blob, where two cells top-right and bottom-left fill their block up as well. A blob keeps growing, ever more slowly: twice its cells after 30 000 generations. The richest of these in spaceships and periods |
+| **Ship factory** | a blob stays a blob while it sends out small spaceships by the hundred, at a third of the speed of light: it makes the cells it loses |
+| **Plus ships** | empty space goes through four states; a blob with the texture of a maze throws plus-shaped spaceships along one diagonal |
+| **Four-way gun** | a single cell is a gun that sends four streams of spaceships along the diagonals; a blob turns to noise. ESPCA-f6b580 |
+| **Crossing fleets** | conserves cells relative to a flipping vacuum; a blob throws off spaceships in all four diagonal directions |
+| **Diagonal traffic** | Single rotation with five of the six pairs going round in a cycle; spaceships fly both ways along one diagonal |
+
 Anything else is a **custom** rule, made in the rule editor or given as a table.
 
 ### Morita's numbers
@@ -60,7 +72,8 @@ axes of its grid, which are the diagonals of this one.
 He numbers the rules with six hexadecimal digits, the outcomes of a cell with no particle coming
 in, one, two at a right angle, two head-on, three and four. `ESPCA-01c5ef` (or `espca-01c5ef`) is
 accepted wherever a rule is, and the rule editor shows the number of every rule that has one: all
-presets do, Single Rotation is ESPCA-04cadf and Critters ESPCA-f7ca80. There are 1536 such rules.
+presets from the collections do, Single Rotation is ESPCA-04cadf and Critters ESPCA-f7ca80. There
+are 1536 such rules.
 
 Three things in the book do not fit. A figure may hold particles of both automata at once (its
 stable patterns do): only those of one fit on a grid here. Its irreversible ESPCAs are not
@@ -78,8 +91,10 @@ cargo test --release --workspace
 ```
 
 Useful flags: `--rule critters` (a preset: `single-rotation`, `critters`, `bbm`, `bounce-gas`, `hpp-gas`,
-`tron`, `rotations`, `double-rotation`, `string-thing`, `swap-on-diagonal`), `--rule espca-01c5ef`
-(Morita's number of a rule) or `--rule 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15` (any reversible table),
+`tron`, `rotations`, `double-rotation`, `string-thing`, `swap-on-diagonal`, or a found one: `steady-blob`,
+`creeping-blob`, `ship-factory`, `plus-ships`, `four-way-gun`, `crossing-fleets`, `diagonal-traffic`),
+`--rule espca-01c5ef` (Morita's number of a rule) or `--rule 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`
+(any reversible table),
 `--width 512 --height 512`, `--init blob|soup|empty`,
 `--density 0.01`, `--seed 7`, `--threads 4`, `--window 1600x1000`, `--vsync auto|on|off` (see
 *Environment notes*).
@@ -204,43 +219,91 @@ What left or was caught is gone: stepping backwards does not bring it back.
 
 ## Searching for rules
 
-`cas-search` looks for interesting rules without opening a window. It puts every rule of a family
-through a few trials and writes one line per rule:
+`cas-search` looks for interesting rules without opening a window: it puts every rule of a family
+through a few trials, the cheap ones first, and writes one line per rule. A search from start to
+finish:
 
 ```sh
-cargo run --release -p cas-search -- --family espca --out searches/espca.tsv
-cargo run --release -p cas-search -- --family conserving --out searches/conserving.tsv
-cargo run --release -p cas-search -- --rule critters --rule espca-0925bf
+# 1. Go through a family. Interrupted, the same command takes the table up where it stopped.
+cargo run --release -p cas-search -- --family half-turn --out searches/half-turn.tsv
+# 2. Look closer at the best of it: for longer, and with more seeds.
+cargo run --release -p cas-search -- --from searches/half-turn.tsv --limit 200 \
+    --seeds 1600 --generations 12000 --blob 32000 --out searches/half-turn-closer.tsv
+# 3. See a find in the app, or have a rule of your own measured.
+cargo run --release -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
+cargo run --release -p cas-search -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
 ```
 
+A run ends by saying how many rules of each character are in the table, and by listing the best.
+The table is tab-separated under a line of column names, so `sort`, `awk` or a spreadsheet take
+it from there.
+
+The trials, and the columns they fill:
+
 * **Seeds**: small random patterns (one to six cells) are left alone on an unbounded plane. Each
-  comes back to its shape in place (*oscillating*) or elsewhere (*travelling*), flies apart
-  (*scattering*), grows without bound (*growing*), or does none of it in time (*undecided*). The
-  table has the share of each, the number of different periods among the oscillating ones and
-  the longest.
-* **Spaceships**: kinds of spaceship slower than light, among the seeds and among what leaves a
-  blob through an open border; of the latter also how many were *caught* and how many small
-  patterns were *others*.
-* **Damage**: one cell of a random soup is flipped; the share that differs, a hundred generations
-  on, of the cells the flip could have reached.
-* **Remaining**: what is left of the blob.
+  comes back to its shape in place (`oscillating`) or elsewhere (`travelling`), flies apart
+  (`scattering`), grows without bound (`growing`), or does none of it in time (`undecided`): the
+  share of each in percent, with the number of different `periods` among the oscillating ones
+  and the `longest`.
+* **Growth**: a seed that grows spreads over the plane like a fire, or grows along lines as a gun
+  does. `growth` is the power of time its cells go with, 2 or 1; of the first seeds that grow,
+  the slowest, so that a rule with guns counts for its guns.
+* **Spaceships**: the kinds of spaceship slower than light, among the seeds, among what a seed
+  that grows along lines sends out, and among what leaves the blob.
+* **Damage**: one cell of a random soup is flipped; the share in percent that differs, a hundred
+  generations on, of the cells the flip could have reached.
+* **Blob**: a random blob on a closed grid. `blob` is its cells in the end as a multiple of what
+  it began with: about 27 if the grid has turned to noise, 1 if nothing was made or unmade.
+* **Evaporation**: the same blob with the border open. `remaining` is what is left of it, again
+  as a multiple; `caught` and `others` are the spaceships and the other small patterns that
+  left.
 
-From these a rule gets a *character*: `explosive` or `growing` (most or some seeds grow without
-bound), `spaceships` (something slower than light travels), `gas` (seeds fly apart, at the speed
-of light), `frozen` (everything stays put, and so does a change), `confined` (everything stays
-put, yet a change spreads). Most rules are explosive. The ones to look at have things that travel
-and things that stay, and little damage: a run ends by printing its best rules, ranked by the
-lesser of their kinds of spaceship and their periods. (By kinds alone the list would be led by
-rules in which a lone cell already flies and nothing stays: cells flying in formation are kinds
-too.) A rule found this way is opened with `cargo run --release -- --rule 0,2,8,3,…` or pasted
-into the rule field.
+Sixty seeds come first. If a tenth of them grow, no more are followed; if all that grow spread
+over the plane, the rule is put through nothing more; and a blob that has spread is not left to
+evaporate. Those columns stay empty. `cells` says what the rule does to the number of cells:
+`conserved`, `conserved relative to the vacuum`, `conserved by weight 1112` (a cell counts for as
+many as its corner of the block says, here the bottom-right one for two: cells are made and
+unmade, but within bounds) or `not conserved`.
 
-Families: `espca`, the rules that look the same after a quarter turn (1536, half a minute);
-`conserving`, the rules that keep the number of cells of every block or trade it for the number
-of dead cells as Critters does (829 440, half an hour on four threads); `random`. Rules that
-differ only by a turn or a mirror, or by a vacuum that flickers and changes nothing else, are
-measured once. A search that was interrupted takes up where it stopped if given the same `--out`,
-and `--limit` measures a fair sample.
+From the trials a rule gets its `character`:
+
+| character | what the trials saw |
+|-----------|---------------------|
+| `explosive`, `growing` | most or some seeds grow without bound and spread over the plane |
+| `linear` | seeds grow without bound, some only along lines: guns, puffers, wicks |
+| `igniting` | seeds stay small, yet the blob ends with more cells than fit where it began |
+| `spaceships` | something slower than light travels, and nothing gets out of hand |
+| `gas` | seeds fly apart, at the speed of light |
+| `frozen` | everything stays put, and so does a change |
+| `confined` | everything stays put, yet a change spreads |
+| `other` | none of these |
+
+Most rules are explosive. The ones to look at have things that travel and things that stay: the
+best are the `spaceships` rules with the most of both, ranked by the lesser of their kinds of
+spaceship and their periods. (By kinds alone the list would be led by rules in which a lone cell
+already flies and nothing stays: cells flying in formation are kinds too.) After them come the
+`linear` rules that send out spaceships.
+
+| `--family` | the rules | tables | measured | on four threads |
+|------------|-----------|--------|----------|-----------------|
+| `espca` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 760 | seconds |
+| `half-turn` | look the same after a half turn | 1 105 920 | 277 760 | 25 minutes |
+| `mirror` | look the same in a mirror | 1 105 920 | 551 832 | three quarters of an hour |
+| `conserving` | keep the number of cells of every block, or trade it for the number of dead cells as Critters does | 829 440 | 104 432 | 25 minutes |
+| `weighted` | keep a weighted number of cells and not their number | 107 664 | 13 746 | 5 minutes |
+| `random` | `--count` random permutations, drawn with `--seed` | | | |
+
+Rules that differ only by a turn or a mirror, or by a vacuum that flickers and changes nothing
+else, are measured once. `--limit` measures a fair sample of a family, or with `--from` the best
+of a table.
+
+How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`
+(8000 generations). That is enough to go through a family: what character a rule has hardly
+depends on it. The best deserve a closer look with four times as much, for two reasons. Kinds
+and periods are counts that keep growing with the seeds, so they compare only between rules
+measured alike. And a rule that does not conserve cells may look tame for 8000 generations and
+spread later: of the 48 such rules of the half-turn family, 30 were still tame after 32 000
+generations and 18 after 128 000.
 
 ## Test rig
 
@@ -287,12 +350,13 @@ of Bevy; the app at the root and the search program are built on it.
 
 | file | what |
 |------|------|
-| `crates/cas-core/src/rules.rs` | rules as permutation tables: presets, text form, Morita's numbers, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, symmetry, time reversal), the rule that stands for all that only look different; tests check each preset against its definition and the numbers against the book's statements |
+| `crates/cas-core/src/rules.rs` | rules as permutation tables: presets, text form, Morita's numbers, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, weighted counts of cells, symmetry, time reversal), the rule that stands for all that only look different; tests check each preset against its definition and the numbers against the book's statements |
 | `…/universe.rs` | the grid and its stepping kernel, the vacuum kept apart from the cells, resizing, what the edge does (open border, catching). Tests hold the kernel against the plain definition of a step and replay the spaceships published with Single Rotation (which pins rotation sense, bit layout and phase to the reference simulator) |
 | `…/pattern.rs` | finite patterns on an unbounded plane: what becomes of a pattern left alone, its period, displacement and canonical form, taking apart patterns that only travel together, run-length encoding. Tests use the periods and displacements js-revca's tests give, hold the analysis against the grid, and replay figures of Morita's book (which pins down how his automata lie on the block grid) |
 | `…/census.rs` | counting by kind the spaceships a universe caught |
-| `…/search.rs` | the trials a rule is put through and its report, the families of rules |
-| `crates/cas-search` | the command-line search: families, the table, taking up an interrupted search |
+| `…/search.rs` | the trials a rule is put through, the cheap ones first, and its report |
+| `…/families.rs` | the families of rules a search goes through: by symmetry, by what is conserved, at random |
+| `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
 | `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, and shows the panel |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |

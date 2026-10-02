@@ -47,9 +47,16 @@ click RuleString; wait 2; key Ctrl+a; type espca-04cadf; wait 3; expect_rule sin
 key Ctrl+a; type ESPCA-04c5bf; wait 3; expect_rule 0,2,8,3,1,5,9,13,4,6,10,7,12,14,11,15
 key Escape; wait 2
 
+# The rules the search found have a section of their own, and names for what they do.
+click RuleMenu; wait 4; click RuleItem:ship-factory; wait 4; expect_rule ship-factory
+expect_text RuleEspca
+shot rules-8-found
+click RuleMenu; wait 4; click RuleItem:four-way-gun; wait 4; expect_rule espca-f6b580
+expect_text RuleEspca ESPCA-f6b580
+
 # The clipboard: copy, change the rule, paste it back.
 rule critters; wait 3; click RuleCopy; wait 4
 expect_clipboard 15,14,13,3,11,5,6,1,7,9,10,2,12,4,8,0
 rule tron; wait 2; click RulePaste; wait 4; expect_rule critters
-key e; wait 4; shot rules-8-editor-closed
+key e; wait 4; shot rules-9-editor-closed
 quit

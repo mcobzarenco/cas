@@ -1,0 +1,45 @@
+# The rule menu and the rule editor. Expects the default start-up.
+wait 25
+
+# The menu, by mouse and by keyboard. Space on an item picks it and does nothing else.
+click RuleMenu; wait 4; shot rules-1-menu
+click RuleItem:critters; wait 4; expect_rule critters
+click RuleMenu; wait 4; key ArrowDown; wait 2; key ArrowDown; wait 2; key Space; wait 6
+expect_rule bbm; expect_playing off; expect_gen 0
+rule single-rotation
+
+# The editor: click two outcomes to exchange them.
+click EditRule; wait 6; shot rules-2-editor
+click Out1; wait 3; click Out2; wait 3
+expect_rule 0,8,2,3,1,5,6,7,4,9,10,11,12,13,14,15
+shot rules-3-custom
+click RuleInverse; wait 2; expect_rule 0,4,2,3,8,5,6,7,1,9,10,11,12,13,14,15
+click RuleIdentity; wait 2; expect_rule 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+# A half-made exchange does not survive a change of rule.
+click Out3; wait 2; rule tron; wait 3; click Out6; wait 3; expect_rule tron
+
+# Typing in the rule field: a preset name, then a table. `c` is a letter here, not "clear".
+clear; paint 5 5
+click RuleString; wait 2; key Ctrl+a; type critters; wait 3; expect_rule critters; expect_cell 5 5 on
+key Ctrl+a; type 15,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0; wait 3; expect_rule tron
+# A partial table is explained, not applied; leaving the field takes the explanation away.
+key Ctrl+a; type 0,1,2; wait 3; expect_rule tron; shot rules-4-partial-table
+click Grid 250 250; wait 4; shot rules-5-field-left
+key c; wait 3; expect_cell 5 5 off
+# Escape leaves the field as well.
+paint 5 5; click RuleString; wait 2; key Escape; wait 2; key c; wait 3; expect_cell 5 5 off
+
+# "Custom…" brings back the last hand-made rule.
+rule 0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15; wait 3
+click RuleMenu; wait 4; click RuleItem:hpp-gas; wait 4; expect_rule hpp-gas
+click RuleMenu; wait 4; click RuleItemCustom; wait 5
+expect_rule 0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15
+# An open menu closes when the press lands elsewhere.
+click RuleMenu; wait 4; click Grid 250 250; wait 4; shot rules-6-menu-closed
+
+# The clipboard: copy, change the rule, paste it back.
+rule critters; wait 3; click RuleCopy; wait 4
+expect_clipboard 15,14,13,3,11,5,6,1,7,9,10,2,12,4,8,0
+rule tron; wait 2; click RulePaste; wait 4; expect_rule critters
+key e; wait 4; shot rules-7-editor-closed
+quit

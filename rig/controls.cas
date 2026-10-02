@@ -1,0 +1,51 @@
+# The control panel: transport, stepping, shortcuts, sliders. Expects the default start-up
+# (single rotation, a blob in the middle, 256×256).
+wait 25; expect_gen 0; expect_playing off
+shot controls-1-start
+
+# Play and pause, by button and by key.
+click PlayPause; wait 6; expect_playing on
+key Space; wait 3; expect_playing off
+
+# Stepping: a tap is one frame, shift makes it a single generation.
+clear
+key ArrowRight; wait 2; expect_gen 1
+key ArrowLeft; wait 2; expect_gen 0
+stride 5
+click StepForward; wait 2; expect_gen 5
+press Shift; key ArrowRight; release Shift; wait 2; expect_gen 6
+click StepBack; wait 2; expect_gen 1
+stride 1; clear
+
+# Shortcuts take no modifier: Ctrl+C is not "c".
+paint 5 5
+key Ctrl+c; wait 2; expect_cell 5 5 on
+key c; wait 2; expect_cell 5 5 off
+
+# Sliders: the wheel steps to the next value, the keys nudge.
+scroll Stride 3; expect_stride 4
+scroll Stride -5; expect_stride 1
+key .; key .; wait 2; expect_stride 3
+key ,; wait 2; expect_stride 2
+stride 1
+key [; wait 2; expect_speed 15
+scroll Speed -1; wait 2
+key ]; wait 2
+shot controls-2-sliders
+
+# Checkboxes follow their option, whoever changes it.
+expect_checked Reverse off; click Reverse; wait 3; expect_checked Reverse on
+key r; wait 3; expect_checked Reverse off
+expect_checked ShowGrid on; key g; wait 3; expect_checked ShowGrid off; click ShowGrid; wait 3; expect_checked ShowGrid on
+
+# The view: the wheel zooms about the pointer, right-drag pans, a click paints under the pointer.
+# Fitted, 256 cells take 0.94 of the 900 px height; two notches zoom in by 1.44.
+clear; fit; wait 2
+scroll Grid 2; wait 2; click Grid; wait 2; expect_cell 128 128 on
+drag Grid 33 0 right; wait 2; click Grid; wait 2; expect_cell 121 128 on
+key f; wait 2; shot controls-3-view
+
+# The fastest setting must leave the window responsive: these 30 frames take half a second.
+blob; speed 240; stride 512; play; wait 30; shot controls-4-flat-out
+pause; wait 2; expect_playing off
+quit

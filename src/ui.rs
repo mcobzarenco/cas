@@ -1,32 +1,37 @@
-//! The control panel (Bevy UI + feathers, dark theme), keyboard shortcuts and stepping.
+//! The control panel (Bevy UI + feathers, dark theme) and the systems that keep it showing
+//! the state of the simulation.
 
 use bevy::{
     feathers::{
         FeathersPlugins,
         constants::fonts,
-        controls::{ButtonVariant, FeathersButton, FeathersCheckbox, FeathersRadio},
+        controls::{
+            ButtonVariant, FeathersButton, FeathersCheckbox, FeathersMenu, FeathersMenuButton,
+            FeathersMenuDivider, FeathersMenuItem, FeathersMenuPopup,
+        },
         cursor::EntityCursor,
         dark_theme::create_dark_theme,
         palette,
         theme::{ThemeBackgroundColor, ThemeBorderColor, ThemeTextColor, ThemedText, UiTheme},
         tokens,
     },
-    input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
     text::{FontSourceTemplate, FontWeight},
-    ui::{Checked, Pressed},
+    ui::Checked,
     ui_widgets::{
-        Activate, RadioGroup, Slider, SliderDragState, SliderOrientation, SliderThumb,
-        SliderValue, TrackClick, ValueChange, radio_self_update,
+        Activate, ActivateOnPress, Slider, SliderDragState, SliderOrientation, SliderThumb,
+        SliderValue, TrackClick, ValueChange,
     },
     window::SystemCursorIcon,
 };
 
 use crate::{
-    rules::RuleKind,
-    sim::{Playback, Rng, Settings, Universe, advance},
-    view::{ViewState, WHEEL_ZOOM, grid_view},
+    actions::{Action, Does, Toggle},
+    editor::{RuleEditor, describe, editor_panel},
+    rules::PRESETS,
+    sim::{Pace, Playback, Settings, SimSystems, Universe, rule_changed},
+    view::{grid_view, wheel_notches},
 };
 
 pub const PANEL_WIDTH: f32 = 300.0;
@@ -35,9 +40,8 @@ const SLIDER_HEIGHT: f32 = 18.0;
 const THUMB: f32 = 14.0;
 const RAIL: f32 = 4.0;
 
-/// Holding a step button or an arrow key repeats after this delay, at this interval.
-const REPEAT_DELAY: f32 = 0.3;
-const REPEAT_INTERVAL: f32 = 1.0 / 12.0;
+/// Shortcut reminders are legible on a button of any colour, and quiet.
+const KEY_HINT: Color = Color::srgba(1.0, 1.0, 1.0, 0.45);
 
 /// Text nodes whose content mirrors the simulation state.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -45,29 +49,10 @@ pub enum Readout {
     #[default]
     PlayPauseLabel,
     Generation,
+    Transport,
     Population,
+    RuleName,
     RuleBlurb,
-}
-
-/// Checkboxes bound to a boolean in [`Playback`] or [`Settings`].
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Toggle {
-    #[default]
-    Reverse,
-    HideVacuum,
-    ShowGrid,
-    ShowBlocks,
-}
-
-impl Toggle {
-    fn get(self, playback: &Playback, settings: &Settings) -> bool {
-        match self {
-            Toggle::Reverse => playback.reverse,
-            Toggle::HideVacuum => settings.hide_vacuum,
-            Toggle::ShowGrid => settings.show_grid,
-            Toggle::ShowBlocks => settings.show_blocks,
-        }
-    }
 }
 
 /// Sliders bound to a number in [`Playback`] or [`Settings`]. All three are logarithmic, because
@@ -119,6 +104,37 @@ impl Control {
         rounded.clamp(lo, hi)
     }
 
+    /// The nearest value the slider can show.
+    pub fn snap(self, value: f32) -> f32 {
+        self.value_at(self.position_of(value))
+    }
+
+    /// The next value up or down: a 64th of the slider, or as much further as it takes for
+    /// rounding to land on a value beyond the current one.
+    pub fn nudged(self, value: f32, up: bool) -> f32 {
+        let step = if up { 1.0 / 64.0 } else { -1.0 / 64.0 };
+        let mut position = self.position_of(value);
+        loop {
+            position = (position + step).clamp(0.0, 1.0);
+            let next = self.value_at(position);
+            let moved = if up { next > value } else { next < value };
+            if moved || position <= 0.0 || position >= 1.0 {
+                return next;
+            }
+        }
+    }
+
+    /// Writes a value to its resource, but only if it differs: writing marks the resource
+    /// changed and re-syncs the panel.
+    fn set(self, value: f32, playback: &mut ResMut<Playback>, settings: &mut ResMut<Settings>) {
+        match self {
+            Control::Speed if playback.speed != value => playback.speed = value,
+            Control::Stride if playback.stride != value as u32 => playback.stride = value as u32,
+            Control::Density if settings.density != value => settings.density = value,
+            _ => {}
+        }
+    }
+
     fn format(self, value: f32) -> String {
         match self {
             Control::Speed if value < 10.0 => format!("{value:.1} fps"),
@@ -146,13 +162,9 @@ struct ValueLabel(Control);
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SliderFill;
 
-/// The rule a radio button selects.
+/// The preset (an index into [`PRESETS`]) a rule-menu item selects.
 #[derive(Component, Clone, Copy, Debug, Default)]
-pub struct RuleChoice(pub RuleKind);
-
-/// A button that steps time by one frame while held: `+1` forwards, `-1` backwards.
-#[derive(Component, Clone, Copy, Debug, Default)]
-struct StepButton(i64);
+struct RuleChoice(usize);
 
 pub struct UiPlugin;
 
@@ -164,34 +176,25 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 (
-                    (keyboard_shortcuts, stepping).before(advance),
-                    release_focus,
-                    (sync_widgets, sync_sliders, style_sliders)
-                        .chain()
-                        .after(advance),
-                    update_status.after(advance),
-                ),
+                    sync_widgets.run_if(rule_changed.or_eager(options_changed)),
+                    (sync_sliders.run_if(options_changed), style_sliders).chain(),
+                    update_status,
+                )
+                    .in_set(SimSystems::Present),
             );
     }
 }
 
-fn spawn_ui(
-    mut commands: Commands,
-    universe: Res<Universe>,
-    playback: Res<Playback>,
-    settings: Res<Settings>,
-) {
-    commands.spawn(Camera2d);
-    let position = |control: Control| control.position_of(control.get(&playback, &settings));
-    commands.spawn_scene(root(
-        universe.kind(),
-        position(Control::Speed),
-        position(Control::Stride),
-        position(Control::Density),
-    ));
+fn options_changed(playback: Res<Playback>, settings: Res<Settings>) -> bool {
+    playback.is_changed() || settings.is_changed()
 }
 
-fn root(rule: RuleKind, speed: f32, stride: f32, density: f32) -> impl Scene {
+fn spawn_ui(mut commands: Commands) {
+    commands.spawn(Camera2d);
+    commands.spawn_scene(root());
+}
+
+fn root() -> impl Scene {
     bsn! {
         #Root
         Node {
@@ -201,13 +204,14 @@ fn root(rule: RuleKind, speed: f32, stride: f32, density: f32) -> impl Scene {
         }
         ThemeBackgroundColor(tokens::WINDOW_BG)
         Children [
-            panel(rule, speed, stride, density),
+            panel(),
+            editor_panel(),
             grid_view(),
         ]
     }
 }
 
-fn panel(rule: RuleKind, speed: f32, stride: f32, density: f32) -> impl Scene {
+fn panel() -> impl Scene {
     bsn! {
         #Panel
         Node {
@@ -223,13 +227,11 @@ fn panel(rule: RuleKind, speed: f32, stride: f32, density: f32) -> impl Scene {
         ThemeBorderColor(tokens::PANE_HEADER_BORDER)
         Children [
             header(),
-            rule_section(rule),
+            rule_section(),
             time_section(),
-            speed_section(speed, stride),
+            speed_section(),
             view_section(),
-            world_section(density),
-            (Node { flex_grow: 1.0 }),
-            help(),
+            world_section(),
         ]
     }
 }
@@ -256,7 +258,7 @@ fn header() -> impl Scene {
 }
 
 /// A titled group of controls.
-fn section(title: &'static str, body: impl SceneList) -> impl Scene {
+pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
@@ -279,7 +281,7 @@ fn section(title: &'static str, body: impl SceneList) -> impl Scene {
 }
 
 /// Small dim explanatory text.
-fn caption(text: impl Into<String>) -> impl Scene {
+pub(crate) fn caption(text: impl Into<String>) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -292,7 +294,7 @@ fn caption(text: impl Into<String>) -> impl Scene {
 }
 
 /// Monospace readout text.
-fn readout(text: impl Into<String>) -> impl Scene {
+pub(crate) fn readout(text: impl Into<String>) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -304,27 +306,61 @@ fn readout(text: impl Into<String>) -> impl Scene {
     }
 }
 
-/// A checkbox bound to `toggle`. Its checked state always follows the resource, see
-/// [`sync_widgets`].
-fn toggle(label: &'static str, name: &'static str, toggle: Toggle) -> impl Scene {
-    let name = Name::new(name);
+/// A quiet reminder of a shortcut, placed right after the label of its control.
+fn key_hint(keys: impl Into<String>) -> impl Scene {
     bsn! {
-        @FeathersCheckbox {
-            @caption: bsn! { Text(label) ThemedText }
+        Text(keys)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::MONO),
+            font_size: FontSize::Px(10.0),
+            weight: FontWeight::NORMAL,
         }
-        template_value(name)
-        template_value(toggle)
-        on(toggle_changed)
+        TextColor(KEY_HINT)
+        Node {
+            margin: UiRect { left: px(6) },
+        }
     }
 }
 
-/// A caption, the current value, and a slider underneath.
-fn slider_row(
-    label: &'static str,
-    name: &'static str,
-    control: Control,
-    position: f32,
-) -> impl Scene {
+/// The caption of a button or checkbox: its label and the key that does the same.
+fn label_with_key(label: &'static str, action: Action) -> Box<dyn SceneList> {
+    bsn_list![
+        (Text(label) ThemedText),
+        key_hint(action.key()),
+    ]
+    .into()
+}
+
+/// A button that triggers `action`, labelled with its shortcut.
+fn action_button(label: &'static str, name: &'static str, action: Action) -> impl Scene {
+    let name = Name::new(name);
+    let does = Does(action);
+    bsn! {
+        @FeathersButton {
+            @caption: {label_with_key(label, action)},
+        }
+        Node { flex_grow: 1.0 }
+        template_value(name)
+        template_value(does)
+    }
+}
+
+/// A checkbox for an on/off option. Its checked state always follows the resource, see
+/// [`sync_widgets`].
+fn toggle(label: &'static str, name: &'static str, option: Toggle) -> impl Scene {
+    let name = Name::new(name);
+    let does = Does(Action::Flip(option));
+    bsn! {
+        @FeathersCheckbox {
+            @caption: {label_with_key(label, Action::Flip(option))},
+        }
+        template_value(name)
+        template_value(does)
+    }
+}
+
+/// A caption with the keys that nudge the value, the current value, and a slider underneath.
+fn slider_row(label: &'static str, name: &'static str, control: Control, keys: String) -> impl Scene {
     let value_label = ValueLabel(control);
     bsn! {
         Node {
@@ -335,23 +371,24 @@ fn slider_row(
             (
                 Node {
                     flex_direction: FlexDirection::Row,
-                    justify_content: JustifyContent::SpaceBetween,
                     align_items: AlignItems::Center,
                 }
                 Children [
                     caption(label),
+                    key_hint(keys),
+                    (Node { flex_grow: 1.0 }),
                     (readout("") template_value(value_label)),
                 ]
             ),
-            slider(name, control, position),
+            slider(name, control),
         ]
     }
 }
 
 /// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: clicking
-/// the rail jumps there, dragging follows the pointer. The thumb travels inside a box that is
-/// one thumb narrower than the slider, so plain percentages place it.
-fn slider(name: &'static str, control: Control, position: f32) -> impl Scene {
+/// the rail jumps there, dragging follows the pointer, the wheel steps. The thumb travels
+/// inside a box that is one thumb narrower than the slider, so plain percentages place it.
+fn slider(name: &'static str, control: Control) -> impl Scene {
     let name = Name::new(name);
     bsn! {
         Node {
@@ -364,10 +401,10 @@ fn slider(name: &'static str, control: Control, position: f32) -> impl Scene {
             track_click: TrackClick::Snap,
             orientation: SliderOrientation::Horizontal,
         }
-        SliderValue(position)
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
         on(slider_changed)
+        on(slider_scrolled)
         Children [
             (
                 Node {
@@ -417,49 +454,87 @@ fn slider(name: &'static str, control: Control, position: f32) -> impl Scene {
     }
 }
 
-fn rule_section(rule: RuleKind) -> impl Scene {
-    let blurb = rule.blurb();
+/// The rule menu, a button for the editor, and what the current rule does.
+fn rule_section() -> impl Scene {
+    let presets: Vec<_> = (0..PRESETS.len()).map(rule_item).collect();
     section("RULE", bsn_list![
         (
             Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(6),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(6),
             }
-            RadioGroup
-            on(radio_self_update)
-            on(|change: On<ValueChange<Entity>>,
-                choices: Query<&RuleChoice>,
-                mut universe: ResMut<Universe>| {
-                if let Ok(choice) = choices.get(change.value) {
-                    universe.set_rule(choice.0);
-                }
-            })
             Children [
-                rule_radio(RuleKind::SingleRotation),
-                rule_radio(RuleKind::Critters),
+                (
+                    @FeathersMenu
+                    Node { flex_grow: 1.0 }
+                    Children [
+                        (
+                            #RuleMenu
+                            @FeathersMenuButton {
+                                @caption: bsn! { Text("") ThemedText template_value(Readout::RuleName) }
+                            }
+                            Node { flex_grow: 1.0 }
+                        ),
+                        (
+                            @FeathersMenuPopup
+                            Children [
+                                { presets },
+                                @FeathersMenuDivider,
+                                (
+                                    #RuleItemCustom
+                                    @FeathersMenuItem {
+                                        @caption: bsn! { Text("Custom…") ThemedText }
+                                    }
+                                    on(|_: On<Activate>,
+                                        mut editor: ResMut<RuleEditor>,
+                                        mut universe: ResMut<Universe>| {
+                                        editor.open_custom(&mut universe);
+                                    })
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
+                (
+                    action_button("Edit", "EditRule", Action::EditRule)
+                    Node { flex_grow: 0.0 }
+                ),
             ]
         ),
-        (caption(blurb) template_value(Readout::RuleBlurb)),
+        (caption("") template_value(Readout::RuleBlurb)),
     ])
 }
 
-fn rule_radio(kind: RuleKind) -> impl Scene {
-    // BSN values are literals, variables or `{ expressions }`; method calls go in variables.
-    let label = kind.name();
-    let name = Name::new(kind.id());
-    let choice = RuleChoice(kind);
+fn rule_item(index: usize) -> impl Scene {
+    let preset = &PRESETS[index];
+    let label = preset.name;
+    let name = Name::new(format!("RuleItem:{}", preset.id));
+    let choice = RuleChoice(index);
     bsn! {
-        @FeathersRadio {
+        @FeathersMenuItem {
             @caption: bsn! { Text(label) ThemedText }
         }
         template_value(name)
         template_value(choice)
+        on(|activate: On<Activate>, choices: Query<&RuleChoice>, mut universe: ResMut<Universe>| {
+            if let Ok(choice) = choices.get(activate.entity) {
+                universe.set_rule(PRESETS[choice.0].rule());
+            }
+        })
     }
 }
 
 fn time_section() -> impl Scene {
-    let back = StepButton(-1);
-    let forward = StepButton(1);
+    // The step buttons act on the press, so that holding them can repeat (`repeat_steps`).
+    let back = Does(Action::StepBack);
+    let forward = Does(Action::StepForward);
+    let play = Does(Action::PlayPause);
+    let play_caption: Box<dyn SceneList> = bsn_list![
+        (Text("Play") ThemedText template_value(Readout::PlayPauseLabel)),
+        key_hint(Action::PlayPause.key()),
+    ]
+    .into();
     section("TIME", bsn_list![
         (
             Node {
@@ -469,27 +544,25 @@ fn time_section() -> impl Scene {
             }
             Children [
                 (
-                    // Stepping is driven by `stepping`, which also repeats while held.
                     #StepBack
                     @FeathersButton {
                         @caption: bsn! { Text("← step") ThemedText }
                     }
                     Node { flex_grow: 1.0 }
+                    ActivateOnPress
                     template_value(back)
                 ),
                 (
                     #PlayPause
                     @FeathersButton {
-                        @caption: bsn! { Text("Play") ThemedText template_value(Readout::PlayPauseLabel) },
+                        @caption: {play_caption},
                         @variant: ButtonVariant::Primary,
                     }
                     Node {
                         flex_grow: 1.5,
-                        min_width: px(84),
+                        min_width: px(96),
                     }
-                    on(|_: On<Activate>, mut playback: ResMut<Playback>| {
-                        playback.playing = !playback.playing;
-                    })
+                    template_value(play)
                 ),
                 (
                     #StepForward
@@ -497,10 +570,12 @@ fn time_section() -> impl Scene {
                         @caption: bsn! { Text("step →") ThemedText }
                     }
                     Node { flex_grow: 1.0 }
+                    ActivateOnPress
                     template_value(forward)
                 ),
             ]
         ),
+        caption("hold to repeat · with shift: a single generation"),
         toggle("Run backwards in time", "Reverse", Toggle::Reverse),
         (
             Node {
@@ -508,25 +583,42 @@ fn time_section() -> impl Scene {
                 row_gap: px(3),
             }
             Children [
-                (readout("generation 0") template_value(Readout::Generation)),
-                (readout("population 0") template_value(Readout::Population)),
+                (readout("") template_value(Readout::Generation)),
+                (readout("") template_value(Readout::Transport)),
+                (readout("") template_value(Readout::Population)),
             ]
         ),
     ])
 }
 
-fn speed_section(speed: f32, stride: f32) -> impl Scene {
+fn speed_section() -> impl Scene {
+    let keys = |down: Action, up: Action| format!("{} {}", down.key(), up.key());
     section("SPEED", bsn_list![
-        slider_row("Frames per second", "Speed", Control::Speed, speed),
-        slider_row("Generations per frame", "Stride", Control::Stride, stride),
+        slider_row(
+            "Frames per second",
+            "Speed",
+            Control::Speed,
+            keys(Action::Slower, Action::Faster),
+        ),
+        slider_row(
+            "Generations per frame",
+            "Stride",
+            Control::Stride,
+            keys(Action::ShorterStride, Action::LongerStride),
+        ),
     ])
 }
 
 fn view_section() -> impl Scene {
+    let navigation = format!(
+        "wheel or {} {} zooms · right-drag pans",
+        Action::ZoomIn.key(),
+        Action::ZoomOut.key(),
+    );
     section("VIEW", bsn_list![
         toggle("Hide vacuum fluctuations", "HideVacuum", Toggle::HideVacuum),
         toggle("Cell grid", "ShowGrid", Toggle::ShowGrid),
-        toggle("2×2 blocks a forward step rotates", "ShowBlocks", Toggle::ShowBlocks),
+        toggle("2×2 blocks of the next step", "ShowBlocks", Toggle::ShowBlocks),
         (
             Node {
                 flex_direction: FlexDirection::Row,
@@ -535,287 +627,104 @@ fn view_section() -> impl Scene {
             }
             Children [
                 (
-                    #FitView
-                    @FeathersButton {
-                        @caption: bsn! { Text("Fit") ThemedText }
-                    }
-                    Node { min_width: px(56) }
-                    on(|_: On<Activate>, mut view: ResMut<ViewState>| {
-                        view.fit = true;
-                    })
+                    action_button("Fit", "FitView", Action::Fit)
+                    Node { flex_grow: 0.0 }
                 ),
-                caption("wheel zooms · right-drag pans"),
+                caption(navigation),
             ]
         ),
     ])
 }
 
-fn world_section(density: f32) -> impl Scene {
+fn world_section() -> impl Scene {
     section("WORLD", bsn_list![
-        slider_row("Density", "Density", Control::Density, density),
+        slider_row("Density", "Density", Control::Density, String::new()),
         (
             Node {
                 flex_direction: FlexDirection::Row,
                 column_gap: px(6),
             }
             Children [
-                (
-                    #Soup
-                    @FeathersButton {
-                        @caption: bsn! { Text("Soup") ThemedText }
-                    }
-                    Node { flex_grow: 1.0 }
-                    on(|_: On<Activate>,
-                        settings: Res<Settings>,
-                        mut rng: ResMut<Rng>,
-                        mut universe: ResMut<Universe>| {
-                        let density = settings.density;
-                        universe.randomize(density, &mut rng);
-                    })
-                ),
-                (
-                    #Blob
-                    @FeathersButton {
-                        @caption: bsn! { Text("Blob") ThemedText }
-                    }
-                    Node { flex_grow: 1.0 }
-                    on(|_: On<Activate>,
-                        settings: Res<Settings>,
-                        mut rng: ResMut<Rng>,
-                        mut universe: ResMut<Universe>| {
-                        let density = settings.density;
-                        universe.randomize_blob(density, &mut rng);
-                    })
-                ),
-                (
-                    #Clear
-                    @FeathersButton {
-                        @caption: bsn! { Text("Clear") ThemedText }
-                    }
-                    Node { flex_grow: 1.0 }
-                    on(|_: On<Activate>, mut universe: ResMut<Universe>| {
-                        universe.clear();
-                    })
-                ),
+                action_button("Soup", "Soup", Action::Soup),
+                action_button("Blob", "Blob", Action::Blob),
+                action_button("Clear", "Clear", Action::Clear),
             ]
         ),
         caption("Soup fills the grid, blob seeds a square in the middle. Left-drag paints, with shift it erases."),
     ])
 }
 
-fn help() -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Column,
-            row_gap: px(3),
-        }
-        Children [
-            caption("space play/pause · ← → step (shift: one)"),
-            caption("r reverse · v vacuum · g grid · p blocks"),
-            caption("f fit · + − zoom · [ ] speed · , . stride"),
-            caption("n soup · b blob · c clear"),
-        ]
-    }
-}
-
+/// Dragging or clicking a slider: the value goes to its resource, and the slider is moved to
+/// the rounded value at once, because a drag continues from where the slider says it is.
 fn slider_changed(
     change: On<ValueChange<f32>>,
     controls: Query<&Control>,
     mut playback: ResMut<Playback>,
     mut settings: ResMut<Settings>,
+    mut commands: Commands,
 ) {
-    let Ok(control) = controls.get(change.source) else {
+    let Ok(&control) = controls.get(change.source) else {
         return;
     };
     let value = control.value_at(change.value);
-    // Only write real changes: writing marks the resource changed and re-syncs the panel.
-    match control {
-        Control::Speed if playback.speed != value => playback.speed = value,
-        Control::Stride if playback.stride != value as u32 => playback.stride = value as u32,
-        Control::Density if settings.density != value => settings.density = value,
-        _ => {}
-    }
+    control.set(value, &mut playback, &mut settings);
+    commands
+        .entity(change.source)
+        .insert(SliderValue(control.position_of(value)));
 }
 
-fn toggle_changed(
-    change: On<ValueChange<bool>>,
-    toggles: Query<&Toggle>,
+/// The wheel steps a slider to its next value.
+fn slider_scrolled(
+    mut scroll: On<Pointer<Scroll>>,
+    controls: Query<&Control>,
     mut playback: ResMut<Playback>,
     mut settings: ResMut<Settings>,
+    mut residue: Local<f32>,
 ) {
-    let Ok(toggle) = toggles.get(change.source) else {
+    let Ok(&control) = controls.get(scroll.entity) else {
         return;
     };
-    match toggle {
-        Toggle::Reverse => playback.reverse = change.value,
-        Toggle::HideVacuum => settings.hide_vacuum = change.value,
-        Toggle::ShowGrid => settings.show_grid = change.value,
-        Toggle::ShowBlocks => settings.show_blocks = change.value,
+    scroll.propagate(false);
+    // Touchpads scroll in small amounts; collect them into whole notches.
+    *residue += wheel_notches(&scroll);
+    let notches = residue.trunc();
+    *residue -= notches;
+    let mut value = control.get(&playback, &settings);
+    for _ in 0..notches.abs() as u32 {
+        value = control.nudged(value, notches > 0.0);
     }
+    control.set(value, &mut playback, &mut settings);
 }
 
-fn keyboard_shortcuts(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut playback: ResMut<Playback>,
-    mut settings: ResMut<Settings>,
-    mut universe: ResMut<Universe>,
-    mut view: ResMut<ViewState>,
-    mut rng: ResMut<Rng>,
-) {
-    let pressed = |codes: &[KeyCode]| codes.iter().any(|code| keys.just_pressed(*code));
-    if pressed(&[KeyCode::Space]) {
-        playback.playing = !playback.playing;
-    }
-    if pressed(&[KeyCode::KeyR]) {
-        playback.reverse = !playback.reverse;
-    }
-    if pressed(&[KeyCode::KeyV]) {
-        settings.hide_vacuum = !settings.hide_vacuum;
-    }
-    if pressed(&[KeyCode::KeyG]) {
-        settings.show_grid = !settings.show_grid;
-    }
-    if pressed(&[KeyCode::KeyP]) {
-        settings.show_blocks = !settings.show_blocks;
-    }
-    if pressed(&[KeyCode::KeyF, KeyCode::Home]) {
-        view.fit = true;
-    }
-    if pressed(&[KeyCode::Equal, KeyCode::NumpadAdd]) {
-        view.zoom_about(Vec2::ZERO, WHEEL_ZOOM * WHEEL_ZOOM);
-    }
-    if pressed(&[KeyCode::Minus, KeyCode::NumpadSubtract]) {
-        view.zoom_about(Vec2::ZERO, 1.0 / (WHEEL_ZOOM * WHEEL_ZOOM));
-    }
-    if pressed(&[KeyCode::KeyN]) {
-        let density = settings.density;
-        universe.randomize(density, &mut rng);
-    }
-    if pressed(&[KeyCode::KeyB]) {
-        let density = settings.density;
-        universe.randomize_blob(density, &mut rng);
-    }
-    if pressed(&[KeyCode::KeyC]) {
-        universe.clear();
-    }
-    if pressed(&[KeyCode::BracketLeft]) {
-        playback.speed = (playback.speed / 2.0).max(Playback::MIN_SPEED);
-    }
-    if pressed(&[KeyCode::BracketRight]) {
-        playback.speed = (playback.speed * 2.0).min(Playback::MAX_SPEED);
-    }
-    if pressed(&[KeyCode::Comma]) {
-        playback.stride = (playback.stride - 1).max(1);
-    }
-    if pressed(&[KeyCode::Period]) {
-        playback.stride = (playback.stride + 1).min(Playback::MAX_STRIDE);
-    }
-}
-
-#[derive(Default)]
-struct Hold {
-    direction: i64,
-    elapsed: f32,
-    next: f32,
-}
-
-/// Steps time while an arrow key or a step button is held: once immediately, then repeating
-/// after a short delay. A frame is `stride` generations, or a single one with shift.
-fn stepping(
-    time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
-    buttons: Query<&StepButton, With<Pressed>>,
-    playback: Res<Playback>,
-    mut universe: ResMut<Universe>,
-    mut hold: Local<Hold>,
-) {
-    let mut direction = buttons.iter().map(|button| button.0).sum::<i64>();
-    if keys.pressed(KeyCode::ArrowRight) {
-        direction += 1;
-    }
-    if keys.pressed(KeyCode::ArrowLeft) {
-        direction -= 1;
-    }
-    let direction = direction.signum();
-    if direction == 0 {
-        *hold = Hold::default();
-        return;
-    }
-    let single = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    let steps = direction * if single { 1 } else { playback.stride as i64 };
-    if hold.direction != direction {
-        *hold = Hold {
-            direction,
-            elapsed: 0.0,
-            next: REPEAT_DELAY,
-        };
-        universe.step_by(steps);
-        return;
-    }
-    hold.elapsed += time.delta_secs();
-    // At most a few repeats per frame, however long the frame took.
-    for _ in 0..4 {
-        if hold.elapsed < hold.next {
-            break;
-        }
-        hold.next += REPEAT_INTERVAL;
-        universe.step_by(steps);
-    }
-}
-
-/// Clicking a widget gives it keyboard focus, which would make Space/arrows drive the widget
-/// instead of the simulation. We don't need focus-driven widgets, so drop it after every click.
-fn release_focus(mouse: Res<ButtonInput<MouseButton>>, mut focus: ResMut<InputFocus>) {
-    if mouse.just_released(MouseButton::Left) && focus.get().is_some() {
-        focus.clear();
-    }
-}
-
-/// Pushes resource state into the radios, checkboxes and labels, so changes from anywhere
-/// (the widgets themselves, keyboard shortcuts, the test rig) show up in the panel. Also runs
-/// when the widgets appear, since the scene is spawned asynchronously.
+/// Pushes resource state into the checkboxes and labels, so changes from anywhere (the widgets
+/// themselves, shortcuts, the rule editor, the test rig) show up in the panel.
 fn sync_widgets(
     universe: Res<Universe>,
     playback: Res<Playback>,
     settings: Res<Settings>,
-    radios: Query<(Entity, &RuleChoice, Has<Checked>)>,
-    toggles: Query<(Entity, &Toggle, Has<Checked>)>,
+    controls: Query<(Entity, &Does, Has<Checked>)>,
     mut readouts: Query<(&Readout, &mut Text)>,
-    added: Query<(), Or<(Added<RuleChoice>, Added<Toggle>, Added<Readout>)>>,
-    mut last_rule: Local<Option<RuleKind>>,
     mut commands: Commands,
 ) {
-    let fresh = !added.is_empty();
-    let kind = universe.kind();
-    let rule_changed = *last_rule != Some(kind);
-    *last_rule = Some(kind);
-    if !(fresh || rule_changed || playback.is_changed() || settings.is_changed()) {
-        return;
-    }
-    for (entity, choice, checked) in &radios {
-        set_checked(&mut commands, entity, checked, choice.0 == kind);
-    }
-    for (entity, toggle, checked) in &toggles {
-        set_checked(&mut commands, entity, checked, toggle.get(&playback, &settings));
+    for (entity, does, checked) in &controls {
+        let Action::Flip(toggle) = does.0 else {
+            continue;
+        };
+        match (toggle.get(&playback, &settings), checked) {
+            (true, false) => commands.entity(entity).insert(Checked),
+            (false, true) => commands.entity(entity).remove::<Checked>(),
+            _ => continue,
+        };
     }
     for (readout, mut text) in &mut readouts {
         let content = match readout {
-            Readout::PlayPauseLabel if playback.playing => "Pause",
-            Readout::PlayPauseLabel => "Play",
-            Readout::RuleBlurb => kind.blurb(),
-            Readout::Generation | Readout::Population => continue,
+            Readout::PlayPauseLabel if playback.playing => "Pause".to_string(),
+            Readout::PlayPauseLabel => "Play".to_string(),
+            Readout::RuleName => universe.rule().name().to_string(),
+            Readout::RuleBlurb => describe(universe.rule()),
+            Readout::Generation | Readout::Transport | Readout::Population => continue,
         };
-        if text.0 != content {
-            text.0 = content.into();
-        }
-    }
-}
-
-fn set_checked(commands: &mut Commands, entity: Entity, is_checked: bool, checked: bool) {
-    if checked && !is_checked {
-        commands.entity(entity).insert(Checked);
-    } else if !checked && is_checked {
-        commands.entity(entity).remove::<Checked>();
+        text.set_if_neq(Text(content));
     }
 }
 
@@ -825,12 +734,8 @@ fn sync_sliders(
     settings: Res<Settings>,
     sliders: Query<(Entity, &Control, &SliderValue)>,
     mut labels: Query<(&ValueLabel, &mut Text)>,
-    added: Query<(), Or<(Added<Control>, Added<ValueLabel>)>>,
     mut commands: Commands,
 ) {
-    if !(playback.is_changed() || settings.is_changed() || !added.is_empty()) {
-        return;
-    }
     for (entity, control, current) in &sliders {
         let position = control.position_of(control.get(&playback, &settings));
         if (current.0 - position).abs() > 1e-6 {
@@ -839,9 +744,7 @@ fn sync_sliders(
     }
     for (label, mut text) in &mut labels {
         let content = label.0.format(label.0.get(&playback, &settings));
-        if text.0 != content {
-            text.0 = content;
-        }
+        text.set_if_neq(Text(content));
     }
 }
 
@@ -881,47 +784,68 @@ fn style_sliders(
     }
 }
 
+/// The generation, what the transport is doing, and the population as it is drawn.
 fn update_status(
     universe: Res<Universe>,
     playback: Res<Playback>,
+    settings: Res<Settings>,
+    pace: Res<Pace>,
     mut readouts: Query<(&Readout, &mut Text)>,
-    added: Query<(), Added<Readout>>,
 ) {
-    if !(universe.is_changed() || playback.is_changed() || !added.is_empty()) {
+    let changed = universe.is_changed()
+        || playback.is_changed()
+        || settings.is_changed()
+        || pace.is_changed();
+    if !changed {
         return;
     }
-    let state = if playback.playing {
-        let rate = playback.speed * playback.stride as f32;
-        let digits = if rate < 10.0 { 1 } else { 0 };
-        format!(
-            "running {} · {rate:.digits$} gen/s",
-            if playback.reverse { "backwards" } else { "forwards" },
-        )
+    let transport = if playback.playing {
+        let direction = if playback.reverse { "backwards" } else { "forwards" };
+        let requested = playback.speed * playback.stride as f32;
+        match pace.achieved {
+            // A few dropped frames are not worth a second number.
+            Some(achieved) if achieved < 0.95 * requested => format!(
+                "{direction} · {} of {} gen/s",
+                format_rate(achieved),
+                format_rate(requested)
+            ),
+            _ => format!("{direction} · {} gen/s", format_rate(requested)),
+        }
     } else {
         "paused".to_string()
     };
-    let population = universe.population();
     let cells = universe.width * universe.height;
+    let population = if settings.shows_complement(&universe) {
+        cells - universe.population()
+    } else {
+        universe.population()
+    };
     for (readout, mut text) in &mut readouts {
-        match readout {
-            Readout::Generation => {
-                text.0 = format!("generation {}  ·  {state}", group_digits(universe.generation));
-            }
-            Readout::Population => {
-                text.0 = format!(
-                    "population {} ({:.2}%)",
-                    group_digits(population as i64),
-                    100.0 * population as f64 / cells as f64,
-                );
-            }
-            _ => {}
-        }
+        let content = match readout {
+            Readout::Generation => format!("generation {}", group_digits(universe.generation)),
+            Readout::Transport => transport.clone(),
+            Readout::Population => format!(
+                "population {} ({:.2}%)",
+                group_digits(population as i64),
+                100.0 * population as f64 / cells as f64,
+            ),
+            _ => continue,
+        };
+        text.set_if_neq(Text(content));
+    }
+}
+
+fn format_rate(generations_per_second: f32) -> String {
+    if generations_per_second < 10.0 {
+        format!("{generations_per_second:.1}")
+    } else {
+        group_digits(generations_per_second.round() as i64)
     }
 }
 
 /// `1234567` → `1 234 567`.
 fn group_digits(n: i64) -> String {
-    let digits = n.abs().to_string();
+    let digits = n.unsigned_abs().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
     if n < 0 {
         out.push('-');
@@ -972,6 +896,35 @@ mod tests {
     }
 
     #[test]
+    fn nudging_moves_in_the_direction_asked() {
+        for control in [Control::Speed, Control::Stride, Control::Density] {
+            let (lo, hi) = control.range();
+            // From the bottom to the top and back, every nudge must make progress.
+            let mut value = lo;
+            let mut steps = 0;
+            while value < hi {
+                let next = control.nudged(value, true);
+                assert!(next > value, "{control:?}: {value} went up to {next}");
+                value = next;
+                steps += 1;
+            }
+            assert!(steps > 20, "{control:?} has only {steps} stops");
+            while value > lo {
+                let next = control.nudged(value, false);
+                assert!(next < value, "{control:?}: {value} went down to {next}");
+                value = next;
+            }
+            assert_eq!(control.nudged(lo, false), lo);
+            assert_eq!(control.nudged(hi, true), hi);
+        }
+        // A value between two stops, as halving the speed with a key leaves it.
+        assert_eq!(Control::Speed.nudged(0.9375, false), 0.5);
+        assert_eq!(Control::Speed.nudged(0.9375, true), 1.0);
+        assert!([3.5, 4.0].contains(&Control::Speed.snap(3.75)));
+        assert_eq!(Control::Stride.nudged(1.0, true), 2.0);
+    }
+
+    #[test]
     fn values_are_formatted_for_humans() {
         assert_eq!(Control::Speed.format(30.0), "30 fps");
         assert_eq!(Control::Speed.format(0.5), "0.5 fps");
@@ -981,5 +934,7 @@ mod tests {
         assert_eq!(Control::Density.format(0.001), "0.10 %");
         assert_eq!(Control::Density.format(0.0001), "0.010 %");
         assert_eq!(group_digits(-1234567), "-1 234 567");
+        assert_eq!(format_rate(122_880.0), "122 880");
+        assert_eq!(format_rate(0.5), "0.5");
     }
 }

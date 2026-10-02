@@ -22,6 +22,9 @@ bevy = { path = "../bevy", default-features = false, features = [
   "png",
   # the dark-themed widget set
   "bevy_feathers",
+  # copy/paste of rule strings through the OS clipboard
+  "bevy_clipboard",
+  "system_clipboard",
 ] }
 clap = { version = "4", features = ["derive"] }
 rayon = "1"

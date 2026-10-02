@@ -17,13 +17,16 @@
 //! | `drag NAME DX DY [left/right/middle]` | press at the node's centre, move by (DX, DY) |
 //! |                     | in a few steps, release                                        |
 //! | `hold NAME FRAMES`  | press the node, keep the button down for FRAMES frames, release |
-//! | `scroll NAME LINES` | turn the wheel over the node (positive zooms in)               |
-//! | `key KEY`           | press and release a key (`Space`, `ArrowLeft`, `r`, `[`, ...)  |
+//! | `scroll NAME LINES` | turn the wheel over the node (positive is "up")                |
+//! | `key KEY`           | press and release a key or chord: `Space`, `ArrowLeft`, `r`,   |
+//! |                     | `[`, `Ctrl+a`, ...                                             |
+//! | `press KEY`, `release KEY` | hold a key down across other commands, e.g. `Shift`     |
+//! | `type TEXT`         | type text into whatever has keyboard focus                     |
 //! | `paint X Y [on/off]`| set a cell directly                                            |
 //! | `fit`               | fit the view to the grid                                       |
 //! | `play`, `pause`     | transport                                                      |
 //! | `step N`            | advance N generations (negative goes backwards)                |
-//! | `rule NAME`         | switch rule                                                    |
+//! | `rule RULE`         | switch rule: a preset name or a table of 16 states             |
 //! | `speed N`           | frames per second                                              |
 //! | `stride N`          | generations per frame                                          |
 //! | `vacuum on/off`     | hide vacuum fluctuations                                       |
@@ -32,38 +35,52 @@
 //! | `blob [DENSITY]`    | random square in the middle                                    |
 //! | `expect_gen N`      | fail (exit code 1) unless the generation counter is N           |
 //! | `expect_cell X Y on/off` | fail unless the cell has that state                       |
+//! | `expect_rule RULE`  | fail unless that rule is active                                |
+//! | `expect_speed N`, `expect_stride N`, `expect_playing on/off` | likewise for the transport |
+//! | `expect_population N` | fail unless that many cells are alive (stored, not as drawn)   |
+//! | `expect_checked NAME on/off` | fail unless the checkbox named NAME shows that state   |
+//! | `expect_clipboard TEXT` | fail unless the clipboard holds TEXT                       |
 //! | `clear`, `quit`     |                                                                |
 //!
 //! Pointer and keyboard actions are injected as the messages `bevy_winit` would produce, so they
 //! flow through picking, focus and the widgets exactly like real input: clicking buttons,
-//! dragging sliders, painting, wheel-zooming and panning the grid are all scriptable. The
-//! window's own cursor position is deliberately left alone, because changing it makes winit warp
-//! the real OS cursor.
+//! dragging sliders, painting, wheel-zooming and panning the grid, opening menus and typing into
+//! text fields are all scriptable. The window's own cursor position is deliberately left alone,
+//! because changing it makes winit warp the real OS cursor.
+//!
+//! A run must not depend on what the person at the machine happens to do, so real input is
+//! discarded while a script runs (and `main` makes the window transparent to the pointer).
+//! A command that names a missing UI node or a cell outside the grid fails the run.
 
 use std::{collections::VecDeque, path::PathBuf};
 
 use bevy::{
-    ecs::system::SystemParam,
+    clipboard::Clipboard,
+    ecs::{
+        message::{MessageUpdateSystems, Messages},
+        system::SystemParam,
+    },
     input::{
         ButtonState,
-        keyboard::{Key, KeyboardInput, NativeKey},
+        keyboard::{Key, KeyboardFocusLost, KeyboardInput, NativeKey},
         mouse::{MouseButtonInput, MouseScrollUnit, MouseWheel},
         touch::TouchPhase,
     },
+    picking::PickingSystems,
     prelude::*,
     render::view::screenshot::{Screenshot, save_to_disk},
-    ui::UiGlobalTransform,
+    ui::{Checked, UiGlobalTransform},
     window::{CursorMoved, PrimaryWindow, WindowEvent},
 };
 
 use crate::{
-    rules::RuleKind,
+    rules::BlockRule,
     sim::{Playback, Rng, Settings, Universe},
     view::ViewState,
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Action {
+pub enum Command {
     Wait(u32),
     Shot(String),
     Click { name: String, offset: Vec2 },
@@ -71,12 +88,16 @@ pub enum Action {
     Drag { name: String, delta: Vec2, button: MouseButton },
     Scroll { name: String, lines: f32 },
     Hold { name: String, frames: u32 },
-    Key(KeyCode),
+    /// Keys pressed in order and released in reverse: `[ControlLeft, KeyA]` is Ctrl+A.
+    Key(Vec<KeyCode>),
+    Press(KeyCode),
+    Release(KeyCode),
+    Type(String),
     Paint { x: usize, y: usize, alive: bool },
     Play,
     Pause,
     Step(i64),
-    Rule(RuleKind),
+    Rule(BlockRule),
     Speed(f32),
     Stride(u32),
     Vacuum(bool),
@@ -87,11 +108,18 @@ pub enum Action {
     Fit,
     ExpectGeneration(i64),
     ExpectCell { x: usize, y: usize, alive: bool },
+    ExpectRule(BlockRule),
+    ExpectSpeed(f32),
+    ExpectStride(u32),
+    ExpectPopulation(usize),
+    ExpectPlaying(bool),
+    ExpectChecked { name: String, checked: bool },
+    ExpectClipboard(String),
     Quit,
 }
 
-pub fn parse_script(script: &str) -> Result<Vec<Action>, String> {
-    let mut actions = Vec::new();
+pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
+    let mut commands = Vec::new();
     let statements = script
         .lines()
         .map(|line| line.split('#').next().unwrap_or_default())
@@ -109,60 +137,87 @@ pub fn parse_script(script: &str) -> Result<Vec<Action>, String> {
                 .copied()
                 .ok_or_else(|| format!("`{command}` needs {what}"))
         };
-        let action = match command {
-            "wait" => Action::Wait(parse(arg(0, "a frame count")?)?),
-            "shot" => Action::Shot(arg(0, "a file name")?.to_string()),
-            "click" => Action::Click {
+        // Everything after the command, for arguments that may contain spaces.
+        let rest = |what: &str| -> Result<String, String> {
+            if args.is_empty() {
+                Err(format!("`{command}` needs {what}"))
+            } else {
+                Ok(args.join(" "))
+            }
+        };
+        let parsed = match command {
+            "wait" => Command::Wait(parse(arg(0, "a frame count")?)?),
+            "shot" => Command::Shot(arg(0, "a file name")?.to_string()),
+            "click" => Command::Click {
                 name: arg(0, "a UI node name")?.to_string(),
                 offset: parse_offset(&args, 1)?,
             },
-            "move" => Action::Move {
+            "move" => Command::Move {
                 name: arg(0, "a UI node name")?.to_string(),
                 offset: parse_offset(&args, 1)?,
             },
-            "drag" => Action::Drag {
+            "drag" => Command::Drag {
                 name: arg(0, "a UI node name")?.to_string(),
                 delta: Vec2::new(parse(arg(1, "dx")?)?, parse(arg(2, "dy")?)?),
                 button: args.get(3).map_or(Ok(MouseButton::Left), |s| parse_button(s))?,
             },
-            "hold" => Action::Hold {
+            "hold" => Command::Hold {
                 name: arg(0, "a UI node name")?.to_string(),
                 frames: parse(arg(1, "a frame count")?)?,
             },
-            "scroll" => Action::Scroll {
+            "scroll" => Command::Scroll {
                 name: arg(0, "a UI node name")?.to_string(),
                 lines: parse(arg(1, "a number of wheel notches")?)?,
             },
-            "key" => Action::Key(parse_key(arg(0, "a key")?)?),
-            "paint" => Action::Paint {
+            "key" => Command::Key(parse_chord(arg(0, "a key")?)?),
+            "press" => Command::Press(parse_key(arg(0, "a key")?)?),
+            "release" => Command::Release(parse_key(arg(0, "a key")?)?),
+            "type" => {
+                let text = rest("some text")?;
+                if let Some(c) = text.chars().find(|&c| key_for_char(c).is_none()) {
+                    return Err(format!("`type` cannot type {c:?}"));
+                }
+                Command::Type(text)
+            }
+            "paint" => Command::Paint {
                 x: parse(arg(0, "x")?)?,
                 y: parse(arg(1, "y")?)?,
                 alive: args.get(2).map_or(Ok(true), |s| parse_bool(s))?,
             },
-            "play" => Action::Play,
-            "pause" => Action::Pause,
-            "step" => Action::Step(args.first().map_or(Ok(1), |s| parse(s))?),
-            "rule" => Action::Rule(arg(0, "a rule name")?.parse()?),
-            "speed" => Action::Speed(parse(arg(0, "frames per second")?)?),
-            "stride" => Action::Stride(parse(arg(0, "generations per frame")?)?),
-            "vacuum" => Action::Vacuum(parse_bool(arg(0, "on/off")?)?),
-            "reverse" => Action::Reverse(parse_bool(arg(0, "on/off")?)?),
-            "soup" => Action::Soup(args.first().map(|s| parse(s)).transpose()?),
-            "blob" => Action::Blob(args.first().map(|s| parse(s)).transpose()?),
-            "clear" => Action::Clear,
-            "fit" => Action::Fit,
-            "expect_gen" => Action::ExpectGeneration(parse(arg(0, "a generation")?)?),
-            "expect_cell" => Action::ExpectCell {
+            "play" => Command::Play,
+            "pause" => Command::Pause,
+            "step" => Command::Step(args.first().map_or(Ok(1), |s| parse(s))?),
+            "rule" => Command::Rule(rest("a rule")?.parse()?),
+            "speed" => Command::Speed(parse(arg(0, "frames per second")?)?),
+            "stride" => Command::Stride(parse(arg(0, "generations per frame")?)?),
+            "vacuum" => Command::Vacuum(parse_bool(arg(0, "on/off")?)?),
+            "reverse" => Command::Reverse(parse_bool(arg(0, "on/off")?)?),
+            "soup" => Command::Soup(args.first().map(|s| parse(s)).transpose()?),
+            "blob" => Command::Blob(args.first().map(|s| parse(s)).transpose()?),
+            "clear" => Command::Clear,
+            "fit" => Command::Fit,
+            "expect_gen" => Command::ExpectGeneration(parse(arg(0, "a generation")?)?),
+            "expect_cell" => Command::ExpectCell {
                 x: parse(arg(0, "x")?)?,
                 y: parse(arg(1, "y")?)?,
                 alive: parse_bool(arg(2, "on/off")?)?,
             },
-            "quit" => Action::Quit,
+            "expect_rule" => Command::ExpectRule(rest("a rule")?.parse()?),
+            "expect_speed" => Command::ExpectSpeed(parse(arg(0, "frames per second")?)?),
+            "expect_stride" => Command::ExpectStride(parse(arg(0, "generations per frame")?)?),
+            "expect_population" => Command::ExpectPopulation(parse(arg(0, "a number of cells")?)?),
+            "expect_playing" => Command::ExpectPlaying(parse_bool(arg(0, "on/off")?)?),
+            "expect_checked" => Command::ExpectChecked {
+                name: arg(0, "a UI node name")?.to_string(),
+                checked: parse_bool(arg(1, "on/off")?)?,
+            },
+            "expect_clipboard" => Command::ExpectClipboard(rest("some text")?),
+            "quit" => Command::Quit,
             other => return Err(format!("unknown command `{other}` in {line:?}")),
         };
-        actions.push(action);
+        commands.push(parsed);
     }
-    Ok(actions)
+    Ok(commands)
 }
 
 fn parse<T: std::str::FromStr>(s: &str) -> Result<T, String>
@@ -198,7 +253,8 @@ fn parse_bool(s: &str) -> Result<bool, String> {
     }
 }
 
-const LETTERS: [(char, KeyCode); 26] = [
+/// Keys that produce a character, with the character they produce (unshifted).
+const CHARACTER_KEYS: [(char, KeyCode); 43] = [
     ('a', KeyCode::KeyA),
     ('b', KeyCode::KeyB),
     ('c', KeyCode::KeyC),
@@ -225,16 +281,32 @@ const LETTERS: [(char, KeyCode); 26] = [
     ('x', KeyCode::KeyX),
     ('y', KeyCode::KeyY),
     ('z', KeyCode::KeyZ),
-];
-
-const PUNCTUATION: [(char, KeyCode); 6] = [
+    ('0', KeyCode::Digit0),
+    ('1', KeyCode::Digit1),
+    ('2', KeyCode::Digit2),
+    ('3', KeyCode::Digit3),
+    ('4', KeyCode::Digit4),
+    ('5', KeyCode::Digit5),
+    ('6', KeyCode::Digit6),
+    ('7', KeyCode::Digit7),
+    ('8', KeyCode::Digit8),
+    ('9', KeyCode::Digit9),
     ('[', KeyCode::BracketLeft),
     (']', KeyCode::BracketRight),
     (',', KeyCode::Comma),
     ('.', KeyCode::Period),
     ('=', KeyCode::Equal),
     ('-', KeyCode::Minus),
+    (' ', KeyCode::Space),
 ];
+
+fn key_for_char(c: char) -> Option<KeyCode> {
+    let c = c.to_ascii_lowercase();
+    CHARACTER_KEYS
+        .iter()
+        .find(|(character, _)| *character == c)
+        .map(|(_, code)| *code)
+}
 
 fn parse_key(s: &str) -> Result<KeyCode, String> {
     let named = match s {
@@ -246,22 +318,34 @@ fn parse_key(s: &str) -> Result<KeyCode, String> {
         "Enter" => Some(KeyCode::Enter),
         "Escape" => Some(KeyCode::Escape),
         "Tab" => Some(KeyCode::Tab),
+        "Backspace" => Some(KeyCode::Backspace),
+        "Delete" => Some(KeyCode::Delete),
+        "Home" => Some(KeyCode::Home),
+        "End" => Some(KeyCode::End),
+        "Ctrl" | "Control" => Some(KeyCode::ControlLeft),
+        "Shift" => Some(KeyCode::ShiftLeft),
+        "Alt" => Some(KeyCode::AltLeft),
         _ => None,
     };
     if let Some(code) = named {
         return Ok(code);
     }
     let mut chars = s.chars();
-    if let (Some(c), None) = (chars.next(), chars.next()) {
-        let c = c.to_ascii_lowercase();
-        if let Some((_, code)) = LETTERS.iter().chain(&PUNCTUATION).find(|(k, _)| *k == c) {
-            return Ok(*code);
-        }
+    if let (Some(c), None) = (chars.next(), chars.next())
+        && c != ' '
+        && let Some(code) = key_for_char(c)
+    {
+        return Ok(code);
     }
     Err(format!("unknown key {s:?}"))
 }
 
-/// Best-effort logical key for a synthetic key code (only the keys the app binds matter).
+/// `Ctrl+a` → `[ControlLeft, KeyA]`.
+fn parse_chord(s: &str) -> Result<Vec<KeyCode>, String> {
+    s.split('+').map(parse_key).collect()
+}
+
+/// Best-effort logical key for a synthetic key code.
 fn logical_key(code: KeyCode) -> Key {
     match code {
         KeyCode::Space => Key::Space,
@@ -272,9 +356,15 @@ fn logical_key(code: KeyCode) -> Key {
         KeyCode::Enter => Key::Enter,
         KeyCode::Escape => Key::Escape,
         KeyCode::Tab => Key::Tab,
-        _ => LETTERS
+        KeyCode::Backspace => Key::Backspace,
+        KeyCode::Delete => Key::Delete,
+        KeyCode::Home => Key::Home,
+        KeyCode::End => Key::End,
+        KeyCode::ControlLeft => Key::Control,
+        KeyCode::ShiftLeft => Key::Shift,
+        KeyCode::AltLeft => Key::Alt,
+        _ => CHARACTER_KEYS
             .iter()
-            .chain(&PUNCTUATION)
             .find(|(_, k)| *k == code)
             .map_or(Key::Unidentified(NativeKey::Unidentified), |(c, _)| {
                 Key::Character(c.to_string().into())
@@ -282,13 +372,18 @@ fn logical_key(code: KeyCode) -> Key {
     }
 }
 
-/// One frame's worth of synthetic pointer input; picking wants to see each step separately.
+/// One frame's worth of synthetic input; picking and focus want to see each step separately.
 #[derive(Clone, Copy, Debug)]
-enum PointerStep {
-    /// Move to a position in logical window coordinates.
+enum InputStep {
+    /// Move the pointer to a position in logical window coordinates.
     Move(Vec2),
-    Button(MouseButton, ButtonState),
+    /// Press or release a button at a position. The position is re-asserted in the same frame,
+    /// so a real mouse wandering over the window cannot redirect the click.
+    Button(Vec2, MouseButton, ButtonState),
     Wheel(f32),
+    Key(KeyCode, ButtonState),
+    /// Press and release a key that types a character.
+    Type(char),
     /// Let a frame pass (while a button is held).
     Idle,
 }
@@ -298,18 +393,17 @@ const DRAG_STEPS: u32 = 8;
 
 #[derive(Resource)]
 struct Rig {
-    actions: VecDeque<Action>,
+    script: VecDeque<Command>,
     dir: PathBuf,
-    /// Frames to idle before the first action, so the window and the layout can settle.
+    /// Frames to idle before the first command, so the window and the layout can settle.
     settle: u32,
     wait: u32,
-    pointer: VecDeque<PointerStep>,
-    key_release: Option<KeyCode>,
+    input: VecDeque<InputStep>,
     shot: Option<Entity>,
 }
 
 pub struct RigPlugin {
-    pub actions: Vec<Action>,
+    pub script: Vec<Command>,
     pub dir: PathBuf,
 }
 
@@ -318,35 +412,65 @@ impl Plugin for RigPlugin {
         std::fs::create_dir_all(&self.dir)
             .unwrap_or_else(|e| panic!("cannot create {}: {e}", self.dir.display()));
         app.insert_resource(Rig {
-            actions: self.actions.clone().into(),
+            script: self.script.clone().into(),
             dir: self.dir.clone(),
             settle: 15,
             wait: 0,
-            pointer: VecDeque::new(),
-            key_release: None,
+            input: VecDeque::new(),
             shot: None,
         })
-        .add_systems(First, drive);
+        // Before anything reads this frame's input: picking does so in `First` already.
+        .add_systems(
+            First,
+            drive
+                .after(MessageUpdateSystems)
+                .before(PickingSystems::Input),
+        );
     }
 }
 
-/// Writes input the way `bevy_winit` does: every event goes out both as its own message and
-/// wrapped in a `WindowEvent`.
+/// The input messages of the app. `bevy_winit` writes every event both as its own message and
+/// wrapped in a `WindowEvent`, and so does the rig.
 #[derive(SystemParam)]
 struct Input<'w, 's> {
     window: Single<'w, 's, Entity, With<PrimaryWindow>>,
-    cursor_moved: MessageWriter<'w, CursorMoved>,
-    mouse_buttons: MessageWriter<'w, MouseButtonInput>,
-    mouse_wheel: MessageWriter<'w, MouseWheel>,
-    keyboard: MessageWriter<'w, KeyboardInput>,
-    window_events: MessageWriter<'w, WindowEvent>,
+    cursor_moved: ResMut<'w, Messages<CursorMoved>>,
+    mouse_buttons: ResMut<'w, Messages<MouseButtonInput>>,
+    mouse_wheel: ResMut<'w, Messages<MouseWheel>>,
+    keyboard: ResMut<'w, Messages<KeyboardInput>>,
+    focus_lost: ResMut<'w, Messages<KeyboardFocusLost>>,
+    window_events: ResMut<'w, Messages<WindowEvent>>,
 }
 
 impl Input<'_, '_> {
-    fn pointer(&mut self, step: PointerStep) {
+    /// Throws away what the real mouse and keyboard did since the last frame.
+    fn discard_real(&mut self) {
+        self.cursor_moved.clear();
+        self.mouse_buttons.clear();
+        self.mouse_wheel.clear();
+        self.keyboard.clear();
+        self.focus_lost.clear();
+        let others: Vec<WindowEvent> = self
+            .window_events
+            .drain()
+            .filter(|event| {
+                !matches!(
+                    event,
+                    WindowEvent::CursorMoved(_)
+                        | WindowEvent::MouseButtonInput(_)
+                        | WindowEvent::MouseWheel(_)
+                        | WindowEvent::KeyboardInput(_)
+                        | WindowEvent::KeyboardFocusLost(_)
+                )
+            })
+            .collect();
+        self.window_events.write_batch(others);
+    }
+
+    fn send(&mut self, step: InputStep) {
         let window = *self.window;
         match step {
-            PointerStep::Move(position) => {
+            InputStep::Move(position) => {
                 let event = CursorMoved {
                     window,
                     position,
@@ -355,7 +479,8 @@ impl Input<'_, '_> {
                 self.cursor_moved.write(event.clone());
                 self.window_events.write(WindowEvent::CursorMoved(event));
             }
-            PointerStep::Button(button, state) => {
+            InputStep::Button(position, button, state) => {
+                self.send(InputStep::Move(position));
                 let event = MouseButtonInput {
                     button,
                     state,
@@ -365,7 +490,7 @@ impl Input<'_, '_> {
                 self.window_events
                     .write(WindowEvent::MouseButtonInput(event));
             }
-            PointerStep::Wheel(lines) => {
+            InputStep::Wheel(lines) => {
                 let event = MouseWheel {
                     unit: MouseScrollUnit::Line,
                     x: 0.0,
@@ -376,16 +501,23 @@ impl Input<'_, '_> {
                 self.mouse_wheel.write(event);
                 self.window_events.write(WindowEvent::MouseWheel(event));
             }
-            PointerStep::Idle => {}
+            InputStep::Key(code, state) => self.key(code, logical_key(code), state, None),
+            InputStep::Type(c) => {
+                let code = key_for_char(c).unwrap_or(KeyCode::Space);
+                let logical = Key::Character(c.to_string().into());
+                self.key(code, logical.clone(), ButtonState::Pressed, Some(c));
+                self.key(code, logical, ButtonState::Released, None);
+            }
+            InputStep::Idle => {}
         }
     }
 
-    fn key(&mut self, code: KeyCode, state: ButtonState) {
+    fn key(&mut self, code: KeyCode, logical_key: Key, state: ButtonState, text: Option<char>) {
         let event = KeyboardInput {
             key_code: code,
-            logical_key: logical_key(code),
+            logical_key,
             state,
-            text: None,
+            text: text.map(|c| c.to_string().into()),
             repeat: false,
             window: *self.window,
         };
@@ -394,10 +526,11 @@ impl Input<'_, '_> {
     }
 }
 
+/// Runs the script: one input step or one command per frame.
 fn drive(
     mut rig: ResMut<Rig>,
     mut input: Input,
-    nodes: Query<(&Name, &ComputedNode, &UiGlobalTransform)>,
+    nodes: Query<(&Name, &ComputedNode, &UiGlobalTransform, Has<Checked>)>,
     screenshots: Query<(), With<Screenshot>>,
     mut app_exit: MessageWriter<AppExit>,
     mut playback: ResMut<Playback>,
@@ -405,11 +538,10 @@ fn drive(
     mut universe: ResMut<Universe>,
     mut view: ResMut<ViewState>,
     mut rng: ResMut<Rng>,
+    mut clipboard: ResMut<Clipboard>,
     mut commands: Commands,
 ) {
-    if let Some(code) = rig.key_release.take() {
-        input.key(code, ButtonState::Released);
-    }
+    input.discard_real();
     if rig.settle > 0 {
         rig.settle -= 1;
         return;
@@ -426,134 +558,181 @@ fn drive(
         rig.wait -= 1;
         return;
     }
-    if let Some(step) = rig.pointer.pop_front() {
-        input.pointer(step);
+    if let Some(step) = rig.input.pop_front() {
+        input.send(step);
         return;
     }
-
-    let Some(action) = rig.actions.pop_front() else {
+    let Some(command) = rig.script.pop_front() else {
         return;
     };
-    info!("rig: {action:?}");
-    // Centre of a named UI node in logical window coordinates.
-    let locate = |name: &str| {
-        let found = nodes
+    info!("rig: {command:?}");
+
+    let node = |name: &str| {
+        nodes
             .iter()
             .find(|(n, ..)| n.as_str() == name)
-            .map(|(_, computed, transform)| transform.translation * computed.inverse_scale_factor);
-        if found.is_none() {
-            error!("rig: no UI node named {name:?}");
-        }
-        found
+            .ok_or_else(|| format!("no UI node named {name:?}"))
     };
+    // Centre of a named UI node in logical window coordinates.
+    let locate = |name: &str| {
+        node(name).map(|(_, computed, transform, _)| {
+            transform.translation * computed.inverse_scale_factor
+        })
+    };
+    let expect = |holds: bool, complaint: String| if holds { Ok(()) } else { Err(complaint) };
     use ButtonState::{Pressed, Released};
-    match action {
-        Action::Wait(frames) => rig.wait = frames,
-        Action::Shot(name) => {
-            let path = rig.dir.join(format!("{name}.png"));
-            let entity = commands
-                .spawn(Screenshot::primary_window())
-                .observe(save_to_disk(path))
-                .id();
-            rig.shot = Some(entity);
-        }
-        Action::Click { name, offset } => {
-            if let Some(center) = locate(&name) {
-                rig.pointer.extend([
-                    PointerStep::Move(center + offset),
-                    PointerStep::Button(MouseButton::Left, Pressed),
-                    PointerStep::Button(MouseButton::Left, Released),
+
+    let outcome: Result<(), String> = (|| {
+        match command {
+            Command::Wait(frames) => rig.wait = frames,
+            Command::Shot(name) => {
+                let path = rig.dir.join(format!("{name}.png"));
+                let entity = commands
+                    .spawn(Screenshot::primary_window())
+                    .observe(save_to_disk(path))
+                    .id();
+                rig.shot = Some(entity);
+            }
+            Command::Click { name, offset } => {
+                let at = locate(&name)? + offset;
+                rig.input.extend([
+                    InputStep::Move(at),
+                    InputStep::Button(at, MouseButton::Left, Pressed),
+                    InputStep::Button(at, MouseButton::Left, Released),
                 ]);
             }
-        }
-        Action::Move { name, offset } => {
-            if let Some(center) = locate(&name) {
-                rig.pointer.push_back(PointerStep::Move(center + offset));
+            Command::Move { name, offset } => {
+                let at = locate(&name)? + offset;
+                rig.input.push_back(InputStep::Move(at));
             }
-        }
-        Action::Drag {
-            name,
-            delta,
-            button,
-        } => {
-            if let Some(center) = locate(&name) {
-                rig.pointer.push_back(PointerStep::Move(center));
-                rig.pointer.push_back(PointerStep::Button(button, Pressed));
+            Command::Drag {
+                name,
+                delta,
+                button,
+            } => {
+                let center = locate(&name)?;
+                rig.input.push_back(InputStep::Move(center));
+                rig.input
+                    .push_back(InputStep::Button(center, button, Pressed));
                 for i in 1..=DRAG_STEPS {
                     let along = delta * (i as f32 / DRAG_STEPS as f32);
-                    rig.pointer.push_back(PointerStep::Move(center + along));
+                    rig.input.push_back(InputStep::Move(center + along));
                 }
-                rig.pointer.push_back(PointerStep::Button(button, Released));
+                rig.input
+                    .push_back(InputStep::Button(center + delta, button, Released));
             }
-        }
-        Action::Hold { name, frames } => {
-            if let Some(center) = locate(&name) {
-                rig.pointer.push_back(PointerStep::Move(center));
-                rig.pointer
-                    .push_back(PointerStep::Button(MouseButton::Left, Pressed));
-                rig.pointer
-                    .extend(std::iter::repeat_n(PointerStep::Idle, frames as usize));
-                rig.pointer
-                    .push_back(PointerStep::Button(MouseButton::Left, Released));
+            Command::Hold { name, frames } => {
+                let center = locate(&name)?;
+                rig.input.push_back(InputStep::Move(center));
+                rig.input
+                    .push_back(InputStep::Button(center, MouseButton::Left, Pressed));
+                rig.input
+                    .extend(std::iter::repeat_n(InputStep::Idle, frames as usize));
+                rig.input
+                    .push_back(InputStep::Button(center, MouseButton::Left, Released));
             }
-        }
-        Action::Scroll { name, lines } => {
-            if let Some(center) = locate(&name) {
-                rig.pointer
-                    .extend([PointerStep::Move(center), PointerStep::Wheel(lines)]);
+            Command::Scroll { name, lines } => {
+                let center = locate(&name)?;
+                rig.input.extend([
+                    InputStep::Move(center),
+                    InputStep::Move(center),
+                    InputStep::Wheel(lines),
+                ]);
             }
-        }
-        Action::Key(code) => {
-            input.key(code, Pressed);
-            rig.key_release = Some(code);
-            rig.wait = 1;
-        }
-        Action::Paint { x, y, alive } => {
-            if x < universe.width && y < universe.height {
+            Command::Key(chord) => {
+                rig.input
+                    .extend(chord.iter().map(|&code| InputStep::Key(code, Pressed)));
+                rig.input
+                    .extend(chord.iter().rev().map(|&code| InputStep::Key(code, Released)));
+                rig.input.push_back(InputStep::Idle);
+            }
+            Command::Press(code) => rig.input.push_back(InputStep::Key(code, Pressed)),
+            Command::Release(code) => rig.input.push_back(InputStep::Key(code, Released)),
+            Command::Type(text) => {
+                rig.input.extend(text.chars().map(InputStep::Type));
+                rig.input.push_back(InputStep::Idle);
+            }
+            Command::Paint { x, y, alive } => {
+                expect(
+                    x < universe.width && y < universe.height,
+                    format!("cell ({x}, {y}) is outside the grid"),
+                )?;
                 universe.set(x, y, alive);
-            } else {
-                error!("rig: cell ({x}, {y}) is outside the grid");
+            }
+            Command::Play => playback.playing = true,
+            Command::Pause => playback.playing = false,
+            Command::Step(steps) => universe.step_by(steps),
+            Command::Rule(rule) => universe.set_rule(rule),
+            Command::Speed(speed) => {
+                playback.speed = speed.clamp(Playback::MIN_SPEED, Playback::MAX_SPEED);
+            }
+            Command::Stride(stride) => playback.stride = stride.clamp(1, Playback::MAX_STRIDE),
+            Command::Vacuum(on) => settings.hide_vacuum = on,
+            Command::Reverse(on) => playback.reverse = on,
+            Command::Soup(density) => {
+                let density = density.unwrap_or(settings.density);
+                universe.randomize(density, &mut rng);
+            }
+            Command::Blob(density) => {
+                let density = density.unwrap_or(settings.density);
+                universe.randomize_blob(density, &mut rng);
+            }
+            Command::Clear => universe.clear(),
+            Command::Fit => view.fit = true,
+            Command::ExpectGeneration(expected) => expect(
+                universe.generation == expected,
+                format!("expected generation {expected}, found {}", universe.generation),
+            )?,
+            Command::ExpectCell { x, y, alive } => {
+                expect(
+                    x < universe.width && y < universe.height,
+                    format!("cell ({x}, {y}) is outside the grid"),
+                )?;
+                expect(
+                    universe.get(x, y) == alive,
+                    format!("expected cell ({x}, {y}) to be {alive}"),
+                )?;
+            }
+            Command::ExpectRule(expected) => expect(
+                *universe.rule() == expected,
+                format!("expected rule {expected}, found {}", universe.rule()),
+            )?,
+            Command::ExpectSpeed(expected) => expect(
+                playback.speed == expected,
+                format!("expected speed {expected}, found {}", playback.speed),
+            )?,
+            Command::ExpectStride(expected) => expect(
+                playback.stride == expected,
+                format!("expected stride {expected}, found {}", playback.stride),
+            )?,
+            Command::ExpectPopulation(expected) => expect(
+                universe.population() == expected,
+                format!("expected population {expected}, found {}", universe.population()),
+            )?,
+            Command::ExpectPlaying(expected) => expect(
+                playback.playing == expected,
+                format!("expected playing to be {expected}"),
+            )?,
+            Command::ExpectChecked { name, checked } => {
+                let (.., found) = node(&name)?;
+                expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
+            }
+            Command::ExpectClipboard(expected) => {
+                let found = clipboard.fetch_text().poll_result();
+                expect(
+                    matches!(&found, Some(Ok(text)) if *text == expected),
+                    format!("expected clipboard {expected:?}, found {found:?}"),
+                )?;
+            }
+            Command::Quit => {
+                app_exit.write(AppExit::Success);
             }
         }
-        Action::Play => playback.playing = true,
-        Action::Pause => playback.playing = false,
-        Action::Step(steps) => universe.step_by(steps),
-        Action::Rule(kind) => universe.set_rule(kind),
-        Action::Speed(speed) => {
-            playback.speed = speed.clamp(Playback::MIN_SPEED, Playback::MAX_SPEED);
-        }
-        Action::Stride(stride) => playback.stride = stride.clamp(1, Playback::MAX_STRIDE),
-        Action::Vacuum(on) => settings.hide_vacuum = on,
-        Action::Reverse(on) => playback.reverse = on,
-        Action::Soup(density) => {
-            let density = density.unwrap_or(settings.density);
-            universe.randomize(density, &mut rng);
-        }
-        Action::Blob(density) => {
-            let density = density.unwrap_or(settings.density);
-            universe.randomize_blob(density, &mut rng);
-        }
-        Action::Clear => universe.clear(),
-        Action::Fit => view.fit = true,
-        Action::ExpectGeneration(expected) => {
-            if universe.generation != expected {
-                error!(
-                    "rig: expected generation {expected}, found {}",
-                    universe.generation
-                );
-                app_exit.write(AppExit::error());
-            }
-        }
-        Action::ExpectCell { x, y, alive } => {
-            let found = x < universe.width && y < universe.height && universe.get(x, y);
-            if found != alive {
-                error!("rig: expected cell ({x}, {y}) to be {alive}, found {found}");
-                app_exit.write(AppExit::error());
-            }
-        }
-        Action::Quit => {
-            app_exit.write(AppExit::Success);
-        }
+        Ok(())
+    })();
+    if let Err(complaint) = outcome {
+        error!("rig: {complaint}");
+        app_exit.write(AppExit::error());
     }
 }
 
@@ -563,51 +742,79 @@ mod tests {
 
     #[test]
     fn parses_a_script() {
-        let actions = parse_script(
+        let script = parse_script(
             "wait 30; shot start\n click PlayPause; key Space; key [; step -3; rule critters; soup; soup 0.5; paint 3 4 off; quit\n\
-             click Speed -40 0; drag Grid 30 -20 right; scroll Grid 3; expect_cell 1 2 on; fit",
+             click Speed -40 0; drag Grid 30 -20 right; scroll Grid 3; expect_cell 1 2 on; fit\n\
+             key Ctrl+a; type 0,2 x; rule 15,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0; expect_rule Tron; expect_clipboard a b",
         )
         .unwrap();
         assert_eq!(
-            actions,
+            script,
             vec![
-                Action::Wait(30),
-                Action::Shot("start".into()),
-                Action::Click {
+                Command::Wait(30),
+                Command::Shot("start".into()),
+                Command::Click {
                     name: "PlayPause".into(),
                     offset: Vec2::ZERO,
                 },
-                Action::Key(KeyCode::Space),
-                Action::Key(KeyCode::BracketLeft),
-                Action::Step(-3),
-                Action::Rule(RuleKind::Critters),
-                Action::Soup(None),
-                Action::Soup(Some(0.5)),
-                Action::Paint { x: 3, y: 4, alive: false },
-                Action::Quit,
-                Action::Click {
+                Command::Key(vec![KeyCode::Space]),
+                Command::Key(vec![KeyCode::BracketLeft]),
+                Command::Step(-3),
+                Command::Rule("critters".parse().unwrap()),
+                Command::Soup(None),
+                Command::Soup(Some(0.5)),
+                Command::Paint { x: 3, y: 4, alive: false },
+                Command::Quit,
+                Command::Click {
                     name: "Speed".into(),
                     offset: Vec2::new(-40.0, 0.0),
                 },
-                Action::Drag {
+                Command::Drag {
                     name: "Grid".into(),
                     delta: Vec2::new(30.0, -20.0),
                     button: MouseButton::Right,
                 },
-                Action::Scroll {
+                Command::Scroll {
                     name: "Grid".into(),
                     lines: 3.0,
                 },
-                Action::ExpectCell { x: 1, y: 2, alive: true },
-                Action::Fit,
+                Command::ExpectCell { x: 1, y: 2, alive: true },
+                Command::Fit,
+                Command::Key(vec![KeyCode::ControlLeft, KeyCode::KeyA]),
+                Command::Type("0,2 x".into()),
+                Command::Rule("tron".parse().unwrap()),
+                Command::ExpectRule("tron".parse().unwrap()),
+                Command::ExpectClipboard("a b".into()),
             ]
         );
     }
 
     #[test]
     fn comments_run_to_the_end_of_the_line() {
-        let actions = parse_script("# a comment; with a semicolon\nwait 1 # trailing; comment\nquit").unwrap();
-        assert_eq!(actions, vec![Action::Wait(1), Action::Quit]);
+        let script = parse_script("# a comment; with a semicolon\nwait 1 # trailing; comment\nquit").unwrap();
+        assert_eq!(script, vec![Command::Wait(1), Command::Quit]);
+    }
+
+    #[test]
+    fn keys_can_be_held_and_state_checked() {
+        let script = parse_script(
+            "press Shift; drag Grid 60 0; release Shift; expect_population 12; expect_playing off",
+        )
+        .unwrap();
+        assert_eq!(
+            script,
+            vec![
+                Command::Press(KeyCode::ShiftLeft),
+                Command::Drag {
+                    name: "Grid".into(),
+                    delta: Vec2::new(60.0, 0.0),
+                    button: MouseButton::Left,
+                },
+                Command::Release(KeyCode::ShiftLeft),
+                Command::ExpectPopulation(12),
+                Command::ExpectPlaying(false),
+            ]
+        );
     }
 
     #[test]
@@ -616,7 +823,9 @@ mod tests {
         assert!(parse_script("frobnicate 1").is_err());
         assert!(parse_script("key F13").is_err());
         assert!(parse_script("rule life").is_err());
+        assert!(parse_script("rule 0,0,0").is_err());
         assert!(parse_script("click PlayPause 4").is_err());
         assert!(parse_script("drag Grid 1 2 sideways").is_err());
+        assert!(parse_script("type héllo").is_err());
     }
 }

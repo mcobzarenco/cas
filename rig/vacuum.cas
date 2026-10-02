@@ -1,0 +1,18 @@
+# Rules that flip the vacuum (Critters, Tron) and "hide vacuum fluctuations".
+# Expects the default start-up: a blob of 1210 cells on 256×256.
+wait 25; expect_population 1210
+
+# Switching to Critters on an odd generation must not invert the picture ...
+step 1; rule critters; wait 3; shot vacuum-1-critters-at-generation-1
+# ... and one step later the cells are complemented, but the picture is not.
+step 1; wait 3; expect_population 64326; shot vacuum-2-flipped-phase
+
+# Leaving Critters in its all-alive phase hands the picture, not the complement, to the next rule.
+rule single-rotation; wait 3; expect_population 1210; shot vacuum-3-back-to-single-rotation
+
+# Painting follows the picture. In the flipped phase an empty-looking world is all alive:
+# a stroke draws by storing dead cells, and erasing stores them alive again.
+clear; rule critters; step 1; fit; wait 3; expect_population 65536
+drag Grid 60 0; wait 2; expect_cell 128 128 off; shot vacuum-4-painted
+press Shift; drag Grid 60 0; release Shift; wait 2; expect_population 65536
+quit

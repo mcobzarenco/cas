@@ -39,6 +39,32 @@ fn alive_at(c: vec2<f32>) -> f32 {
     return abs(state - params.invert);
 }
 
+// Share of the pixel around cell coordinate `c` that is drawn alive.
+fn coverage_at(c: vec2<f32>) -> f32 {
+    // Cells per pixel along one axis.
+    let footprint = 1.0 / params.scale;
+    if footprint <= 1.0 {
+        // Four taps on a rotated grid: smooth cell edges at fractional zooms.
+        return 0.25 * (alive_at(c + footprint * vec2<f32>(-0.375, -0.125))
+            + alive_at(c + footprint * vec2<f32>(0.125, -0.375))
+            + alive_at(c + footprint * vec2<f32>(0.375, 0.125))
+            + alive_at(c + footprint * vec2<f32>(-0.125, 0.375)));
+    }
+    // Zoomed out, several cells share the pixel: look at each of them, up to 8×8.
+    let n = min(i32(ceil(footprint)), 8);
+    var alive = 0.0;
+    for (var j = 0; j < n; j++) {
+        for (var i = 0; i < n; i++) {
+            let tap = (vec2<f32>(f32(i), f32(j)) + 0.5) / f32(n) - 0.5;
+            alive += alive_at(c + tap * footprint);
+        }
+    }
+    // A lone cell would fade away in the average, so any live cell lifts the pixel. The lift
+    // sets in gradually, to keep zooming smooth.
+    let lift = 0.5 * clamp(footprint - 1.0, 0.0, 1.0);
+    return mix(alive / f32(n * n), min(alive, 1.0), lift);
+}
+
 // Coverage of a line `width` pixels wide whose centre is `distance` pixels away.
 fn stroke(distance: f32, width: f32) -> f32 {
     return clamp(0.5 * width + 0.5 - distance, 0.0, 1.0);
@@ -54,14 +80,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let q = max(-c, c - params.grid_size) * params.scale;
     let outside = max(q.x, q.y);
 
-    // Four taps on a rotated grid: smooth cell edges at fractional zooms, less shimmer when
-    // several cells share a pixel.
-    let o = 1.0 / params.scale;
-    let coverage = 0.25 * (alive_at(c + o * vec2<f32>(-0.375, -0.125))
-        + alive_at(c + o * vec2<f32>(0.125, -0.375))
-        + alive_at(c + o * vec2<f32>(0.375, 0.125))
-        + alive_at(c + o * vec2<f32>(-0.125, 0.375)));
-    var color = mix(params.dead.rgb, params.alive.rgb, coverage);
+    var color = mix(params.dead.rgb, params.alive.rgb, coverage_at(c));
 
     // Cell grid: a line on every integer coordinate.
     let to_cell_edge = abs(fract(c + 0.5) - 0.5) * params.scale;

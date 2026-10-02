@@ -13,147 +13,404 @@
 //!   bit 2 | bit 3
 //! ```
 //!
-//! Every rule here is a bijection on the 16 states, so it has an exact inverse: running time
-//! backwards means applying the inverse table with the partition the forward step used.
+//! A rule is *reversible* exactly when its table is a permutation of the 16 states; running time
+//! backwards then means applying the inverse permutation with the partition the forward step
+//! used. Only reversible rules can be constructed here.
+//!
+//! As text, a rule is its table: sixteen comma-separated states, the outcome of state 0 first,
+//! e.g. `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` for Single Rotation. That is the notation of
+//! dmishin's simulator and, with an `MS,D` prefix and `;` separators, of MCell.
 
 use std::{fmt, str::FromStr};
 
-/// The rules available in the sandbox.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum RuleKind {
-    /// Blocks with exactly one live cell rotate 90° clockwise; every other block is left alone.
-    /// <https://dmishin.blogspot.com/2013/11/the-single-rotation-rule-remarkably.html>
-    #[default]
-    SingleRotation,
-    /// Margolus' "Critters": blocks with 0, 1 or 4 live cells are complemented, blocks with 2 are
-    /// kept, blocks with 3 are complemented and rotated by 180°.
-    /// <https://en.wikipedia.org/wiki/Critters_(cellular_automaton)>
-    Critters,
+/// A named rule from the literature.
+#[derive(Debug)]
+pub struct Preset {
+    /// Stable identifier: accepted on the command line and used to name UI widgets.
+    pub id: &'static str,
+    pub name: &'static str,
+    pub blurb: &'static str,
+    pub table: [u8; 16],
 }
 
-impl RuleKind {
-    pub const ALL: [RuleKind; 2] = [RuleKind::SingleRotation, RuleKind::Critters];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::SingleRotation => "Single rotation",
-            Self::Critters => "Critters",
-        }
-    }
-
-    /// Stable identifier, used to name the UI widgets so the test rig can click them.
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::SingleRotation => "RuleSingleRotation",
-            Self::Critters => "RuleCritters",
-        }
-    }
-
-    pub fn blurb(self) -> &'static str {
-        match self {
-            Self::SingleRotation => {
-                "Blocks with exactly one live cell rotate 90° clockwise. \
-                 Population is conserved and the vacuum is stable."
-            }
-            Self::Critters => {
-                "0, 1 or 4 live cells: invert the block. 2: keep it. 3: invert and rotate 180°. \
-                 Every empty block fills up, so the vacuum flips on every step."
-            }
-        }
-    }
-
-    pub fn rule(self) -> BlockRule {
-        match self {
-            Self::SingleRotation => BlockRule::from_fn(self, |block| {
-                if popcount(block) == 1 {
-                    rotate_cw(block)
-                } else {
-                    block
-                }
-            }),
-            Self::Critters => BlockRule::from_fn(self, |block| match popcount(block) {
-                2 => block,
-                3 => rotate_180(complement(block)),
-                _ => complement(block),
-            }),
-        }
+impl Preset {
+    pub fn rule(&self) -> BlockRule {
+        BlockRule::new(self.table).expect("presets are reversible")
     }
 }
 
-impl fmt::Display for RuleKind {
+/// The rules offered in the rule menu. Tables are the published ones (dmishin's simulator and
+/// the MCell collection use the same numbering); the tests check each blurb against its table.
+pub static PRESETS: [Preset; 10] = [
+    Preset {
+        id: "single-rotation",
+        name: "Single rotation",
+        blurb: "Blocks with exactly one live cell rotate 90° clockwise. Population is \
+                conserved and the vacuum is stable.",
+        table: [0, 2, 8, 3, 1, 5, 6, 7, 4, 9, 10, 11, 12, 13, 14, 15],
+    },
+    Preset {
+        id: "critters",
+        name: "Critters",
+        blurb: "0, 1 or 4 live cells: invert the block. 2: keep it. 3: invert and rotate 180°. \
+                Every empty block fills up, so the vacuum flips on every step.",
+        table: [15, 14, 13, 3, 11, 5, 6, 1, 7, 9, 10, 2, 12, 4, 8, 0],
+    },
+    Preset {
+        id: "bbm",
+        name: "Billiard ball machine",
+        blurb: "Margolus' billiard-ball model: a lone cell crosses its block diagonally, two \
+                cells on a diagonal bounce to the other diagonal, everything else stays.",
+        table: [0, 8, 4, 3, 2, 5, 9, 7, 1, 6, 10, 11, 12, 13, 14, 15],
+    },
+    Preset {
+        id: "bounce-gas",
+        name: "Bounce gas",
+        blurb: "The billiard-ball machine with three-cell blocks turned by 180° as well: a gas \
+                of diagonal particles that bounce off each other.",
+        table: [0, 8, 4, 3, 2, 5, 9, 14, 1, 6, 10, 13, 12, 11, 7, 15],
+    },
+    Preset {
+        id: "hpp-gas",
+        name: "HPP gas",
+        blurb: "The HPP lattice gas: every block turns by 180°, so particles fly diagonally, \
+                except head-on pairs, which scatter onto the other diagonal.",
+        table: [0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15],
+    },
+    Preset {
+        id: "tron",
+        name: "Tron",
+        blurb: "Empty and full blocks swap, every other block stays as it is. The vacuum flips \
+                on every step.",
+        table: [15, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0],
+    },
+    Preset {
+        id: "rotations",
+        name: "Rotations",
+        blurb: "One-cell and three-cell blocks rotate 90° clockwise; two-cell blocks jump to \
+                the opposite side or the other diagonal.",
+        table: [0, 2, 8, 12, 1, 10, 9, 11, 4, 6, 5, 14, 3, 7, 13, 15],
+    },
+    Preset {
+        id: "double-rotation",
+        name: "Double rotation",
+        blurb: "One-cell blocks rotate 90° clockwise and three-cell blocks 90° \
+                counter-clockwise; everything else stays.",
+        table: [0, 2, 8, 3, 1, 5, 6, 13, 4, 9, 10, 7, 12, 14, 11, 15],
+    },
+    Preset {
+        id: "string-thing",
+        name: "String thing",
+        blurb: "Only two-cell blocks change: adjacent pairs jump to the opposite side, \
+                diagonal pairs to the other diagonal.",
+        table: [0, 1, 2, 12, 4, 10, 9, 7, 8, 6, 5, 11, 3, 13, 14, 15],
+    },
+    Preset {
+        id: "swap-on-diagonal",
+        name: "Swap on diagonal",
+        blurb: "Every block turns by 180°: each cell swaps with the one diagonally opposite, \
+                so particles fly diagonally and never interact.",
+        table: [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15],
+    },
+];
+
+/// Why a table is not a usable rule.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuleError {
+    /// Not exactly 16 entries.
+    Length(usize),
+    /// An entry is not a block state.
+    Entry(String),
+    /// Two block states have the same outcome, so a step could not be undone.
+    NotReversible { output: u8, inputs: (u8, u8) },
+}
+
+impl fmt::Display for RuleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
-impl FromStr for RuleKind {
-    type Err = String;
-
-    /// Lenient: `single-rotation`, `SingleRotation`, `rotation`, `critters`, ...
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let key: String = s
-            .chars()
-            .filter(char::is_ascii_alphanumeric)
-            .map(|c| c.to_ascii_lowercase())
-            .collect();
-        match key.as_str() {
-            "singlerotation" | "rotation" | "single" => Ok(Self::SingleRotation),
-            "critters" | "critter" => Ok(Self::Critters),
-            _ => {
-                let names: Vec<_> = Self::ALL.iter().map(|kind| kind.name()).collect();
-                Err(format!(
-                    "unknown rule {s:?}; expected one of: {}",
-                    names.join(", ")
-                ))
-            }
+        match self {
+            Self::Length(n) => write!(f, "a rule has 16 entries, found {n}"),
+            Self::Entry(entry) => write!(f, "{entry:?} is not a block state (0–15)"),
+            Self::NotReversible { output, inputs: (a, b) } => write!(
+                f,
+                "not reversible: blocks {a} and {b} both become {output}"
+            ),
         }
     }
 }
 
-/// A reversible rule on 2×2 blocks: a permutation of the 16 block states and its inverse.
+impl std::error::Error for RuleError {}
+
+/// What a rule does to empty space.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Vacuum {
+    /// Empty blocks stay empty.
+    Stable,
+    /// Empty and full blocks swap: the background alternates between all-dead and all-alive.
+    Flips,
+    /// Empty blocks turn into something else.
+    Unstable,
+}
+
+/// What a rule does to the number of live cells.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Population {
+    /// Every block keeps its number of live cells.
+    Conserved,
+    /// Every block trades its live count for its dead count, as Critters does: the population
+    /// is conserved once the vacuum flip is undone.
+    ConservedUpToFlip,
+    NotConserved,
+}
+
+/// The rotations and mirrors of the square under which a rule looks the same: transforming a
+/// pattern and then running it gives the transformed run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Symmetry {
+    /// Every rotation and every mirror.
+    Full,
+    /// Quarter turns but no mirror: the rule has a handedness.
+    Rotations,
+    HalfTurnAndAxisMirrors,
+    HalfTurnAndDiagonalMirrors,
+    HalfTurn,
+    LeftRightMirror,
+    TopBottomMirror,
+    DiagonalMirror,
+    None,
+}
+
+/// How running a rule backwards relates to running it forwards. Because the partitions
+/// alternate, "the same" always means: on the other partition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reversed {
+    /// The table is its own inverse.
+    SameRule,
+    /// The inverse is the rule seen turned or in a mirror.
+    Transformed,
+    /// The inverse is the rule with dead and alive exchanged.
+    Complemented,
+    /// Both of the above at once.
+    TransformedAndComplemented,
+    /// No symmetry of the square or of the two states relates the two directions.
+    DifferentRule,
+}
+
+/// A reversible rule on 2×2 blocks: a permutation of the 16 block states, and its inverse.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockRule {
-    pub kind: RuleKind,
-    /// `table[state]` is the state of the block after one forward step.
-    pub table: [u8; 16],
-    /// `inverse[table[state]] == state`.
-    pub inverse: [u8; 16],
-    /// `true` when the empty block maps to the full block, i.e. the background alternates
-    /// between all-dead and all-alive on consecutive generations.
-    pub vacuum_flips: bool,
+    table: [u8; 16],
+    inverse: [u8; 16],
 }
 
 impl BlockRule {
-    /// Panics if `table` is not a permutation, since such a rule would not be reversible.
-    pub fn from_table(kind: RuleKind, table: [u8; 16]) -> Self {
+    pub fn new(table: [u8; 16]) -> Result<Self, RuleError> {
         let mut inverse = [u8::MAX; 16];
         for (input, &output) in table.iter().enumerate() {
-            assert!(output < 16, "{kind}: block state {output} out of range");
-            assert!(
-                inverse[output as usize] == u8::MAX,
-                "{kind} is not reversible: states {} and {input} both map to {output}",
-                inverse[output as usize]
-            );
+            if output > 15 {
+                return Err(RuleError::Entry(output.to_string()));
+            }
+            let earlier = inverse[output as usize];
+            if earlier != u8::MAX {
+                return Err(RuleError::NotReversible {
+                    output,
+                    inputs: (earlier, input as u8),
+                });
+            }
             inverse[output as usize] = input as u8;
         }
-        Self {
-            kind,
-            table,
-            inverse,
-            vacuum_flips: table[0] == 0b1111,
-        }
+        Ok(Self { table, inverse })
     }
 
-    pub fn from_fn(kind: RuleKind, f: impl Fn(u8) -> u8) -> Self {
-        let mut table = [0u8; 16];
-        for (state, out) in table.iter_mut().enumerate() {
-            *out = f(state as u8);
+    /// The rule that changes nothing.
+    pub fn identity() -> Self {
+        Self::new(std::array::from_fn(|state| state as u8)).expect("the identity is reversible")
+    }
+
+    /// A uniformly random permutation; `random` supplies random bits.
+    pub fn random(mut random: impl FnMut() -> u64) -> Self {
+        let mut table: [u8; 16] = std::array::from_fn(|state| state as u8);
+        for i in (1..table.len()).rev() {
+            table.swap(i, (random() % (i as u64 + 1)) as usize);
         }
-        Self::from_table(kind, table)
+        Self::new(table).expect("a shuffle is a permutation")
+    }
+
+    /// `table()[state]` is the state of the block after one forward step.
+    pub fn table(&self) -> &[u8; 16] {
+        &self.table
     }
 
     pub fn table_for(&self, forward: bool) -> &[u8; 16] {
         if forward { &self.table } else { &self.inverse }
+    }
+
+    /// The rule that undoes this one.
+    pub fn inverted(&self) -> Self {
+        Self {
+            table: self.inverse,
+            inverse: self.table,
+        }
+    }
+
+    /// Exchanges the outcomes of two block states. This is the elementary edit that keeps a
+    /// rule reversible: every permutation can be reached by swaps.
+    pub fn swap_outcomes(&mut self, a: u8, b: u8) {
+        self.table.swap(a as usize, b as usize);
+        for (input, &output) in self.table.iter().enumerate() {
+            self.inverse[output as usize] = input as u8;
+        }
+    }
+
+    /// The preset with this table, if any.
+    pub fn preset(&self) -> Option<&'static Preset> {
+        PRESETS.iter().find(|preset| preset.table == self.table)
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.preset().map_or("Custom", |preset| preset.name)
+    }
+
+    pub fn vacuum(&self) -> Vacuum {
+        match (self.table[0], self.table[15]) {
+            (0, _) => Vacuum::Stable,
+            (15, 0) => Vacuum::Flips,
+            _ => Vacuum::Unstable,
+        }
+    }
+
+    pub fn population(&self) -> Population {
+        let all = |keeps: fn(u32, u32) -> bool| {
+            (0..16u8).all(|state| keeps(popcount(state), popcount(self.table[state as usize])))
+        };
+        if all(|before, after| after == before) {
+            Population::Conserved
+        } else if all(|before, after| after == 4 - before) {
+            Population::ConservedUpToFlip
+        } else {
+            Population::NotConserved
+        }
+    }
+
+    /// Does the rule give the same result whether a block is transformed before or after it?
+    fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
+        (0..16u8).all(|state| {
+            self.table[transform(state) as usize] == transform(self.table[state as usize])
+        })
+    }
+
+    pub fn symmetry(&self) -> Symmetry {
+        let left_right = self.commutes_with(mirror);
+        let diagonal = self.commutes_with(transpose) || self.commutes_with(anti_transpose);
+        // The transformations a rule commutes with form a group, which leaves these cases.
+        if self.commutes_with(rotate_cw) {
+            if left_right { Symmetry::Full } else { Symmetry::Rotations }
+        } else if self.commutes_with(rotate_180) {
+            if left_right {
+                Symmetry::HalfTurnAndAxisMirrors
+            } else if diagonal {
+                Symmetry::HalfTurnAndDiagonalMirrors
+            } else {
+                Symmetry::HalfTurn
+            }
+        } else if left_right {
+            Symmetry::LeftRightMirror
+        } else if self.commutes_with(flip) {
+            Symmetry::TopBottomMirror
+        } else if diagonal {
+            Symmetry::DiagonalMirror
+        } else {
+            Symmetry::None
+        }
+    }
+
+    /// Does exchanging dead and alive turn every run into another run?
+    pub fn is_complement_symmetric(&self) -> bool {
+        self.commutes_with(complement)
+    }
+
+    pub fn reversed(&self) -> Reversed {
+        const TURNS_AND_MIRRORS: [fn(u8) -> u8; 7] =
+            [rotate_cw, rotate_180, rotate_ccw, mirror, flip, transpose, anti_transpose];
+        // Is the inverse the rule as seen through `transform`, with or without the two states
+        // exchanged as well?
+        let inverse_through = |transform: fn(u8) -> u8, complemented: bool| {
+            let through = |block| {
+                if complemented { complement(transform(block)) } else { transform(block) }
+            };
+            (0..16u8).all(|state| {
+                self.inverse[through(state) as usize] == through(self.table[state as usize])
+            })
+        };
+        if self.table == self.inverse {
+            Reversed::SameRule
+        } else if TURNS_AND_MIRRORS.iter().any(|&turn| inverse_through(turn, false)) {
+            Reversed::Transformed
+        } else if inverse_through(|block| block, true) {
+            Reversed::Complemented
+        } else if TURNS_AND_MIRRORS.iter().any(|&turn| inverse_through(turn, true)) {
+            Reversed::TransformedAndComplemented
+        } else {
+            Reversed::DifferentRule
+        }
+    }
+}
+
+impl fmt::Display for BlockRule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let entries: Vec<String> = self.table.iter().map(u8::to_string).collect();
+        f.write_str(&entries.join(","))
+    }
+}
+
+impl FromStr for BlockRule {
+    type Err = String;
+
+    /// Accepts a preset (`critters`, `Single Rotation`, `hpp-gas`, ...) or a table of sixteen
+    /// states separated by commas, semicolons or spaces, optionally with MCell's `MS,D` prefix.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Presets match however their words are joined: "Single Rotation", "single-rotation".
+        let key = |text: &str| -> String {
+            text.chars()
+                .filter(|c| !c.is_whitespace() && !matches!(c, '-' | '_'))
+                .map(|c| c.to_ascii_lowercase())
+                .collect()
+        };
+        let wanted = key(s);
+        if let Some(preset) = PRESETS
+            .iter()
+            .find(|preset| key(preset.id) == wanted || key(preset.name) == wanted)
+        {
+            return Ok(preset.rule());
+        }
+
+        let body = s.trim();
+        let body = match body.get(..4) {
+            Some(prefix) if prefix.eq_ignore_ascii_case("MS,D") => &body[4..],
+            _ => body,
+        };
+        let entries: Vec<&str> = body
+            .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+        let is_number = |entry: &&str| entry.bytes().all(|b| b.is_ascii_digit());
+        if entries.is_empty() || !entries.iter().all(is_number) {
+            let ids: Vec<_> = PRESETS.iter().map(|preset| preset.id).collect();
+            return Err(format!(
+                "unknown rule {s:?}; expected 16 block states like \
+                 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15 or one of: {}",
+                ids.join(", ")
+            ));
+        }
+        if entries.len() != 16 {
+            return Err(RuleError::Length(entries.len()).to_string());
+        }
+        let mut table = [0u8; 16];
+        for (slot, entry) in table.iter_mut().zip(&entries) {
+            *slot = entry
+                .parse()
+                .map_err(|_| RuleError::Entry(entry.to_string()).to_string())?;
+        }
+        Self::new(table).map_err(|error| error.to_string())
     }
 }
 
@@ -161,6 +418,7 @@ pub const fn popcount(block: u8) -> u32 {
     (block & 0xF).count_ones()
 }
 
+/// Exchange dead and alive.
 pub const fn complement(block: u8) -> u8 {
     !block & 0xF
 }
@@ -176,76 +434,292 @@ pub const fn rotate_cw(block: u8) -> u8 {
 
 /// Rotate the block by a half turn: TL ↔ BR, TR ↔ BL.
 pub const fn rotate_180(block: u8) -> u8 {
-    let tl = block & 1;
-    let tr = (block >> 1) & 1;
-    let bl = (block >> 2) & 1;
-    let br = (block >> 3) & 1;
-    br | (bl << 1) | (tr << 2) | (tl << 3)
+    rotate_cw(rotate_cw(block))
+}
+
+pub const fn rotate_ccw(block: u8) -> u8 {
+    rotate_cw(rotate_180(block))
+}
+
+/// Mirror the block left to right: TL ↔ TR, BL ↔ BR.
+pub const fn mirror(block: u8) -> u8 {
+    ((block & 0b0101) << 1) | ((block & 0b1010) >> 1)
+}
+
+/// Mirror the block top to bottom: TL ↔ BL, TR ↔ BR.
+pub const fn flip(block: u8) -> u8 {
+    ((block & 0b0011) << 2) | ((block & 0b1100) >> 2)
+}
+
+/// Mirror the block in its main diagonal: TR ↔ BL.
+pub const fn transpose(block: u8) -> u8 {
+    mirror(rotate_cw(block))
+}
+
+/// Mirror the block in its other diagonal: TL ↔ BR.
+pub const fn anti_transpose(block: u8) -> u8 {
+    rotate_cw(mirror(block))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The numeric code published on dmishin's blog, same bit layout as ours.
-    const SINGLE_ROTATION: [u8; 16] = [0, 2, 8, 3, 1, 5, 6, 7, 4, 9, 10, 11, 12, 13, 14, 15];
-    /// Critters as tabulated by Toffoli & Margolus (and MCell).
-    const CRITTERS: [u8; 16] = [15, 14, 13, 3, 11, 5, 6, 1, 7, 9, 10, 2, 12, 4, 8, 0];
+    fn preset(id: &str) -> BlockRule {
+        PRESETS.iter().find(|preset| preset.id == id).unwrap().rule()
+    }
 
-    #[test]
-    fn single_rotation_matches_published_table() {
-        assert_eq!(RuleKind::SingleRotation.rule().table, SINGLE_ROTATION);
+    fn from_fn(f: impl Fn(u8) -> u8) -> BlockRule {
+        BlockRule::new(std::array::from_fn(|state| f(state as u8))).unwrap()
     }
 
     #[test]
-    fn critters_matches_published_table() {
-        assert_eq!(RuleKind::Critters.rule().table, CRITTERS);
-    }
-
-    #[test]
-    fn inverses_undo_the_rules() {
-        for kind in RuleKind::ALL {
-            let rule = kind.rule();
-            for state in 0..16u8 {
-                assert_eq!(rule.inverse[rule.table[state as usize] as usize], state, "{kind}");
-                assert_eq!(rule.table[rule.inverse[state as usize] as usize], state, "{kind}");
+    fn presets_are_reversible_and_distinct() {
+        for (i, a) in PRESETS.iter().enumerate() {
+            let rule = a.rule();
+            assert_eq!(rule.preset().map(|p| p.id), Some(a.id));
+            assert_eq!(rule.name(), a.name);
+            for b in &PRESETS[i + 1..] {
+                assert_ne!(a.id, b.id);
+                assert_ne!(a.table, b.table, "{} and {} share a table", a.id, b.id);
             }
         }
     }
 
     #[test]
-    fn single_rotation_inverse_is_counterclockwise() {
-        let rule = RuleKind::SingleRotation.rule();
-        for state in 0..16u8 {
-            let expected = if popcount(state) == 1 {
-                rotate_cw(rotate_cw(rotate_cw(state)))
-            } else {
-                state
-            };
-            assert_eq!(rule.inverse[state as usize], expected);
+    fn single_rotation_is_its_definition() {
+        let rule = from_fn(|b| if popcount(b) == 1 { rotate_cw(b) } else { b });
+        assert_eq!(rule, preset("single-rotation"));
+        assert_eq!(rule.inverted(), from_fn(|b| if popcount(b) == 1 { rotate_ccw(b) } else { b }));
+        assert_eq!(rule.population(), Population::Conserved);
+        assert_eq!(rule.symmetry(), Symmetry::Rotations, "it has a sense of rotation");
+        assert!(!rule.is_complement_symmetric());
+        assert_eq!(rule.reversed(), Reversed::Transformed, "a mirror reverses the rotation");
+        assert_eq!(rule.vacuum(), Vacuum::Stable);
+    }
+
+    #[test]
+    fn critters_is_its_definition() {
+        let rule = from_fn(|b| match popcount(b) {
+            2 => b,
+            3 => rotate_180(complement(b)),
+            _ => complement(b),
+        });
+        assert_eq!(rule, preset("critters"));
+        assert_eq!(rule.population(), Population::ConservedUpToFlip);
+        assert_eq!(rule.symmetry(), Symmetry::Full);
+        assert!(!rule.is_complement_symmetric());
+        assert_eq!(rule.reversed(), Reversed::Complemented);
+        assert_eq!(rule.vacuum(), Vacuum::Flips);
+    }
+
+    #[test]
+    fn the_other_presets_do_what_their_blurbs_say() {
+        let diagonal = |b: u8| b == 6 || b == 9;
+        assert_eq!(
+            preset("bbm"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_180(b),
+                2 if diagonal(b) => complement(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("bounce-gas"),
+            from_fn(|b| match popcount(b) {
+                1 | 3 => rotate_180(b),
+                2 if diagonal(b) => complement(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("hpp-gas"),
+            from_fn(|b| if diagonal(b) { complement(b) } else { rotate_180(b) })
+        );
+        assert_eq!(
+            preset("tron"),
+            from_fn(|b| if b == 0 || b == 15 { complement(b) } else { b })
+        );
+        assert_eq!(
+            preset("rotations"),
+            from_fn(|b| match popcount(b) {
+                1 | 3 => rotate_cw(b),
+                2 => complement(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("double-rotation"),
+            from_fn(|b| match popcount(b) {
+                1 => rotate_cw(b),
+                3 => rotate_ccw(b),
+                _ => b,
+            })
+        );
+        assert_eq!(
+            preset("string-thing"),
+            from_fn(|b| if popcount(b) == 2 { complement(b) } else { b })
+        );
+        assert_eq!(preset("swap-on-diagonal"), from_fn(rotate_180));
+
+        for id in ["bbm", "bounce-gas", "hpp-gas", "string-thing", "swap-on-diagonal"] {
+            let rule = preset(id);
+            assert_eq!(rule.population(), Population::Conserved, "{id}");
+            assert_eq!(rule.reversed(), Reversed::SameRule, "{id}");
+            assert_eq!(rule.symmetry(), Symmetry::Full, "{id}");
+        }
+        assert_eq!(preset("tron").vacuum(), Vacuum::Flips);
+        assert_eq!(preset("tron").population(), Population::NotConserved);
+        assert!(preset("hpp-gas").is_complement_symmetric());
+        assert!(!preset("bbm").is_complement_symmetric());
+        assert_eq!(preset("rotations").symmetry(), Symmetry::Rotations);
+        assert_eq!(preset("double-rotation").reversed(), Reversed::Transformed);
+    }
+
+    #[test]
+    fn every_kind_of_symmetry_is_told_apart() {
+        // The identity with two outcomes exchanged keeps exactly the symmetries that map the
+        // pair of blocks onto itself. Blocks: 1 top-left, 2 top-right, 4 bottom-left,
+        // 8 bottom-right, 3 top row, 12 bottom row.
+        let swapped = |a, b| {
+            let mut rule = BlockRule::identity();
+            rule.swap_outcomes(a, b);
+            rule
+        };
+        assert_eq!(BlockRule::identity().symmetry(), Symmetry::Full);
+        assert_eq!(swapped(1, 2).symmetry(), Symmetry::LeftRightMirror);
+        assert_eq!(swapped(1, 4).symmetry(), Symmetry::TopBottomMirror);
+        assert_eq!(swapped(1, 3).symmetry(), Symmetry::None);
+        assert_eq!(swapped(2, 4).symmetry(), Symmetry::HalfTurnAndDiagonalMirrors);
+        assert_eq!(swapped(3, 12).symmetry(), Symmetry::HalfTurnAndAxisMirrors);
+        assert_eq!(swapped(1, 7).symmetry(), Symmetry::DiagonalMirror);
+
+        // Top-left and bottom-right trade places, and so do the two rows: only the half turn
+        // maps both exchanges onto themselves.
+        let mut half_turn = swapped(1, 8);
+        half_turn.swap_outcomes(3, 12);
+        assert_eq!(half_turn.symmetry(), Symmetry::HalfTurn);
+    }
+
+    #[test]
+    fn reversal_is_classified() {
+        assert_eq!(BlockRule::identity().reversed(), Reversed::SameRule);
+        // A three-cycle of single cells is not its own inverse; a mirror that exchanges two of
+        // its blocks runs it the other way.
+        let mut cycle = BlockRule::identity();
+        cycle.swap_outcomes(1, 2);
+        cycle.swap_outcomes(2, 4);
+        assert_eq!(cycle.reversed(), Reversed::Transformed);
+        for seed in 1..40u64 {
+            let mut state = seed;
+            let rule = BlockRule::random(|| {
+                state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                state >> 33
+            });
+            // Whatever relates a rule to its inverse relates the inverse to the rule.
+            assert_eq!(rule.reversed(), rule.inverted().reversed(), "{rule}");
         }
     }
 
     #[test]
-    fn critters_is_not_an_involution_but_flips_the_vacuum() {
-        let rule = RuleKind::Critters.rule();
-        assert_ne!(rule.table, rule.inverse);
-        assert!(rule.vacuum_flips);
-        assert!(!RuleKind::SingleRotation.rule().vacuum_flips);
+    fn inverses_undo_the_rules() {
+        for preset in &PRESETS {
+            let rule = preset.rule();
+            let inverse = rule.inverted();
+            for state in 0..16usize {
+                assert_eq!(inverse.table()[rule.table()[state] as usize], state as u8);
+                assert_eq!(rule.table_for(false)[rule.table_for(true)[state] as usize], state as u8);
+            }
+            assert_eq!(inverse.inverted(), rule);
+        }
     }
 
     #[test]
-    fn rotations_compose() {
+    fn swapping_outcomes_keeps_a_rule_reversible() {
+        // Single rotation is three swaps away from the identity.
+        let mut rule = BlockRule::identity();
+        rule.swap_outcomes(1, 2);
+        rule.swap_outcomes(2, 8);
+        rule.swap_outcomes(8, 4);
+        assert_eq!(rule, preset("single-rotation"));
+        assert_eq!(BlockRule::new(*rule.table()), Ok(rule.clone()));
+        assert_eq!(rule.inverted().inverted(), rule);
+    }
+
+    #[test]
+    fn random_rules_are_permutations() {
+        let mut state = 7u64;
+        let mut next = move || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state >> 33
+        };
+        let rules: Vec<_> = (0..20).map(|_| BlockRule::random(&mut next)).collect();
+        for rule in &rules {
+            assert_eq!(BlockRule::new(*rule.table()).as_ref(), Ok(rule));
+        }
+        assert!(rules.windows(2).any(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn rules_round_trip_through_text() {
+        for preset in &PRESETS {
+            let rule = preset.rule();
+            assert_eq!(rule.to_string().parse(), Ok(rule.clone()));
+            assert_eq!(preset.id.parse(), Ok(rule.clone()));
+            assert_eq!(preset.name.parse(), Ok(rule));
+        }
+        let single_rotation = preset("single-rotation");
+        assert_eq!(single_rotation.to_string(), "0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15");
+        assert_eq!("SingleRotation".parse(), Ok(single_rotation.clone()));
+        assert_eq!(
+            "MS,D0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(),
+            Ok(single_rotation.clone())
+        );
+        assert_eq!(
+            "Ms,d0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(),
+            Ok(single_rotation.clone())
+        );
+        assert_eq!(" 0 2 8 3 1 5 6 7  4 9 10 11 12 13 14 15 ".parse(), Ok(single_rotation));
+    }
+
+    #[test]
+    fn bad_rules_are_explained() {
+        let parse = |text: &str| text.parse::<BlockRule>().unwrap_err();
+        assert!(parse("life").contains("unknown rule"));
+        assert!(parse("").contains("unknown rule"));
+        assert!(parse("0,1,2").contains("16 entries, found 3"));
+        assert!(parse("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,16").contains("not a block state"));
+        assert!(parse("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,99999999999").contains("not a block state"));
+        assert!(parse("+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15").contains("unknown rule"));
+        assert!(parse("t,r,o,n").contains("unknown rule"));
+        // The "sand" rule of the MCell collection is not reversible.
+        assert_eq!(
+            parse("0,4,8,12,4,12,12,13,8,12,12,14,12,13,14,15"),
+            "not reversible: blocks 1 and 4 both become 4"
+        );
+        assert_eq!(
+            BlockRule::new([0; 16]),
+            Err(RuleError::NotReversible { output: 0, inputs: (0, 1) })
+        );
+    }
+
+    #[test]
+    fn block_transforms_compose() {
         for state in 0..16u8 {
-            assert_eq!(rotate_cw(rotate_cw(state)), rotate_180(state));
-            assert_eq!(rotate_180(rotate_180(state)), state);
+            assert_eq!(rotate_cw(rotate_cw(rotate_cw(rotate_cw(state)))), state);
+            assert_eq!(mirror(mirror(state)), state);
             assert_eq!(popcount(rotate_cw(state)), popcount(state));
+            assert_eq!(popcount(mirror(state)), popcount(state));
+            assert_eq!(popcount(complement(state)), 4 - popcount(state));
         }
-    }
-
-    #[test]
-    #[should_panic(expected = "not reversible")]
-    fn non_bijective_tables_are_rejected() {
-        BlockRule::from_table(RuleKind::Critters, [0; 16]);
+        assert_eq!(rotate_cw(0b0001), 0b0010);
+        assert_eq!(rotate_180(0b0001), 0b1000);
+        assert_eq!(mirror(0b0001), 0b0010);
+        assert_eq!(mirror(0b0100), 0b1000);
+        assert_eq!(flip(0b0001), 0b0100);
+        assert_eq!(flip(0b0010), 0b1000);
+        assert_eq!((transpose(0b0010), transpose(0b0001)), (0b0100, 0b0001));
+        assert_eq!((anti_transpose(0b0001), anti_transpose(0b0010)), (0b1000, 0b0010));
+        assert_eq!(rotate_ccw(rotate_cw(0b0110)), 0b0110);
     }
 }

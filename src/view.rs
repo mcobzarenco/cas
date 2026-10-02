@@ -9,21 +9,25 @@
 //! right- or middle-drag pans, left-drag paints.
 
 use bevy::{
-    asset::{RenderAssetUsages, embedded_asset},
+    asset::{AssetEventSystems, RenderAssetUsages, embedded_asset},
     feathers::cursor::EntityCursor,
     input::mouse::MouseScrollUnit,
     prelude::*,
     reflect::TypePath,
     render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat},
     shader::ShaderRef,
-    ui::UiGlobalTransform,
+    ui::{UiGlobalTransform, UiSystems},
     window::SystemCursorIcon,
 };
 
-use crate::sim::{Settings, Universe, advance};
+use crate::sim::{Settings, SimSystems, Universe};
 
-/// Largest zoom, in logical pixels per cell.
-pub const MAX_ZOOM: f32 = 64.0;
+pub const ALIVE: Color = Color::srgb(1.0, 0.769, 0.42);
+pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
+pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
+
+/// Largest zoom, in logical pixels per cell (more when a tiny grid needs it to fit).
+const MAX_ZOOM: f32 = 64.0;
 /// How far out you can zoom, relative to the zoom at which the whole grid fits.
 const MIN_ZOOM_FACTOR: f32 = 0.5;
 /// Fraction of the viewport the grid fills when fitted.
@@ -37,14 +41,38 @@ const PIXELS_PER_NOTCH: f32 = 48.0;
 const GRID_FADE: (f32, f32) = (5.0, 10.0);
 const BLOCK_FADE: (f32, f32) = (3.5, 8.0);
 
-/// The node showing the cells; it fills the area next to the panel.
+/// The node showing the cells; it fills the area next to the panels.
 #[derive(Component, Default, Clone)]
 pub struct GridView;
 
 #[derive(Resource)]
-pub struct GridAssets {
+struct GridAssets {
     image: Handle<Image>,
     material: Handle<GridMaterial>,
+}
+
+impl FromWorld for GridAssets {
+    fn from_world(world: &mut World) -> Self {
+        let universe = world.resource::<Universe>();
+        // One byte per cell, read with `textureLoad`, so no sampler and no filtering.
+        let image = Image::new_fill(
+            Extent3d {
+                width: universe.width as u32,
+                height: universe.height as u32,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[0],
+            TextureFormat::R8Uint,
+            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        );
+        let image = world.resource_mut::<Assets<Image>>().add(image);
+        let material = world.resource_mut::<Assets<GridMaterial>>().add(GridMaterial {
+            params: GridParams::default(),
+            cells: image.clone(),
+        });
+        Self { image, material }
+    }
 }
 
 /// Where we are looking.
@@ -56,6 +84,8 @@ pub struct ViewState {
     pub zoom: f32,
     /// Keep the whole grid fitted to the viewport; cleared by zooming or panning.
     pub fit: bool,
+    /// The zooms the current viewport and grid allow, kept up to date by [`constrain_view`].
+    zoom_range: (f32, f32),
 }
 
 impl Default for ViewState {
@@ -64,16 +94,18 @@ impl Default for ViewState {
             center: Vec2::ZERO,
             zoom: 1.0,
             fit: true,
+            zoom_range: (0.01, MAX_ZOOM),
         }
     }
 }
 
 impl ViewState {
     /// Multiplies the zoom by `factor` while keeping the cell under `offset` (logical pixels
-    /// from the centre of the viewport) where it is.
+    /// from the centre of the viewport) where it is. At a zoom limit nothing moves.
     pub fn zoom_about(&mut self, offset: Vec2, factor: f32) {
+        let (min, max) = self.zoom_range;
         let anchor = self.center + offset / self.zoom;
-        self.zoom = (self.zoom * factor).clamp(0.01, MAX_ZOOM);
+        self.zoom = (self.zoom * factor).clamp(min, max);
         self.center = anchor - offset / self.zoom;
         self.fit = false;
     }
@@ -82,7 +114,10 @@ impl ViewState {
 /// The paint stroke in progress.
 #[derive(Resource, Default)]
 struct Stroke {
-    value: bool,
+    /// Shift was down when the stroke began: it erases.
+    erase: bool,
+    /// What the stroke leaves on screen, decided by the first cell it touches.
+    alive: Option<bool>,
     last: Option<IVec2>,
 }
 
@@ -119,28 +154,31 @@ struct GridParams {
     block_color: Vec4,
 }
 
+/// Needs the [`Universe`] to exist: the cell texture takes its size.
 pub struct ViewPlugin;
 
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "grid.wgsl");
         app.add_plugins(UiMaterialPlugin::<GridMaterial>::default())
+            .init_resource::<GridAssets>()
             .init_resource::<ViewState>()
             .init_resource::<Stroke>()
-            .add_systems(Startup, setup_grid)
+            .add_observer(attach_material)
+            .add_systems(Update, upload_cells.in_set(SimSystems::Present))
+            // After layout, so that the fit follows this frame's viewport, and before asset
+            // changes are collected for rendering.
             .add_systems(
-                Update,
-                (
-                    attach_material,
-                    upload_cells.after(advance),
-                    (constrain_view, update_material).chain().after(advance),
-                ),
+                PostUpdate,
+                (constrain_view, update_material)
+                    .chain()
+                    .after(UiSystems::Layout)
+                    .before(AssetEventSystems),
             );
     }
 }
 
-/// The grid node. Its material is attached by [`attach_material`], since asset handles can't be
-/// passed through `bsn!` values.
+/// The grid node; [`attach_material`] gives it its material.
 pub fn grid_view() -> impl Scene {
     bsn! {
         #Grid
@@ -156,41 +194,10 @@ pub fn grid_view() -> impl Scene {
     }
 }
 
-fn setup_grid(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<GridMaterial>>,
-    universe: Res<Universe>,
-) {
-    // One byte per cell, read with `textureLoad`, so no sampler and no filtering.
-    let image = images.add(Image::new_fill(
-        Extent3d {
-            width: universe.width as u32,
-            height: universe.height as u32,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &[0],
-        TextureFormat::R8Uint,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    ));
-    let material = materials.add(GridMaterial {
-        params: GridParams::default(),
-        cells: image.clone(),
-    });
-    commands.insert_resource(GridAssets { image, material });
-}
-
-fn attach_material(
-    assets: Res<GridAssets>,
-    nodes: Query<Entity, (With<GridView>, Without<MaterialNode<GridMaterial>>)>,
-    mut commands: Commands,
-) {
-    for entity in &nodes {
-        commands
-            .entity(entity)
-            .insert(MaterialNode(assets.material.clone()));
-    }
+fn attach_material(add: On<Add, GridView>, assets: Res<GridAssets>, mut commands: Commands) {
+    commands
+        .entity(add.entity)
+        .insert(MaterialNode(assets.material.clone()));
 }
 
 /// The cell bytes are the texture: a plain copy whenever the universe changed.
@@ -206,8 +213,10 @@ fn upload_cells(
         return;
     };
     match image.data.as_mut() {
-        Some(data) if data.len() == universe.cells.len() => data.copy_from_slice(&universe.cells),
-        _ => image.data = Some(universe.cells.clone()),
+        Some(data) if data.len() == universe.cells().len() => {
+            data.copy_from_slice(universe.cells());
+        }
+        _ => image.data = Some(universe.cells().to_vec()),
     }
 }
 
@@ -223,17 +232,19 @@ fn constrain_view(
     }
     let grid = Vec2::new(universe.width as f32, universe.height as f32);
     let fit = FIT_MARGIN * (size / grid).min_element();
+    let zoom_range = (MIN_ZOOM_FACTOR * fit, MAX_ZOOM.max(fit));
     let (center, zoom) = if view.fit {
         (0.5 * grid, fit)
     } else {
         (
             view.center.clamp(Vec2::ZERO, grid),
-            view.zoom.clamp(MIN_ZOOM_FACTOR * fit, MAX_ZOOM.max(fit)),
+            view.zoom.clamp(zoom_range.0, zoom_range.1),
         )
     };
-    if view.center != center || view.zoom != zoom {
+    if view.center != center || view.zoom != zoom || view.zoom_range != zoom_range {
         view.center = center;
         view.zoom = zoom;
+        view.zoom_range = zoom_range;
     }
 }
 
@@ -244,7 +255,6 @@ fn update_material(
     assets: Res<GridAssets>,
     node: Single<&ComputedNode, With<GridView>>,
     mut materials: ResMut<Assets<GridMaterial>>,
-    mut last: Local<Option<GridParams>>,
 ) {
     let pixel_ratio = 1.0 / node.inverse_scale_factor;
     let params = GridParams {
@@ -255,31 +265,25 @@ fn update_material(
         line_width: (0.75 * pixel_ratio).max(1.0),
         // Outline this generation's partition: the blocks a forward step rewrites next.
         block_offset: universe.partition_offset() as f32,
-        invert: (settings.hide_vacuum
-            && universe.rule.vacuum_flips
-            && universe.generation.rem_euclid(2) == 1) as u8 as f32,
+        invert: settings.shows_complement(&universe) as u8 as f32,
         grid_alpha: if settings.show_grid { fade(GRID_FADE, view.zoom) } else { 0.0 },
         block_alpha: if settings.show_blocks { fade(BLOCK_FADE, view.zoom) } else { 0.0 },
-        alive: linear(0xFF, 0xC4, 0x6B, 1.0),
-        dead: linear(0x0E, 0x0F, 0x14, 1.0),
-        background: linear(0x1F, 0x1F, 0x24, 1.0),
-        grid_color: linear(0xFF, 0xFF, 0xFF, 0.07),
-        block_color: linear(0x6F, 0xB1, 0xFF, 0.30),
+        alive: linear(ALIVE, 1.0),
+        dead: linear(DEAD, 1.0),
+        background: linear(BACKGROUND, 1.0),
+        grid_color: linear(Color::WHITE, 0.07),
+        block_color: linear(Color::srgb(0.435, 0.694, 1.0), 0.30),
     };
-    // Touching the asset re-prepares its bind group, so only do it when something changed.
-    if *last != Some(params)
-        && let Some(mut material) = materials.get_mut(&assets.material)
+    // Writing to the asset re-prepares its bind group; reading it does not.
+    if let Some(mut material) = materials.get_mut(&assets.material)
+        && material.params != params
     {
         material.params = params;
-        *last = Some(params);
     }
 }
 
-fn linear(r: u8, g: u8, b: u8, alpha: f32) -> Vec4 {
-    Color::srgb_u8(r, g, b)
-        .to_linear()
-        .with_alpha(alpha)
-        .to_vec4()
+fn linear(color: Color, alpha: f32) -> Vec4 {
+    color.to_linear().with_alpha(alpha).to_vec4()
 }
 
 /// Smoothstep from 0 at `lo` to 1 at `hi`.
@@ -288,15 +292,9 @@ fn fade((lo, hi): (f32, f32), x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// The cell under a pointer position given in logical window coordinates.
-fn cell_at(
-    position: Vec2,
-    node: &ComputedNode,
-    transform: &UiGlobalTransform,
-    view: &ViewState,
-) -> IVec2 {
-    let offset = position - transform.translation * node.inverse_scale_factor;
-    (view.center + offset / view.zoom).floor().as_ivec2()
+/// A pointer position (logical window coordinates) relative to the centre of a node.
+fn offset_in(node: &ComputedNode, transform: &UiGlobalTransform, position: Vec2) -> Vec2 {
+    position - transform.translation * node.inverse_scale_factor
 }
 
 fn in_grid(cell: IVec2, universe: &Universe) -> Option<(usize, usize)> {
@@ -317,76 +315,78 @@ fn segment(a: IVec2, b: IVec2) -> impl Iterator<Item = IVec2> {
     })
 }
 
-/// Left press starts a stroke: it paints the opposite of the cell it starts on, or erases while
-/// shift is held.
-fn on_press(
-    press: On<Pointer<Press>>,
-    nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
-    keys: Res<ButtonInput<KeyCode>>,
-    view: Res<ViewState>,
-    mut universe: ResMut<Universe>,
-    mut stroke: ResMut<Stroke>,
-) {
+/// Wheel movement in notches; positive is away from the user.
+pub fn wheel_notches(scroll: &Pointer<Scroll>) -> f32 {
+    match scroll.unit {
+        MouseScrollUnit::Line => scroll.y,
+        MouseScrollUnit::Pixel => scroll.y / PIXELS_PER_NOTCH,
+    }
+}
+
+/// Painting works on what is on screen: while the picture is the complement of the cells
+/// (hide vacuum fluctuations), drawing a live cell stores a dead one.
+#[derive(bevy::ecs::system::SystemParam)]
+struct Canvas<'w, 's> {
+    nodes: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+    view: ResMut<'w, ViewState>,
+    settings: Res<'w, Settings>,
+    universe: ResMut<'w, Universe>,
+    stroke: ResMut<'w, Stroke>,
+}
+
+impl Canvas<'_, '_> {
+    /// Continues the stroke to the cell under the pointer. The first cell it touches decides
+    /// what it draws: the opposite of what is there, or nothing but dead cells when erasing.
+    fn stroke_to(&mut self, grid: Entity, pointer: Vec2) {
+        let Ok((node, transform)) = self.nodes.get(grid) else {
+            return;
+        };
+        let offset = offset_in(node, transform, pointer);
+        let cell = (self.view.center + offset / self.view.zoom).floor().as_ivec2();
+        let complemented = self.settings.shows_complement(&self.universe);
+        let alive = match (self.stroke.alive, in_grid(cell, &self.universe)) {
+            (Some(alive), _) => alive,
+            (None, Some((x, y))) => {
+                let shown = self.universe.get(x, y) != complemented;
+                !self.stroke.erase && !shown
+            }
+            // Still outside the grid: the stroke starts where it enters.
+            (None, None) => return,
+        };
+        let stored = alive != complemented;
+        for point in segment(self.stroke.last.unwrap_or(cell), cell) {
+            if let Some((x, y)) = in_grid(point, &self.universe)
+                && self.universe.get(x, y) != stored
+            {
+                self.universe.set(x, y, stored);
+            }
+        }
+        self.stroke.alive = Some(alive);
+        self.stroke.last = Some(cell);
+    }
+}
+
+/// A left press starts a stroke; shift makes it an eraser.
+fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canvas: Canvas) {
     if press.button != PointerButton::Primary {
         return;
     }
-    stroke.last = None;
-    let Ok((node, transform)) = nodes.get(press.entity) else {
-        return;
+    *canvas.stroke = Stroke {
+        erase: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
+        ..default()
     };
-    let cell = cell_at(press.pointer_location.position, node, transform, &view);
-    let Some((x, y)) = in_grid(cell, &universe) else {
-        return;
-    };
-    let erase = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    let value = !erase && !universe.get(x, y);
-    if universe.get(x, y) != value {
-        universe.set(x, y, value);
-    }
-    *stroke = Stroke {
-        value,
-        last: Some(cell),
-    };
+    canvas.stroke_to(press.entity, press.pointer_location.position);
 }
 
 /// Left-drag continues the stroke; right- or middle-drag pans.
-fn on_drag(
-    drag: On<Pointer<Drag>>,
-    nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
-    mut view: ResMut<ViewState>,
-    mut universe: ResMut<Universe>,
-    mut stroke: ResMut<Stroke>,
-) {
-    if drag.button != PointerButton::Primary {
-        let zoom = view.zoom;
-        view.center -= drag.delta / zoom;
-        view.fit = false;
-        return;
+fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
+    if drag.button == PointerButton::Primary {
+        canvas.stroke_to(drag.entity, drag.pointer_location.position);
+    } else {
+        let zoom = canvas.view.zoom;
+        canvas.view.center -= drag.delta / zoom;
+        canvas.view.fit = false;
     }
-    let Ok((node, transform)) = nodes.get(drag.entity) else {
-        return;
-    };
-    let cell = cell_at(drag.pointer_location.position, node, transform, &view);
-    let from = match stroke.last {
-        Some(last) => last,
-        None => {
-            // The press landed outside the grid; the stroke starts where it enters.
-            let Some((x, y)) = in_grid(cell, &universe) else {
-                return;
-            };
-            stroke.value = !universe.get(x, y);
-            cell
-        }
-    };
-    let value = stroke.value;
-    for point in segment(from, cell) {
-        if let Some((x, y)) = in_grid(point, &universe)
-            && universe.get(x, y) != value
-        {
-            universe.set(x, y, value);
-        }
-    }
-    stroke.last = Some(cell);
 }
 
 /// The wheel zooms about the pointer.
@@ -398,15 +398,11 @@ fn on_scroll(
     let Ok((node, transform)) = nodes.get(scroll.entity) else {
         return;
     };
-    let notches = match scroll.unit {
-        MouseScrollUnit::Line => scroll.y,
-        MouseScrollUnit::Pixel => scroll.y / PIXELS_PER_NOTCH,
-    };
-    if notches == 0.0 {
-        return;
+    let notches = wheel_notches(&scroll);
+    if notches != 0.0 {
+        let offset = offset_in(node, transform, scroll.pointer_location.position);
+        view.zoom_about(offset, WHEEL_ZOOM.powf(notches));
     }
-    let offset = scroll.pointer_location.position - transform.translation * node.inverse_scale_factor;
-    view.zoom_about(offset, WHEEL_ZOOM.powf(notches));
 }
 
 #[cfg(test)]
@@ -418,7 +414,7 @@ mod tests {
         let mut view = ViewState {
             center: Vec2::new(100.0, 80.0),
             zoom: 4.0,
-            fit: true,
+            ..default()
         };
         let offset = Vec2::new(120.0, -40.0);
         let before = view.center + offset / view.zoom;
@@ -427,6 +423,21 @@ mod tests {
         assert!((before - after).length() < 1e-4);
         assert_eq!(view.zoom, 10.0);
         assert!(!view.fit);
+    }
+
+    #[test]
+    fn zooming_at_a_limit_leaves_the_view_alone() {
+        let mut view = ViewState {
+            center: Vec2::new(100.0, 80.0),
+            zoom: 2.0,
+            zoom_range: (2.0, 40.0),
+            ..default()
+        };
+        view.zoom_about(Vec2::new(300.0, 200.0), 1.0 / WHEEL_ZOOM);
+        assert_eq!((view.center, view.zoom), (Vec2::new(100.0, 80.0), 2.0));
+        view.zoom = 40.0;
+        view.zoom_about(Vec2::new(300.0, 200.0), WHEEL_ZOOM);
+        assert_eq!((view.center, view.zoom), (Vec2::new(100.0, 80.0), 40.0));
     }
 
     #[test]

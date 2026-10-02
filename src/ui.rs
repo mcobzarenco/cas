@@ -28,6 +28,7 @@ use bevy::{
 
 use crate::{
     actions::{Action, Does, Toggle},
+    catcher::catcher_panel,
     editor::{RuleEditor, describe, editor_panel},
     rules::PRESETS,
     sim::{Pace, Playback, Settings, SimSystems, Universe, rule_changed},
@@ -35,6 +36,9 @@ use crate::{
 };
 
 pub const PANEL_WIDTH: f32 = 300.0;
+
+/// The grid sizes on offer: so many cells each way.
+const GRID_SIDES: [usize; 8] = [32, 64, 128, 256, 512, 1024, 2048, 4096];
 
 const SLIDER_HEIGHT: f32 = 18.0;
 const THUMB: f32 = 14.0;
@@ -53,6 +57,7 @@ pub enum Readout {
     Population,
     RuleName,
     RuleBlurb,
+    GridSize,
 }
 
 /// Sliders bound to a number in [`Playback`] or [`Settings`]. All three are logarithmic, because
@@ -185,8 +190,16 @@ impl Plugin for UiPlugin {
     }
 }
 
-fn options_changed(playback: Res<Playback>, settings: Res<Settings>) -> bool {
-    playback.is_changed() || settings.is_changed()
+/// Has anything a checkbox, a slider or the size menu shows changed?
+fn options_changed(
+    playback: Res<Playback>,
+    settings: Res<Settings>,
+    universe: Res<Universe>,
+    mut seen: Local<Option<(bool, bool, usize, usize)>>,
+) -> bool {
+    // The universe counts as changed on every step; its options are watched by value.
+    let world = (universe.open_border, universe.catching, universe.width, universe.height);
+    playback.is_changed() || settings.is_changed() || seen.replace(world) != Some(world)
 }
 
 fn spawn_ui(mut commands: Commands) {
@@ -206,6 +219,7 @@ fn root() -> impl Scene {
         Children [
             panel(),
             editor_panel(),
+            catcher_panel(),
             grid_view(),
         ]
     }
@@ -347,7 +361,7 @@ fn action_button(label: &'static str, name: &'static str, action: Action) -> imp
 
 /// A checkbox for an on/off option. Its checked state always follows the resource, see
 /// [`sync_widgets`].
-fn toggle(label: &'static str, name: &'static str, option: Toggle) -> impl Scene {
+pub(crate) fn toggle(label: &'static str, name: &'static str, option: Toggle) -> impl Scene {
     let name = Name::new(name);
     let does = Does(Action::Flip(option));
     bsn! {
@@ -637,7 +651,33 @@ fn view_section() -> impl Scene {
 }
 
 fn world_section() -> impl Scene {
+    let sizes: Vec<_> = GRID_SIDES.into_iter().map(size_item).collect();
     section("WORLD", bsn_list![
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+            }
+            Children [
+                caption("Grid size"),
+                (Node { flex_grow: 1.0 }),
+                (
+                    @FeathersMenu
+                    Children [
+                        (
+                            #GridSize
+                            @FeathersMenuButton {
+                                @caption: bsn! { Text("") ThemedText template_value(Readout::GridSize) }
+                            }
+                        ),
+                        (
+                            @FeathersMenuPopup
+                            Children [ { sizes } ]
+                        ),
+                    ]
+                ),
+            ]
+        ),
         slider_row("Density", "Density", Control::Density, String::new()),
         (
             Node {
@@ -651,7 +691,39 @@ fn world_section() -> impl Scene {
             ]
         ),
         caption("Soup fills the grid, blob seeds a square in the middle. Left-drag paints, with shift it erases."),
+        toggle("Open border", "OpenBorder", Toggle::OpenBorder),
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(8),
+            }
+            Children [
+                (
+                    toggle("Catch spaceships", "Catching", Toggle::Catching)
+                    Node { flex_grow: 1.0 }
+                ),
+                (
+                    action_button("Spaceships", "Spaceships", Action::Spaceships)
+                    Node { flex_grow: 0.0 }
+                ),
+            ]
+        ),
     ])
+}
+
+/// A size in the grid-size menu.
+fn size_item(side: usize) -> impl Scene {
+    let label = format!("{side} × {side}");
+    let name = Name::new(format!("GridSize:{side}"));
+    let does = Does(Action::Resize(side));
+    bsn! {
+        @FeathersMenuItem {
+            @caption: bsn! { Text(label) ThemedText }
+        }
+        template_value(name)
+        template_value(does)
+    }
 }
 
 /// Dragging or clicking a slider: the value goes to its resource, and the slider is moved to
@@ -710,7 +782,7 @@ fn sync_widgets(
         let Action::Flip(toggle) = does.0 else {
             continue;
         };
-        match (toggle.get(&playback, &settings), checked) {
+        match (toggle.get(&playback, &settings, &universe), checked) {
             (true, false) => commands.entity(entity).insert(Checked),
             (false, true) => commands.entity(entity).remove::<Checked>(),
             _ => continue,
@@ -722,6 +794,7 @@ fn sync_widgets(
             Readout::PlayPauseLabel => "Play".to_string(),
             Readout::RuleName => universe.rule().name().to_string(),
             Readout::RuleBlurb => describe(universe.rule()),
+            Readout::GridSize => format!("{} × {}", universe.width, universe.height),
             Readout::Generation | Readout::Transport | Readout::Population => continue,
         };
         text.set_if_neq(Text(content));
@@ -784,19 +857,14 @@ fn style_sliders(
     }
 }
 
-/// The generation, what the transport is doing, and the population as it is drawn.
+/// The generation, what the transport is doing, and the population.
 fn update_status(
     universe: Res<Universe>,
     playback: Res<Playback>,
-    settings: Res<Settings>,
     pace: Res<Pace>,
     mut readouts: Query<(&Readout, &mut Text)>,
 ) {
-    let changed = universe.is_changed()
-        || playback.is_changed()
-        || settings.is_changed()
-        || pace.is_changed();
-    if !changed {
+    if !(universe.is_changed() || playback.is_changed() || pace.is_changed()) {
         return;
     }
     let transport = if playback.playing {
@@ -815,11 +883,7 @@ fn update_status(
         "paused".to_string()
     };
     let cells = universe.width * universe.height;
-    let population = if settings.shows_complement(&universe) {
-        cells - universe.population()
-    } else {
-        universe.population()
-    };
+    let population = universe.population();
     for (readout, mut text) in &mut readouts {
         let content = match readout {
             Readout::Generation => format!("generation {}", group_digits(universe.generation)),
@@ -844,7 +908,7 @@ fn format_rate(generations_per_second: f32) -> String {
 }
 
 /// `1234567` → `1 234 567`.
-fn group_digits(n: i64) -> String {
+pub(crate) fn group_digits(n: i64) -> String {
     let digits = n.unsigned_abs().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
     if n < 0 {

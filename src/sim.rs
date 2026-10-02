@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy::{platform::time::Instant, prelude::*};
 use rayon::prelude::*;
 
-use crate::rules::{BlockRule, Vacuum};
+use crate::rules::BlockRule;
 
 /// The order of a frame in `Update`: input changes the world and the transport, the simulation
 /// steps, then everything that shows the result catches up.
@@ -39,7 +39,13 @@ impl Rng {
     }
 }
 
-/// The grid of cells. Cells are stored row-major as `0`/`1` bytes; the grid wraps around.
+/// The grid of cells. It wraps around, unless its border is open.
+///
+/// What is stored, one `0`/`1` byte per cell and row by row, is how the world differs from
+/// the vacuum: for a rule that leaves empty space alone, simply the live cells. That is the
+/// picture one wants to see, paint and count, and it steps under the rule taken relative to its
+/// vacuum ([`BlockRule::relative_to_vacuum`]). The cells of the automaton proper are these XOR
+/// the vacuum, which only the unhidden view needs: see [`Universe::vacuum`].
 #[derive(Resource, Clone, Debug)]
 pub struct Universe {
     pub width: usize,
@@ -49,53 +55,121 @@ pub struct Universe {
     /// How many steps we are from the initial condition; the partition offset follows its parity.
     pub generation: i64,
     rule: BlockRule,
-    forward: Kernel,
-    backward: Kernel,
-    flipped: bool,
+    /// The vacuum's cycle and, for each of its generations, the kernels that step the
+    /// difference from it forwards and backwards.
+    vacuum: Vec<u8>,
+    kernels: Vec<(Kernel, Kernel)>,
+    /// Where in its cycle the vacuum is.
+    phase: usize,
+    /// With an open border, whatever reaches the edge of the grid leaves the world.
+    pub open_border: bool,
+    /// Small patterns that reach the edge are taken out of the world and kept as
+    /// [`Departure`]s, whatever the border otherwise does.
+    pub catching: bool,
+    departures: Vec<Departure>,
 }
+
+/// A small pattern that was caught at the edge, as it was at that moment: its cells relative
+/// to a corner of the blocks the next step would have rewritten, and where the vacuum was in
+/// its cycle.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Departure {
+    pub cells: Vec<(i32, i32)>,
+    pub phase: usize,
+}
+
+/// Live cells this close to each other, along both axes, belong to the same pattern.
+const PATTERN_REACH: i32 = 4;
+/// Something with this many cells or more is debris, not a pattern.
+pub const PATTERN_CELLS: usize = 20;
 
 impl Universe {
     pub fn new(width: usize, height: usize, rule: BlockRule) -> Self {
-        assert!(
-            width >= 2 && height >= 2 && width.is_multiple_of(2) && height.is_multiple_of(2),
-            "a Margolus grid needs even dimensions, got {width}×{height}"
-        );
+        Self::check_size(width, height);
         let n = width * height;
-        Self {
+        let mut universe = Self {
             width,
             height,
             cells: vec![0; n],
             scratch: vec![0; n],
             generation: 0,
-            forward: Kernel::new(rule.table_for(true)),
-            backward: Kernel::new(rule.table_for(false)),
-            rule,
-            flipped: false,
-        }
+            rule: BlockRule::identity(),
+            vacuum: Vec::new(),
+            kernels: Vec::new(),
+            phase: 0,
+            open_border: false,
+            catching: false,
+            departures: Vec::new(),
+        };
+        universe.install(rule);
+        universe
+    }
+
+    fn check_size(width: usize, height: usize) {
+        assert!(
+            width >= 2 && height >= 2 && width.is_multiple_of(2) && height.is_multiple_of(2),
+            "a Margolus grid needs even dimensions, got {width}×{height}"
+        );
     }
 
     pub fn rule(&self) -> &BlockRule {
         &self.rule
     }
 
-    /// Switches rule in place; the cells and the generation counter are kept. Leaving a
-    /// vacuum-flipping rule in its all-alive phase complements the cells: the new rule starts
-    /// from a dead vacuum and the picture carries over.
+    /// Switches rule in place. The cells and the generation counter are kept; the picture is
+    /// from now on read against the new rule's vacuum, at the start of its cycle.
     pub fn set_rule(&mut self, rule: BlockRule) {
-        if self.flipped && rule.vacuum() != Vacuum::Flips {
-            self.cells.iter_mut().for_each(|cell| *cell ^= 1);
-            self.flipped = false;
+        if rule != self.rule {
+            self.install(rule);
         }
-        self.forward = Kernel::new(rule.table_for(true));
-        self.backward = Kernel::new(rule.table_for(false));
+    }
+
+    fn install(&mut self, rule: BlockRule) {
+        self.vacuum = rule.vacuum_cycle();
+        self.kernels = rule
+            .relative_to_vacuum()
+            .iter()
+            .map(|table| {
+                (
+                    Kernel::new(table.table_for(true)),
+                    Kernel::new(table.table_for(false)),
+                )
+            })
+            .collect();
+        self.phase = 0;
         self.rule = rule;
     }
 
-    /// True while a vacuum-flipping rule (Critters, Tron) has the world in its all-alive phase:
-    /// an odd number of steps was taken under such a rule since the world was last reset. The
-    /// picture is then easier to read complemented, see [`Settings::shows_complement`].
-    pub fn is_flipped(&self) -> bool {
-        self.flipped
+    /// Gives the grid another size. What is on it stays where it is, seen from the middle, as
+    /// far as it still fits.
+    pub fn resize(&mut self, width: usize, height: usize) {
+        Self::check_size(width, height);
+        if (width, height) == (self.width, self.height) {
+            return;
+        }
+        // Rows and columns come and go on both sides alike, but only in pairs: the pattern
+        // keeps its place among the blocks.
+        let margin = |old: usize, new: usize| (old.abs_diff(new) / 2) & !1;
+        let (dx, dy) = (margin(self.width, width), margin(self.height, height));
+        let (from_x, to_x) = if width < self.width { (dx, 0) } else { (0, dx) };
+        let (from_y, to_y) = if height < self.height { (dy, 0) } else { (0, dy) };
+        let kept = width.min(self.width);
+        let mut cells = vec![0; width * height];
+        for y in 0..height.min(self.height) {
+            let from = (from_y + y) * self.width + from_x;
+            let to = (to_y + y) * width + to_x;
+            cells[to..to + kept].copy_from_slice(&self.cells[from..from + kept]);
+        }
+        self.cells = cells;
+        self.scratch = vec![0; width * height];
+        self.width = width;
+        self.height = height;
+    }
+
+    /// The vacuum right now: the state of every block of the current partition in an empty
+    /// world. For most rules, and at the start of every cycle, that is 0: all cells dead.
+    pub fn vacuum(&self) -> u8 {
+        self.vacuum[self.phase]
     }
 
     /// The cells, row by row, one `0`/`1` byte each.
@@ -138,10 +212,10 @@ impl Universe {
         self.reset_clock();
     }
 
-    /// A fresh pattern is generation 0 with a dead vacuum.
+    /// A fresh pattern is generation 0, at the start of the vacuum's cycle.
     fn reset_clock(&mut self) {
         self.generation = 0;
-        self.flipped = false;
+        self.phase = 0;
     }
 
     pub fn population(&self) -> usize {
@@ -166,14 +240,18 @@ impl Universe {
     /// One generation forwards or backwards. Backwards means undoing the forward step that led
     /// here: the inverse table with the partition that step used.
     pub fn step(&mut self, forward: bool) {
+        let cycle = self.vacuum.len();
         if forward {
-            let offset = Self::offset_at(self.generation);
-            self.apply(true, offset);
+            self.apply(true);
             self.generation += 1;
+            self.phase = (self.phase + 1) % cycle;
         } else {
             self.generation -= 1;
-            let offset = Self::offset_at(self.generation);
-            self.apply(false, offset);
+            self.phase = (self.phase + cycle - 1) % cycle;
+            self.apply(false);
+        }
+        if self.open_border || self.catching {
+            self.sweep_edge();
         }
     }
 
@@ -184,14 +262,94 @@ impl Universe {
         }
     }
 
-    fn apply(&mut self, forward: bool, offset: usize) {
-        let kernel = if forward { &self.forward } else { &self.backward };
+    /// Rewrites the blocks of the current partition, at the current place in the vacuum's cycle.
+    fn apply(&mut self, forward: bool) {
+        let (forwards, backwards) = &self.kernels[self.phase];
+        let kernel = if forward { forwards } else { backwards };
+        let offset = self.partition_offset();
         let parallel = self.cells.len() >= PARALLEL_CELLS;
         step_blocks(&self.cells, &mut self.scratch, self.width, kernel, offset, parallel);
         std::mem::swap(&mut self.cells, &mut self.scratch);
-        if self.rule.vacuum() == Vacuum::Flips {
-            self.flipped = !self.flipped;
+    }
+
+    /// Deals with what reached the edge: the live cells in the first row and the first column.
+    /// On a torus those two lines are the whole edge, and nothing can cross them unseen, since
+    /// nothing moves faster than a cell per step. A small pattern leaves whole, and is kept if
+    /// patterns are being caught. Of anything bigger an open border takes the cells that touch
+    /// it, and a closed one nothing.
+    fn sweep_edge(&mut self) {
+        let (width, height) = (self.width, self.height);
+        let edge = (0..width).map(|x| (x, 0)).chain((1..height).map(|y| (0, y)));
+        // Debris is recognised once: a live cell within reach of it is part of it, and that
+        // is how many of the cells to come along the edge still are.
+        let mut reach = 0;
+        for (x, y) in edge {
+            let near_debris = reach > 0;
+            reach = (reach - 1).max(0);
+            if self.cells[y * width + x] == 0 {
+                continue;
+            }
+            if !near_debris && let Some(departure) = self.take_pattern(x, y) {
+                if self.catching {
+                    self.departures.push(departure);
+                }
+                continue;
+            }
+            reach = PATTERN_REACH;
+            if self.open_border {
+                self.cells[y * width + x] = 0;
+            }
         }
+    }
+
+    /// Takes the pattern that the live cell at `(x, y)` belongs to out of the world, if it is
+    /// a small one.
+    fn take_pattern(&mut self, x: usize, y: usize) -> Option<Departure> {
+        let (width, height) = (self.width as i32, self.height as i32);
+        // Coordinates do not wrap here, so that a pattern lying across the edge keeps its
+        // shape; only looking a cell up wraps them.
+        let wrap = |v: i32, size: i32| if (0..size).contains(&v) { v } else { v.rem_euclid(size) };
+        let index = |(x, y): (i32, i32)| (wrap(y, height) * width + wrap(x, width)) as usize;
+
+        // Flood fill. Cells are taken out as they are found, which also marks them as seen.
+        let mut pattern = vec![(x as i32, y as i32)];
+        self.cells[index(pattern[0])] = 0;
+        let mut visited = 0;
+        while visited < pattern.len() && pattern.len() < PATTERN_CELLS {
+            let (cx, cy) = pattern[visited];
+            visited += 1;
+            for dy in -PATTERN_REACH..=PATTERN_REACH {
+                for dx in -PATTERN_REACH..=PATTERN_REACH {
+                    let cell = (cx + dx, cy + dy);
+                    if std::mem::take(&mut self.cells[index(cell)]) != 0 {
+                        pattern.push(cell);
+                    }
+                }
+            }
+        }
+        if pattern.len() >= PATTERN_CELLS {
+            // Debris: it goes back.
+            for &cell in &pattern {
+                self.cells[index(cell)] = 1;
+            }
+            return None;
+        }
+        let offset = self.partition_offset() as i32;
+        let block_corner = |v: i32| v - ((v - offset) & 1);
+        let (x0, y0) = (block_corner(x as i32), block_corner(y as i32));
+        Some(Departure {
+            cells: pattern.iter().map(|&(x, y)| (x - x0, y - y0)).collect(),
+            phase: self.phase,
+        })
+    }
+
+    pub fn has_departures(&self) -> bool {
+        !self.departures.is_empty()
+    }
+
+    /// The patterns caught at the edge since this was last asked.
+    pub fn take_departures(&mut self) -> Vec<Departure> {
+        std::mem::take(&mut self.departures)
     }
 }
 
@@ -377,8 +535,8 @@ pub struct Pace {
 /// Everything that is not transport: how the world is drawn and seeded.
 #[derive(Resource, Clone, Debug)]
 pub struct Settings {
-    /// Draw the complement while a vacuum-flipping rule has the world in its all-alive phase,
-    /// so empty space stays dark instead of flickering.
+    /// Draw the cells as they differ from the vacuum, which is how they are stored. Unhidden,
+    /// the true cells are drawn: for a rule like Critters the whole picture then flickers.
     pub hide_vacuum: bool,
     /// Live-cell probability of a random soup.
     pub density: f32,
@@ -391,12 +549,6 @@ pub struct Settings {
 impl Settings {
     pub const MIN_DENSITY: f32 = 0.0001;
     pub const MAX_DENSITY: f32 = 0.9;
-
-    /// Is the picture the complement of the cells right now? Whatever shows or edits cells on
-    /// screen (the shader, painting, the population figure) goes through this.
-    pub fn shows_complement(&self, universe: &Universe) -> bool {
-        self.hide_vacuum && universe.is_flipped()
-    }
 }
 
 /// Run condition: has the rule changed since this condition last looked? The universe as a
@@ -545,66 +697,193 @@ mod tests {
     }
 
     #[test]
-    fn critters_conserves_population_over_even_steps() {
-        // Every step maps a block's live count c to 4 - c (or keeps 2), so after one step the
-        // population is `cells - n` and after two it is `n` again.
+    fn critters_conserves_what_differs_from_the_vacuum() {
         let mut universe = soup(rule("critters"), 11);
         let population = universe.population();
-        let cells = universe.width * universe.height;
-        universe.step(true);
-        assert_eq!(universe.population(), cells - population);
-        universe.step_by(99);
-        assert_eq!(universe.population(), population);
+        for _ in 0..25 {
+            universe.step(true);
+            assert_eq!(universe.population(), population);
+        }
     }
 
     #[test]
-    fn critters_complements_the_vacuum_each_step() {
+    fn the_vacuum_cycles_beside_the_cells() {
+        // An empty world stays empty in store, while its vacuum goes all alive and back.
         let mut universe = Universe::new(8, 8, rule("critters"));
+        assert_eq!(universe.vacuum(), 0);
         universe.step(true);
-        assert_eq!(universe.population(), 64);
-        assert!(universe.is_flipped());
+        assert_eq!((universe.population(), universe.vacuum()), (0, 15));
         universe.step(true);
-        assert_eq!(universe.population(), 0);
-        assert!(!universe.is_flipped());
+        assert_eq!((universe.population(), universe.vacuum()), (0, 0));
         universe.step(false);
-        assert!(universe.is_flipped(), "stepping back flips the vacuum too");
+        assert_eq!(universe.vacuum(), 15, "stepping back takes the vacuum back too");
     }
 
     #[test]
     fn the_picture_survives_a_rule_switch() {
-        // Three steps of Critters leave the world in its all-alive phase. What the user sees,
-        // with the vacuum hidden, is the complement; that is what the next rule must get.
         let mut universe = soup(rule("critters"), 21);
         universe.step_by(3);
-        let picture: Vec<u8> = universe.cells().iter().map(|cell| cell ^ 1).collect();
-
-        let mut to_tron = universe.clone();
-        to_tron.set_rule(rule("tron"));
-        assert!(to_tron.is_flipped(), "Tron flips the vacuum as well: nothing to undo");
-        assert_ne!(to_tron.cells(), picture);
-
+        assert_eq!(universe.vacuum(), 15);
+        let picture = universe.cells().to_vec();
         universe.set_rule(rule("single-rotation"));
-        assert!(!universe.is_flipped());
         assert_eq!(universe.cells(), picture);
+        assert_eq!(universe.vacuum(), 0, "the new rule reads it against its own vacuum");
         assert_eq!(universe.generation, 3, "the clock is not touched");
     }
 
     #[test]
-    fn a_new_pattern_starts_with_a_dead_vacuum() {
+    fn a_new_pattern_starts_the_vacuum_cycle_afresh() {
         let mut rng = Rng::new(1);
-        let flipped = || {
+        let mid_cycle = || {
             let mut universe = soup(rule("critters"), 4);
             universe.step(true);
             universe
         };
-        let (mut cleared, mut soup, mut blob) = (flipped(), flipped(), flipped());
+        let (mut cleared, mut soup, mut blob) = (mid_cycle(), mid_cycle(), mid_cycle());
         cleared.clear();
         soup.randomize(0.3, &mut rng);
         blob.randomize_blob(0.3, &mut rng);
         for universe in [cleared, soup, blob] {
-            assert!(!universe.is_flipped());
-            assert_eq!(universe.generation, 0);
+            assert_eq!((universe.vacuum(), universe.generation), (0, 0));
         }
+    }
+
+    /// The vacuum of `universe` as cells: the tile [`Universe::vacuum`] describes, repeated.
+    fn vacuum_cells(universe: &Universe) -> Vec<u8> {
+        let offset = universe.partition_offset();
+        (0..universe.height)
+            .flat_map(|y| (0..universe.width).map(move |x| (x, y)))
+            .map(|(x, y)| (universe.vacuum() >> (((x + offset) & 1) + 2 * ((y + offset) & 1))) & 1)
+            .collect()
+    }
+
+    #[test]
+    fn stored_cells_are_the_true_cells_but_for_the_vacuum() {
+        // The automaton proper, stepped by the plain definition, against the stored difference.
+        let mut rng = Rng::new(17);
+        let mut rules: Vec<BlockRule> = PRESETS.iter().map(|preset| preset.rule()).collect();
+        rules.extend((0..40).map(|_| BlockRule::random(|| rng.next_u64())));
+        for rule in rules {
+            let mut universe = soup(rule.clone(), 23);
+            let mut truth = universe.cells().to_vec();
+            let (width, height) = (universe.width, universe.height);
+            let check = |universe: &Universe, truth: &[u8], when: &str| {
+                let vacuum = vacuum_cells(universe);
+                let stored: Vec<u8> = universe.cells().iter().zip(&vacuum).map(|(c, v)| c ^ v).collect();
+                assert_eq!(stored, truth, "{rule}, {when} generation {}", universe.generation);
+            };
+            for _ in 0..20 {
+                let offset = universe.partition_offset();
+                truth = reference_step(&truth, width, height, rule.table_for(true), offset);
+                universe.step(true);
+                check(&universe, &truth, "forwards to");
+            }
+            for _ in 0..27 {
+                universe.step(false);
+                let offset = universe.partition_offset();
+                truth = reference_step(&truth, width, height, rule.table_for(false), offset);
+                check(&universe, &truth, "back to");
+            }
+        }
+    }
+
+    /// The lightest ship of Single Rotation, heading right, two blocks from the edge.
+    fn ship_near_the_edge() -> Universe {
+        let mut universe = Universe::new(32, 32, rule("single-rotation"));
+        for (x, y) in [(26, 13), (27, 13), (26, 15), (27, 15)] {
+            universe.set(x, y, true);
+        }
+        universe
+    }
+
+    #[test]
+    fn the_open_border_takes_small_patterns_whole() {
+        let mut universe = ship_near_the_edge();
+        universe.open_border = true;
+        let mut steps = 0;
+        while universe.population() == 4 {
+            universe.step(true);
+            steps += 1;
+            assert!(steps < 100, "the ship never reached the edge");
+        }
+        assert_eq!(universe.population(), 0, "it left in one piece");
+        assert!(!universe.has_departures(), "nobody asked for it to be kept");
+    }
+
+    #[test]
+    fn what_is_caught_is_kept_whatever_the_border() {
+        for open_border in [false, true] {
+            let mut universe = ship_near_the_edge();
+            universe.open_border = open_border;
+            universe.catching = true;
+            universe.step_by(100);
+            assert_eq!(universe.population(), 0);
+            let departures = universe.take_departures();
+            assert_eq!(departures.len(), 1);
+            assert_eq!(departures[0].cells.len(), 4);
+            assert_eq!(departures[0].phase, 0);
+            assert!(universe.take_departures().is_empty(), "they are handed over once");
+        }
+    }
+
+    #[test]
+    fn a_pattern_across_the_edge_keeps_its_shape() {
+        let mut universe = Universe::new(16, 16, BlockRule::identity());
+        universe.catching = true;
+        for (x, y) in [(15, 6), (0, 6), (14, 9)] {
+            universe.set(x, y, true);
+        }
+        universe.step(true);
+        assert_eq!(universe.population(), 0);
+        let cells = &universe.take_departures()[0].cells;
+        // Found from (0, 6); after one step the blocks start on odd coordinates.
+        assert_eq!(cells, &[(1, 1), (0, 1), (-1, 4)]);
+    }
+
+    #[test]
+    fn debris_is_worn_down_by_an_open_border_and_passes_a_closed_one() {
+        // Six cells by six: too many to be a pattern.
+        const { assert!(PATTERN_CELLS <= 36) };
+        let debris = || {
+            let mut universe = Universe::new(32, 32, BlockRule::identity());
+            for y in 10..16 {
+                for x in 0..6 {
+                    universe.set(x, y, true);
+                }
+            }
+            universe
+        };
+        let (mut open, mut closed) = (debris(), debris());
+        open.open_border = true;
+        closed.catching = true;
+        open.step(true);
+        closed.step(true);
+        assert_eq!(open.population(), 30, "one column of six is gone");
+        assert_eq!(closed.cells(), debris().cells());
+        assert!(!open.has_departures() && !closed.has_departures());
+    }
+
+    #[test]
+    fn resizing_keeps_the_pattern_and_its_place_among_the_blocks() {
+        let mut universe = Universe::new(32, 32, rule("single-rotation"));
+        for (x, y) in [(12, 13), (13, 13), (12, 15), (13, 15)] {
+            universe.set(x, y, true);
+        }
+        let mut twin = universe.clone();
+        // With room added all around and taken away again, the ship flies as it would have.
+        universe.resize(64, 48);
+        assert_eq!((universe.width, universe.height, universe.population()), (64, 48, 4));
+        assert!(universe.get(12 + 16, 13 + 8));
+        universe.step_by(12);
+        twin.step_by(12);
+        universe.resize(32, 32);
+        assert_eq!(universe.cells(), twin.cells());
+        assert_eq!(universe.generation, 12);
+        // What no longer fits is cut off: the ship is now at (14, 13), two rows of two cells.
+        universe.resize(4, 4);
+        assert_eq!(universe.population(), 2);
+        universe.step_by(3);
+        assert_eq!(universe.population(), 2, "and the grid steps as before");
     }
 
     /// The definition of a step, written for clarity: every cell looks up its block.
@@ -785,33 +1064,8 @@ mod published_patterns {
 
     type Cells = BTreeSet<(i32, i32)>;
 
-    /// Cells of an RLE pattern: `b` dead, `o` alive, `$` end of row, digits repeat.
     fn rle(pattern: &str) -> Vec<(i32, i32)> {
-        let (mut x, mut y, mut count) = (0, 0, 0);
-        let mut cells = Vec::new();
-        for c in pattern.chars() {
-            match c {
-                '0'..='9' => count = count * 10 + c.to_digit(10).unwrap() as i32,
-                'b' => {
-                    x += count.max(1);
-                    count = 0;
-                }
-                'o' => {
-                    for _ in 0..count.max(1) {
-                        cells.push((x, y));
-                        x += 1;
-                    }
-                    count = 0;
-                }
-                '$' => {
-                    y += count.max(1);
-                    x = 0;
-                    count = 0;
-                }
-                _ => panic!("bad RLE character {c:?}"),
-            }
-        }
-        cells
+        crate::pattern::from_rle(pattern).unwrap()
     }
 
     fn place(cells: &[(i32, i32)], origin: (i32, i32), size: usize) -> Universe {

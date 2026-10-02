@@ -23,6 +23,7 @@
 //! | `press KEY`, `release KEY` | hold a key down across other commands, e.g. `Shift`     |
 //! | `type TEXT`         | type text into whatever has keyboard focus                     |
 //! | `paint X Y [on/off]`| set a cell directly                                            |
+//! | `place RLE X Y`     | put a run-length encoded pattern with its corner at (X, Y)     |
 //! | `fit`               | fit the view to the grid                                       |
 //! | `play`, `pause`     | transport                                                      |
 //! | `step N`            | advance N generations (negative goes backwards)                |
@@ -34,11 +35,15 @@
 //! | `soup [DENSITY]`    | uniform random soup                                            |
 //! | `blob [DENSITY]`    | random square in the middle                                    |
 //! | `expect_gen N`      | fail (exit code 1) unless the generation counter is N           |
-//! | `expect_cell X Y on/off` | fail unless the cell has that state                       |
+//! | `expect_cell X Y on/off` | fail unless the cell has that state (as part of the       |
+//! |                     | pattern: the vacuum is not counted in)                         |
 //! | `expect_rule RULE`  | fail unless that rule is active                                |
 //! | `expect_speed N`, `expect_stride N`, `expect_playing on/off` | likewise for the transport |
-//! | `expect_population N` | fail unless that many cells are alive (stored, not as drawn)   |
+//! | `expect_population N` | fail unless the pattern has that many cells                  |
+//! | `expect_size W H`   | fail unless the grid is W cells wide and H high                |
 //! | `expect_checked NAME on/off` | fail unless the checkbox named NAME shows that state   |
+//! | `expect_text NAME TEXT` | fail unless the text node named NAME reads TEXT            |
+//! | `expect_caught SHIPS KINDS` | fail unless the catcher has that many spaceships, of that many kinds |
 //! | `expect_clipboard TEXT` | fail unless the clipboard holds TEXT                       |
 //! | `clear`, `quit`     |                                                                |
 //!
@@ -74,6 +79,8 @@ use bevy::{
 };
 
 use crate::{
+    catcher::Catcher,
+    pattern::{Cell, from_rle},
     rules::BlockRule,
     sim::{Playback, Rng, Settings, Universe},
     view::ViewState,
@@ -94,6 +101,7 @@ pub enum Command {
     Release(KeyCode),
     Type(String),
     Paint { x: usize, y: usize, alive: bool },
+    Place { cells: Vec<Cell>, x: i32, y: i32 },
     Play,
     Pause,
     Step(i64),
@@ -112,8 +120,11 @@ pub enum Command {
     ExpectSpeed(f32),
     ExpectStride(u32),
     ExpectPopulation(usize),
+    ExpectSize(usize, usize),
     ExpectPlaying(bool),
     ExpectChecked { name: String, checked: bool },
+    ExpectText { name: String, text: String },
+    ExpectCaught { ships: u64, kinds: usize },
     ExpectClipboard(String),
     Quit,
 }
@@ -184,6 +195,11 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 y: parse(arg(1, "y")?)?,
                 alive: args.get(2).map_or(Ok(true), |s| parse_bool(s))?,
             },
+            "place" => Command::Place {
+                cells: from_rle(arg(0, "a run-length encoded pattern")?)?,
+                x: parse(arg(1, "x")?)?,
+                y: parse(arg(2, "y")?)?,
+            },
             "play" => Command::Play,
             "pause" => Command::Pause,
             "step" => Command::Step(args.first().map_or(Ok(1), |s| parse(s))?),
@@ -206,10 +222,19 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
             "expect_speed" => Command::ExpectSpeed(parse(arg(0, "frames per second")?)?),
             "expect_stride" => Command::ExpectStride(parse(arg(0, "generations per frame")?)?),
             "expect_population" => Command::ExpectPopulation(parse(arg(0, "a number of cells")?)?),
+            "expect_size" => Command::ExpectSize(parse(arg(0, "a width")?)?, parse(arg(1, "a height")?)?),
             "expect_playing" => Command::ExpectPlaying(parse_bool(arg(0, "on/off")?)?),
             "expect_checked" => Command::ExpectChecked {
                 name: arg(0, "a UI node name")?.to_string(),
                 checked: parse_bool(arg(1, "on/off")?)?,
+            },
+            "expect_text" => Command::ExpectText {
+                name: arg(0, "a UI node name")?.to_string(),
+                text: args[1..].join(" "),
+            },
+            "expect_caught" => Command::ExpectCaught {
+                ships: parse(arg(0, "a number of spaceships")?)?,
+                kinds: parse(arg(1, "a number of kinds")?)?,
             },
             "expect_clipboard" => Command::ExpectClipboard(rest("some text")?),
             "quit" => Command::Quit,
@@ -530,7 +555,7 @@ impl Input<'_, '_> {
 fn drive(
     mut rig: ResMut<Rig>,
     mut input: Input,
-    nodes: Query<(&Name, &ComputedNode, &UiGlobalTransform, Has<Checked>)>,
+    nodes: Query<(&Name, &ComputedNode, &UiGlobalTransform, Has<Checked>, Option<&Text>)>,
     screenshots: Query<(), With<Screenshot>>,
     mut app_exit: MessageWriter<AppExit>,
     mut playback: ResMut<Playback>,
@@ -539,6 +564,7 @@ fn drive(
     mut view: ResMut<ViewState>,
     mut rng: ResMut<Rng>,
     mut clipboard: ResMut<Clipboard>,
+    catcher: Res<Catcher>,
     mut commands: Commands,
 ) {
     input.discard_real();
@@ -575,7 +601,7 @@ fn drive(
     };
     // Centre of a named UI node in logical window coordinates.
     let locate = |name: &str| {
-        node(name).map(|(_, computed, transform, _)| {
+        node(name).map(|(_, computed, transform, ..)| {
             transform.translation * computed.inverse_scale_factor
         })
     };
@@ -659,6 +685,16 @@ fn drive(
                 )?;
                 universe.set(x, y, alive);
             }
+            Command::Place { cells, x, y } => {
+                let on_grid = |&(cx, cy): &Cell| {
+                    (0..universe.width as i32).contains(&(x + cx))
+                        && (0..universe.height as i32).contains(&(y + cy))
+                };
+                expect(cells.iter().all(on_grid), "the pattern does not fit on the grid".into())?;
+                for (cx, cy) in cells {
+                    universe.set((x + cx) as usize, (y + cy) as usize, true);
+                }
+            }
             Command::Play => playback.playing = true,
             Command::Pause => playback.playing = false,
             Command::Step(steps) => universe.step_by(steps),
@@ -709,13 +745,29 @@ fn drive(
                 universe.population() == expected,
                 format!("expected population {expected}, found {}", universe.population()),
             )?,
+            Command::ExpectSize(width, height) => expect(
+                (universe.width, universe.height) == (width, height),
+                format!("expected a grid of {width}×{height}, found {}×{}", universe.width, universe.height),
+            )?,
             Command::ExpectPlaying(expected) => expect(
                 playback.playing == expected,
                 format!("expected playing to be {expected}"),
             )?,
             Command::ExpectChecked { name, checked } => {
-                let (.., found) = node(&name)?;
+                let (_, _, _, found, _) = node(&name)?;
                 expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
+            }
+            Command::ExpectText { name, text } => {
+                let (.., found) = node(&name)?;
+                let found = found.map_or("", |text| text.as_str());
+                expect(found == text, format!("expected {name} to read {text:?}, found {found:?}"))?;
+            }
+            Command::ExpectCaught { ships, kinds } => {
+                let found = catcher.totals(universe.rule());
+                expect(
+                    found == (ships, kinds),
+                    format!("expected {ships} spaceships of {kinds} kinds, found {found:?}"),
+                )?;
             }
             Command::ExpectClipboard(expected) => {
                 let found = clipboard.fetch_text().poll_result();
@@ -815,6 +867,27 @@ mod tests {
                 Command::ExpectPlaying(false),
             ]
         );
+    }
+
+    #[test]
+    fn patterns_are_placed_and_the_world_and_its_catches_checked() {
+        let script = parse_script(
+            "place 2o$bo 3 4; expect_size 64 32; expect_caught 5 2; expect_text Note No ships: yet.; expect_text Note",
+        )
+        .unwrap();
+        assert_eq!(
+            script,
+            vec![
+                Command::Place { cells: vec![(0, 0), (1, 0), (1, 1)], x: 3, y: 4 },
+                Command::ExpectSize(64, 32),
+                Command::ExpectCaught { ships: 5, kinds: 2 },
+                Command::ExpectText { name: "Note".into(), text: "No ships: yet.".into() },
+                Command::ExpectText { name: "Note".into(), text: String::new() },
+            ]
+        );
+        assert!(parse_script("place 2x 3 4").is_err());
+        assert!(parse_script("expect_size 64").is_err());
+        assert!(parse_script("expect_text").is_err());
     }
 
     #[test]

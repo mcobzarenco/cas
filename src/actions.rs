@@ -15,6 +15,7 @@ use bevy::{
 };
 
 use crate::{
+    catcher::Catcher,
     editor::RuleEditor,
     sim::{Playback, Rng, Settings, SimSystems, Universe},
     ui::Control,
@@ -41,7 +42,11 @@ pub enum Action {
     Soup,
     Blob,
     Clear,
+    /// Make the grid this many cells wide and high.
+    Resize(usize),
     EditRule,
+    /// Show or hide the list of the spaceships caught.
+    Spaceships,
 }
 
 /// Put on a button or a checkbox: using it triggers the action.
@@ -56,22 +61,26 @@ pub enum Toggle {
     HideVacuum,
     ShowGrid,
     ShowBlocks,
+    OpenBorder,
+    Catching,
 }
 
 impl Toggle {
-    pub fn get(self, playback: &Playback, settings: &Settings) -> bool {
+    pub fn get(self, playback: &Playback, settings: &Settings, universe: &Universe) -> bool {
         match self {
             Toggle::Reverse => playback.reverse,
             Toggle::HideVacuum => settings.hide_vacuum,
             Toggle::ShowGrid => settings.show_grid,
             Toggle::ShowBlocks => settings.show_blocks,
+            Toggle::OpenBorder => universe.open_border,
+            Toggle::Catching => universe.catching,
         }
     }
 }
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 20] = [
+const KEYS: [(&str, Action); 23] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -91,6 +100,9 @@ const KEYS: [(&str, Action); 20] = [
     ("n", Action::Soup),
     ("b", Action::Blob),
     ("c", Action::Clear),
+    ("o", Action::Flip(Toggle::OpenBorder)),
+    ("k", Action::Flip(Toggle::Catching)),
+    ("s", Action::Spaceships),
     ("e", Action::EditRule),
 ];
 
@@ -182,6 +194,7 @@ fn perform(
     mut view: ResMut<ViewState>,
     mut rng: ResMut<Rng>,
     mut editor: ResMut<RuleEditor>,
+    mut catcher: ResMut<Catcher>,
 ) {
     match *action {
         Action::PlayPause => playback.playing = !playback.playing,
@@ -191,6 +204,14 @@ fn perform(
         Action::Flip(Toggle::HideVacuum) => settings.hide_vacuum = !settings.hide_vacuum,
         Action::Flip(Toggle::ShowGrid) => settings.show_grid = !settings.show_grid,
         Action::Flip(Toggle::ShowBlocks) => settings.show_blocks = !settings.show_blocks,
+        Action::Flip(Toggle::OpenBorder) => universe.open_border = !universe.open_border,
+        Action::Flip(Toggle::Catching) => {
+            universe.catching = !universe.catching;
+            // Catching is asking what will be caught.
+            if universe.catching {
+                catcher.show();
+            }
+        }
         Action::Slower => playback.speed = Control::Speed.snap(playback.speed / 2.0),
         Action::Faster => playback.speed = Control::Speed.snap(playback.speed * 2.0),
         Action::ShorterStride => playback.stride = (playback.stride - 1).max(1),
@@ -207,7 +228,12 @@ fn perform(
             universe.randomize_blob(density, &mut rng);
         }
         Action::Clear => universe.clear(),
+        Action::Resize(side) => {
+            universe.resize(side, side);
+            view.fit = true;
+        }
         Action::EditRule => editor.toggle(),
+        Action::Spaceships => catcher.toggle(),
     }
 }
 

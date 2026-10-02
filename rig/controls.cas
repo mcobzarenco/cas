@@ -3,6 +3,15 @@
 wait 25; expect_gen 0; expect_playing off
 shot controls-1-start
 
+# The size menu: the grid grows and shrinks around the pattern, which stays in the middle.
+# What no longer fits is cut off: here a cell far from the blob.
+paint 10 20
+click GridSize; wait 4; shot controls-2-sizes
+click GridSize:512; wait 4; expect_size 512 512; expect_population 1211; expect_cell 138 148 on
+click GridSize; wait 4; click GridSize:64; wait 4; expect_size 64 64; expect_population 1210
+shot controls-3-small-grid
+click GridSize; wait 4; click GridSize:256; wait 4; expect_size 256 256; expect_cell 10 20 off
+
 # Play and pause, by button and by key.
 click PlayPause; wait 6; expect_playing on
 key Space; wait 3; expect_playing off
@@ -31,7 +40,7 @@ stride 1
 key [; wait 2; expect_speed 15
 scroll Speed -1; wait 2
 key ]; wait 2
-shot controls-2-sliders
+shot controls-4-sliders
 
 # Checkboxes follow their option, whoever changes it.
 expect_checked Reverse off; click Reverse; wait 3; expect_checked Reverse on
@@ -43,9 +52,9 @@ expect_checked ShowGrid on; key g; wait 3; expect_checked ShowGrid off; click Sh
 clear; fit; wait 2
 scroll Grid 2; wait 2; click Grid; wait 2; expect_cell 128 128 on
 drag Grid 33 0 right; wait 2; click Grid; wait 2; expect_cell 121 128 on
-key f; wait 2; shot controls-3-view
+key f; wait 2; shot controls-5-view
 
 # The fastest setting must leave the window responsive: these 30 frames take half a second.
-blob; speed 240; stride 512; play; wait 30; shot controls-4-flat-out
+blob; speed 240; stride 512; play; wait 30; shot controls-6-flat-out
 pause; wait 2; expect_playing off
 quit

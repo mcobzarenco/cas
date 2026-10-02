@@ -1,5 +1,5 @@
 // Draws the universe. Cell states come from a one-byte-per-cell integer texture; the view
-// transform, colours, vacuum inversion and the grid / block overlays are all done per fragment,
+// transform, colours, the vacuum and the grid / block overlays are all done per fragment,
 // so zooming, panning and toggling overlays never touch the texture.
 #import bevy_ui::ui_vertex_output::UiVertexOutput
 
@@ -16,8 +16,9 @@ struct GridParams {
     line_width: f32,
     // Partition offset (0 or 1) of the blocks to outline.
     block_offset: f32,
-    // 1 to draw the complement of the cells.
-    invert: f32,
+    // The vacuum to put back under the cells: one bit for each cell of a block of the
+    // partition being outlined. 0 while the vacuum is hidden.
+    vacuum: u32,
     // Overlay opacities, already faded for the zoom level (0 = hidden).
     grid_alpha: f32,
     block_alpha: f32,
@@ -26,6 +27,8 @@ struct GridParams {
     background: vec4<f32>,
     grid_color: vec4<f32>,
     block_color: vec4<f32>,
+    // The outline of the grid.
+    edge_color: vec4<f32>,
 };
 
 @group(1) @binding(0) var<uniform> params: GridParams;
@@ -35,8 +38,9 @@ struct GridParams {
 fn alive_at(c: vec2<f32>) -> f32 {
     let last = vec2<i32>(params.grid_size) - vec2<i32>(1);
     let cell = clamp(vec2<i32>(floor(c)), vec2<i32>(0), last);
-    let state = f32(textureLoad(cells, cell, 0).r & 1u);
-    return abs(state - params.invert);
+    let corner = (vec2<u32>(cell) + u32(params.block_offset)) & vec2<u32>(1u);
+    let vacuum = params.vacuum >> (corner.x + 2u * corner.y);
+    return f32((textureLoad(cells, cell, 0).r ^ vacuum) & 1u);
 }
 
 // Share of the pixel around cell coordinate `c` that is drawn alive.
@@ -98,7 +102,8 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let background = params.background.rgb * (1.0 - shadow);
     var out = mix(background, color, clamp(0.5 - outside, 0.0, 1.0));
 
-    // A faint outline marks where the torus wraps.
-    out = mix(out, params.grid_color.rgb, 0.09 * stroke(abs(outside), params.line_width));
+    // An outline marks the edge of the grid.
+    let edge = stroke(abs(outside), params.line_width);
+    out = mix(out, params.edge_color.rgb, edge * params.edge_color.a);
     return vec4<f32>(out, 1.0);
 }

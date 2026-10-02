@@ -1,0 +1,42 @@
+# Catching spaceships at the edge of the grid, with the border closed and open. Expects the
+# default start-up (single rotation, 256×256).
+wait 25; clear
+
+# The list can be looked at before anything is caught; ticking the box opens it as well.
+key s; wait 20; expect_text CatcherNote Catching is off.
+key s; wait 3
+
+# The lightest ship, heading for the right edge, and a diagonal one heading for the corner.
+place $2o2$2o 240 120
+place 3o$o$bo 236 236
+click Catching; wait 20; expect_checked Catching on; expect_checked CatcherCatching on
+expect_text CatcherNote No spaceships yet: let a blob run.
+shot catcher-1-armed
+
+# The first ship has 14 cells to go at a cell per 6 generations; the other takes longer. The
+# border is closed, and still they are taken out where they would have wrapped around.
+step 120; wait 10; expect_caught 1 1; expect_population 5
+step 400; wait 20; expect_caught 2 2; expect_population 0
+expect_text CatcherNote Click a pattern to copy it as text.
+shot catcher-2-two-kinds
+
+# Without catching, a closed border lets a ship come round again and an open one lets it
+# leave; neither counts it.
+key k; wait 3; expect_checked Catching off
+place $2o2$2o 240 120
+step 120; expect_population 4
+key o; wait 3; expect_checked OpenBorder on
+step 1600; wait 10; expect_population 0; expect_caught 2 2
+
+# A blob, left to evaporate through the open border. The rows stay put while the list grows,
+# so a click lands also while the catches come in: it copies the pattern as text.
+key k; wait 3
+blob; speed 240; stride 32; play; wait 200
+click Kind0; wait 3; expect_clipboard b2o2$b2o
+wait 200; pause; wait 20
+shot catcher-3-haul
+
+# Forgetting empties the list of this rule; the key closes the panel.
+click CatcherForget; wait 20; expect_caught 0 0
+key s; wait 4; shot catcher-4-closed
+quit

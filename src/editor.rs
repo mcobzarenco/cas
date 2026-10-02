@@ -28,7 +28,7 @@ use bevy::{
 };
 
 use crate::{
-    rules::{BlockRule, Population, Reversed, Symmetry, Vacuum},
+    rules::{BlockRule, Population, Reversed, Symmetry},
     sim::{Rng, SimSystems, Universe, rule_changed},
     ui::{caption, readout, section},
     view::{ALIVE, DEAD},
@@ -176,7 +176,7 @@ fn properties(rule: &BlockRule) -> String {
 fn population(rule: &BlockRule) -> &'static str {
     match rule.population() {
         Population::Conserved => "conserved",
-        Population::ConservedUpToFlip => "conserved up to the vacuum flip",
+        Population::ConservedRelativeToVacuum => "conserved relative to the vacuum",
         Population::NotConserved => "not conserved",
     }
 }
@@ -195,11 +195,10 @@ fn symmetry(rule: &BlockRule) -> &'static str {
     }
 }
 
-fn vacuum(rule: &BlockRule) -> &'static str {
-    match rule.vacuum() {
-        Vacuum::Stable => "stable",
-        Vacuum::Flips => "flips every step",
-        Vacuum::Unstable => "unstable",
+fn vacuum(rule: &BlockRule) -> String {
+    match rule.vacuum_cycle().len() {
+        1 => "stable".to_string(),
+        period => format!("repeats every {period} generations"),
     }
 }
 
@@ -690,10 +689,10 @@ mod tests {
         let critters: BlockRule = "critters".parse().unwrap();
         assert_eq!(
             properties(&critters),
-            "population  conserved up to the vacuum flip\n\
+            "population  conserved relative to the vacuum\n\
              symmetry    all rotations and mirrors\n\
              two states  not interchangeable\n\
-             vacuum      flips every step\n\
+             vacuum      repeats every 2 generations\n\
              reversed    the rule complemented"
         );
     }

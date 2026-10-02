@@ -1,18 +1,20 @@
-# Rules that flip the vacuum (Critters, Tron) and "hide vacuum fluctuations".
+# Rules whose empty space does not stay empty (Critters, Tron) and "hide vacuum fluctuations".
 # Expects the default start-up: a blob of 1210 cells on 256×256.
 wait 25; expect_population 1210
 
-# Switching to Critters on an odd generation must not invert the picture ...
+# A rule taken up on an odd generation starts its vacuum's cycle there: nothing is inverted.
 step 1; rule critters; wait 3; shot vacuum-1-critters-at-generation-1
-# ... and one step later the cells are complemented, but the picture is not.
-step 1; wait 3; expect_population 64326; shot vacuum-2-flipped-phase
+# One step later the empty world is all alive. What is stored is the pattern without its
+# vacuum, so the cells and their count know nothing of it ...
+step 1; wait 3; expect_population 1210; shot vacuum-2-hidden
+# ... and only the unhidden view shows the automaton as it is.
+vacuum off; wait 3; shot vacuum-3-unhidden; vacuum on
 
-# Leaving Critters in its all-alive phase hands the picture, not the complement, to the next rule.
-rule single-rotation; wait 3; expect_population 1210; shot vacuum-3-back-to-single-rotation
+# The next rule gets the pattern as drawn, wherever the vacuum was in its cycle.
+rule single-rotation; wait 3; expect_population 1210; shot vacuum-4-back-to-single-rotation
 
-# Painting follows the picture. In the flipped phase an empty-looking world is all alive:
-# a stroke draws by storing dead cells, and erasing stores them alive again.
-clear; rule critters; step 1; fit; wait 3; expect_population 65536
-drag Grid 60 0; wait 2; expect_cell 128 128 off; shot vacuum-4-painted
-press Shift; drag Grid 60 0; release Shift; wait 2; expect_population 65536
+# Painting stores what is drawn, also while the vacuum is all alive.
+clear; rule critters; step 1; fit; wait 3; expect_population 0
+drag Grid 60 0; wait 2; expect_cell 128 128 on; shot vacuum-5-painted
+press Shift; drag Grid 60 0; release Shift; wait 2; expect_population 0
 quit

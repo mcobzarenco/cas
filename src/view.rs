@@ -2,8 +2,8 @@
 //!
 //! The cells are uploaded as a one-byte-per-cell texture and drawn by a UI material whose
 //! fragment shader (`grid.wgsl`) applies the view transform, colours the cells, optionally
-//! complements them (hide vacuum fluctuations) and overlays the cell grid and the 2×2 block
-//! partition. Zooming, panning and the overlays therefore cost nothing on the CPU.
+//! puts the vacuum back under them (when it is not hidden) and overlays the cell grid and the
+//! 2×2 block partition. Zooming, panning and the overlays therefore cost nothing on the CPU.
 //!
 //! Interaction goes through picking events on the grid node: the wheel zooms about the pointer,
 //! right- or middle-drag pans, left-drag paints.
@@ -25,6 +25,9 @@ use crate::sim::{Settings, SimSystems, Universe};
 pub const ALIVE: Color = Color::srgb(1.0, 0.769, 0.42);
 pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
 pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
+/// The outline of the grid: faint, and in the colour of the cells while it catches them.
+const EDGE: (Color, f32) = (Color::WHITE, 0.09);
+const CATCHING_EDGE: (Color, f32) = (ALIVE, 0.45);
 
 /// Largest zoom, in logical pixels per cell (more when a tiny grid needs it to fit).
 const MAX_ZOOM: f32 = 64.0;
@@ -51,16 +54,21 @@ struct GridAssets {
     material: Handle<GridMaterial>,
 }
 
+/// The size of the texture that holds the cells.
+fn extent(universe: &Universe) -> Extent3d {
+    Extent3d {
+        width: universe.width as u32,
+        height: universe.height as u32,
+        depth_or_array_layers: 1,
+    }
+}
+
 impl FromWorld for GridAssets {
     fn from_world(world: &mut World) -> Self {
         let universe = world.resource::<Universe>();
         // One byte per cell, read with `textureLoad`, so no sampler and no filtering.
         let image = Image::new_fill(
-            Extent3d {
-                width: universe.width as u32,
-                height: universe.height as u32,
-                depth_or_array_layers: 1,
-            },
+            extent(universe),
             TextureDimension::D2,
             &[0],
             TextureFormat::R8Uint,
@@ -116,7 +124,7 @@ impl ViewState {
 struct Stroke {
     /// Shift was down when the stroke began: it erases.
     erase: bool,
-    /// What the stroke leaves on screen, decided by the first cell it touches.
+    /// What the stroke draws, decided by the first cell it touches.
     alive: Option<bool>,
     last: Option<IVec2>,
 }
@@ -144,7 +152,7 @@ struct GridParams {
     pixel_ratio: f32,
     line_width: f32,
     block_offset: f32,
-    invert: f32,
+    vacuum: u32,
     grid_alpha: f32,
     block_alpha: f32,
     alive: Vec4,
@@ -152,6 +160,7 @@ struct GridParams {
     background: Vec4,
     grid_color: Vec4,
     block_color: Vec4,
+    edge_color: Vec4,
 }
 
 /// Needs the [`Universe`] to exist: the cell texture takes its size.
@@ -200,7 +209,8 @@ fn attach_material(add: On<Add, GridView>, assets: Res<GridAssets>, mut commands
         .insert(MaterialNode(assets.material.clone()));
 }
 
-/// The cell bytes are the texture: a plain copy whenever the universe changed.
+/// The cell bytes are the texture: a plain copy whenever the universe changed, into a texture
+/// of another size when the grid has been resized.
 fn upload_cells(
     universe: Res<Universe>,
     assets: Res<GridAssets>,
@@ -212,11 +222,15 @@ fn upload_cells(
     let Some(mut image) = images.get_mut(&assets.image) else {
         return;
     };
+    let image = &mut *image;
     match image.data.as_mut() {
-        Some(data) if data.len() == universe.cells().len() => {
+        Some(data) if image.texture_descriptor.size == extent(&universe) => {
             data.copy_from_slice(universe.cells());
         }
-        _ => image.data = Some(universe.cells().to_vec()),
+        _ => {
+            image.texture_descriptor.size = extent(&universe);
+            image.data = Some(universe.cells().to_vec());
+        }
     }
 }
 
@@ -265,7 +279,8 @@ fn update_material(
         line_width: (0.75 * pixel_ratio).max(1.0),
         // Outline this generation's partition: the blocks a forward step rewrites next.
         block_offset: universe.partition_offset() as f32,
-        invert: settings.shows_complement(&universe) as u8 as f32,
+        // The stored cells are the picture without the vacuum; unhidden, the shader adds it.
+        vacuum: if settings.hide_vacuum { 0 } else { universe.vacuum() as u32 },
         grid_alpha: if settings.show_grid { fade(GRID_FADE, view.zoom) } else { 0.0 },
         block_alpha: if settings.show_blocks { fade(BLOCK_FADE, view.zoom) } else { 0.0 },
         alive: linear(ALIVE, 1.0),
@@ -273,6 +288,10 @@ fn update_material(
         background: linear(BACKGROUND, 1.0),
         grid_color: linear(Color::WHITE, 0.07),
         block_color: linear(Color::srgb(0.435, 0.694, 1.0), 0.30),
+        edge_color: {
+            let (color, alpha) = if universe.catching { CATCHING_EDGE } else { EDGE };
+            linear(color, alpha)
+        },
     };
     // Writing to the asset re-prepares its bind group; reading it does not.
     if let Some(mut material) = materials.get_mut(&assets.material)
@@ -323,13 +342,11 @@ pub fn wheel_notches(scroll: &Pointer<Scroll>) -> f32 {
     }
 }
 
-/// Painting works on what is on screen: while the picture is the complement of the cells
-/// (hide vacuum fluctuations), drawing a live cell stores a dead one.
+/// The grid node as something to paint on and look around in.
 #[derive(bevy::ecs::system::SystemParam)]
 struct Canvas<'w, 's> {
     nodes: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
     view: ResMut<'w, ViewState>,
-    settings: Res<'w, Settings>,
     universe: ResMut<'w, Universe>,
     stroke: ResMut<'w, Stroke>,
 }
@@ -343,22 +360,17 @@ impl Canvas<'_, '_> {
         };
         let offset = offset_in(node, transform, pointer);
         let cell = (self.view.center + offset / self.view.zoom).floor().as_ivec2();
-        let complemented = self.settings.shows_complement(&self.universe);
         let alive = match (self.stroke.alive, in_grid(cell, &self.universe)) {
             (Some(alive), _) => alive,
-            (None, Some((x, y))) => {
-                let shown = self.universe.get(x, y) != complemented;
-                !self.stroke.erase && !shown
-            }
+            (None, Some((x, y))) => !self.stroke.erase && !self.universe.get(x, y),
             // Still outside the grid: the stroke starts where it enters.
             (None, None) => return,
         };
-        let stored = alive != complemented;
         for point in segment(self.stroke.last.unwrap_or(cell), cell) {
             if let Some((x, y)) = in_grid(point, &self.universe)
-                && self.universe.get(x, y) != stored
+                && self.universe.get(x, y) != alive
             {
-                self.universe.set(x, y, stored);
+                self.universe.set(x, y, alive);
             }
         }
         self.stroke.alive = Some(alive);

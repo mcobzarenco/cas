@@ -17,6 +17,11 @@
 //! backwards then means applying the inverse permutation with the partition the forward step
 //! used. Only reversible rules can be constructed here.
 //!
+//! Nothing says the empty block must stay empty. Then empty space is not all dead cells but a
+//! texture that changes with every step, the *vacuum*, and what one wants to look at is how a
+//! pattern differs from it. [`BlockRule::vacuum_cycle`] and [`BlockRule::relative_to_vacuum`]
+//! describe the vacuum and that difference for any rule.
+//!
 //! As text, a rule is its table: sixteen comma-separated states, the outcome of state 0 first,
 //! e.g. `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` for Single Rotation. That is the notation of
 //! dmishin's simulator and, with an `MS,D` prefix and `;` separators, of MCell.
@@ -140,25 +145,14 @@ impl fmt::Display for RuleError {
 
 impl std::error::Error for RuleError {}
 
-/// What a rule does to empty space.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Vacuum {
-    /// Empty blocks stay empty.
-    Stable,
-    /// Empty and full blocks swap: the background alternates between all-dead and all-alive.
-    Flips,
-    /// Empty blocks turn into something else.
-    Unstable,
-}
-
 /// What a rule does to the number of live cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Population {
     /// Every block keeps its number of live cells.
     Conserved,
-    /// Every block trades its live count for its dead count, as Critters does: the population
-    /// is conserved once the vacuum flip is undone.
-    ConservedUpToFlip,
+    /// The cells themselves are not conserved, but the cells that differ from the vacuum are,
+    /// as in Critters.
+    ConservedRelativeToVacuum,
     NotConserved,
 }
 
@@ -196,7 +190,7 @@ pub enum Reversed {
 }
 
 /// A reversible rule on 2×2 blocks: a permutation of the 16 block states, and its inverse.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockRule {
     table: [u8; 16],
     inverse: [u8; 16],
@@ -270,29 +264,52 @@ impl BlockRule {
         self.preset().map_or("Custom", |preset| preset.name)
     }
 
-    pub fn vacuum(&self) -> Vacuum {
-        match (self.table[0], self.table[15]) {
-            (0, _) => Vacuum::Stable,
-            (15, 0) => Vacuum::Flips,
-            _ => Vacuum::Unstable,
+    /// The empty world through time. All its blocks are alike, so one block state describes
+    /// it: the state of every block about to be rewritten. It starts at 0 and is back at 0
+    /// after as many generations as the cycle is long, sixteen at most.
+    pub fn vacuum_cycle(&self) -> Vec<u8> {
+        let mut cycle = vec![0];
+        loop {
+            // The next step's blocks are shifted by a cell each way, which shows the world's
+            // repeating 2×2 tile turned by a half turn.
+            let next = rotate_180(self.table[*cycle.last().unwrap() as usize]);
+            if next == 0 {
+                return cycle;
+            }
+            cycle.push(next);
         }
     }
 
+    /// The rule as it acts on the difference from the vacuum: one table for each generation
+    /// of the vacuum's cycle, every one of them leaving empty blocks empty. For a rule with a
+    /// stable vacuum that is the rule itself.
+    pub fn relative_to_vacuum(&self) -> Vec<BlockRule> {
+        self.vacuum_cycle()
+            .into_iter()
+            .map(|vacuum| {
+                let after = self.table[vacuum as usize];
+                let table =
+                    std::array::from_fn(|block| self.table[block ^ vacuum as usize] ^ after);
+                BlockRule::new(table).expect("a permutation relabelled is a permutation")
+            })
+            .collect()
+    }
+
     pub fn population(&self) -> Population {
-        let all = |keeps: fn(u32, u32) -> bool| {
-            (0..16u8).all(|state| keeps(popcount(state), popcount(self.table[state as usize])))
+        let conserves = |rule: &BlockRule| {
+            (0..16u8).all(|state| popcount(rule.table[state as usize]) == popcount(state))
         };
-        if all(|before, after| after == before) {
+        if conserves(self) {
             Population::Conserved
-        } else if all(|before, after| after == 4 - before) {
-            Population::ConservedUpToFlip
+        } else if self.relative_to_vacuum().iter().all(conserves) {
+            Population::ConservedRelativeToVacuum
         } else {
             Population::NotConserved
         }
     }
 
     /// Does the rule give the same result whether a block is transformed before or after it?
-    fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
+    pub fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
         (0..16u8).all(|state| {
             self.table[transform(state) as usize] == transform(self.table[state as usize])
         })
@@ -495,7 +512,8 @@ mod tests {
         assert_eq!(rule.symmetry(), Symmetry::Rotations, "it has a sense of rotation");
         assert!(!rule.is_complement_symmetric());
         assert_eq!(rule.reversed(), Reversed::Transformed, "a mirror reverses the rotation");
-        assert_eq!(rule.vacuum(), Vacuum::Stable);
+        assert_eq!(rule.vacuum_cycle(), [0]);
+        assert_eq!(rule.relative_to_vacuum(), std::slice::from_ref(&rule));
     }
 
     #[test]
@@ -506,11 +524,11 @@ mod tests {
             _ => complement(b),
         });
         assert_eq!(rule, preset("critters"));
-        assert_eq!(rule.population(), Population::ConservedUpToFlip);
+        assert_eq!(rule.population(), Population::ConservedRelativeToVacuum);
         assert_eq!(rule.symmetry(), Symmetry::Full);
         assert!(!rule.is_complement_symmetric());
         assert_eq!(rule.reversed(), Reversed::Complemented);
-        assert_eq!(rule.vacuum(), Vacuum::Flips);
+        assert_eq!(rule.vacuum_cycle(), [0, 15]);
     }
 
     #[test]
@@ -568,7 +586,7 @@ mod tests {
             assert_eq!(rule.reversed(), Reversed::SameRule, "{id}");
             assert_eq!(rule.symmetry(), Symmetry::Full, "{id}");
         }
-        assert_eq!(preset("tron").vacuum(), Vacuum::Flips);
+        assert_eq!(preset("tron").vacuum_cycle(), [0, 15]);
         assert_eq!(preset("tron").population(), Population::NotConserved);
         assert!(preset("hpp-gas").is_complement_symmetric());
         assert!(!preset("bbm").is_complement_symmetric());
@@ -619,6 +637,34 @@ mod tests {
             // Whatever relates a rule to its inverse relates the inverse to the rule.
             assert_eq!(rule.reversed(), rule.inverted().reversed(), "{rule}");
         }
+    }
+
+    #[test]
+    fn every_rule_has_a_vacuum_it_leaves_alone() {
+        let mut state = 11u64;
+        let mut next = move || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state >> 33
+        };
+        let random = (0..200).map(|_| BlockRule::random(&mut next));
+        let mut longest = 0;
+        for rule in PRESETS.iter().map(|preset| preset.rule()).chain(random) {
+            let cycle = rule.vacuum_cycle();
+            let relative = rule.relative_to_vacuum();
+            assert!((1..=16).contains(&cycle.len()), "{rule}: {cycle:?}");
+            assert_eq!(cycle[0], 0);
+            assert_eq!(relative.len(), cycle.len());
+            for (i, table) in relative.iter().enumerate() {
+                assert_eq!(table.table()[0], 0, "{rule}: generation {i} disturbs the vacuum");
+                // The difference `d` from the vacuum `v` evolves as the cells `d ^ v` do.
+                let (v, after) = (cycle[i], rule.table()[cycle[i] as usize]);
+                for d in 0..16u8 {
+                    assert_eq!(table.table()[d as usize] ^ after, rule.table()[(d ^ v) as usize]);
+                }
+            }
+            longest = longest.max(cycle.len());
+        }
+        assert!(longest > 2, "random rules have vacua beyond stable and flipping");
     }
 
     #[test]

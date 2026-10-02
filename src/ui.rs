@@ -242,10 +242,11 @@ fn panel() -> impl Scene {
         Children [
             header(),
             rule_section(),
+            world_section(),
             time_section(),
             speed_section(),
             view_section(),
-            world_section(),
+            pattern_section(),
         ]
     }
 }
@@ -539,6 +540,53 @@ fn rule_item(index: usize) -> impl Scene {
     }
 }
 
+/// The space the automaton lives in: how big it is, and what its edge does.
+fn world_section() -> impl Scene {
+    let sizes: Vec<_> = GRID_SIDES.into_iter().map(size_item).collect();
+    section("WORLD", bsn_list![
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+            }
+            Children [
+                caption("Grid size"),
+                (Node { flex_grow: 1.0 }),
+                (
+                    @FeathersMenu
+                    Children [
+                        (
+                            #GridSize
+                            @FeathersMenuButton {
+                                @caption: bsn! { Text("") ThemedText template_value(Readout::GridSize) }
+                            }
+                        ),
+                        (
+                            @FeathersMenuPopup
+                            Children [ { sizes } ]
+                        ),
+                    ]
+                ),
+            ]
+        ),
+        toggle("Open border", "OpenBorder", Toggle::OpenBorder),
+    ])
+}
+
+/// A size in the grid-size menu.
+fn size_item(side: usize) -> impl Scene {
+    let label = format!("{side} × {side}");
+    let name = Name::new(format!("GridSize:{side}"));
+    let does = Does(Action::Resize(side));
+    bsn! {
+        @FeathersMenuItem {
+            @caption: bsn! { Text(label) ThemedText }
+        }
+        template_value(name)
+        template_value(does)
+    }
+}
+
 fn time_section() -> impl Scene {
     // The step buttons act on the press, so that holding them can repeat (`repeat_steps`).
     let back = Does(Action::StepBack);
@@ -650,34 +698,9 @@ fn view_section() -> impl Scene {
     ])
 }
 
-fn world_section() -> impl Scene {
-    let sizes: Vec<_> = GRID_SIDES.into_iter().map(size_item).collect();
-    section("WORLD", bsn_list![
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-            }
-            Children [
-                caption("Grid size"),
-                (Node { flex_grow: 1.0 }),
-                (
-                    @FeathersMenu
-                    Children [
-                        (
-                            #GridSize
-                            @FeathersMenuButton {
-                                @caption: bsn! { Text("") ThemedText template_value(Readout::GridSize) }
-                            }
-                        ),
-                        (
-                            @FeathersMenuPopup
-                            Children [ { sizes } ]
-                        ),
-                    ]
-                ),
-            ]
-        ),
+/// What is in the world: seeding it, and catching the spaceships that reach its edge.
+fn pattern_section() -> impl Scene {
+    section("PATTERN", bsn_list![
         slider_row("Density", "Density", Control::Density, String::new()),
         (
             Node {
@@ -691,7 +714,6 @@ fn world_section() -> impl Scene {
             ]
         ),
         caption("Soup fills the grid, blob seeds a square in the middle. Left-drag paints, with shift it erases."),
-        toggle("Open border", "OpenBorder", Toggle::OpenBorder),
         (
             Node {
                 flex_direction: FlexDirection::Row,
@@ -710,20 +732,6 @@ fn world_section() -> impl Scene {
             ]
         ),
     ])
-}
-
-/// A size in the grid-size menu.
-fn size_item(side: usize) -> impl Scene {
-    let label = format!("{side} × {side}");
-    let name = Name::new(format!("GridSize:{side}"));
-    let does = Does(Action::Resize(side));
-    bsn! {
-        @FeathersMenuItem {
-            @caption: bsn! { Text(label) ThemedText }
-        }
-        template_value(name)
-        template_value(does)
-    }
 }
 
 /// Dragging or clicking a slider: the value goes to its resource, and the slider is moved to

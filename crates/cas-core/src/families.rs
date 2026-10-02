@@ -154,9 +154,10 @@ mod tests {
         assert!(turning.iter().all(|rule| rule.espca().is_some()));
         let unique: HashSet<&BlockRule> = turning.iter().collect();
         assert_eq!(unique.len(), turning.len());
-        // Mirror images are one rule, and so is a rule whose vacuum only flickers.
+        // Mirror images are one rule, and so are a rule whose vacuum only flickers and a
+        // rule begun a generation later.
         let distinct_turning = distinct(turning);
-        assert_eq!(distinct_turning.len(), 760);
+        assert_eq!(distinct_turning.len(), 584);
         assert!(distinct_turning.iter().all(|rule| rule.representative() == *rule));
 
         for transform in [rotate_180, mirror] {

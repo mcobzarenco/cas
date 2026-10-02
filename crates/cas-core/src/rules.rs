@@ -586,16 +586,34 @@ impl BlockRule {
     }
 
     /// One rule to stand for all that differ from this one only in how one looks at them:
-    /// turned or mirrored, or with a vacuum that flickers and changes nothing else. Of
-    /// those it is the one whose table comes first.
+    /// turned or mirrored, begun at another generation of the vacuum's cycle, or with a
+    /// vacuum that flickers and changes nothing else. Of those it is the one whose table
+    /// comes first.
     pub fn representative(&self) -> BlockRule {
         // A rule that is its own complement acts on what differs from its vacuum in one
         // way at every generation: that way is the rule to look at.
         let relative = self.relative_to_vacuum();
         let flickers_only = relative.iter().all(|table| *table == relative[0]);
-        let rule = if flickers_only { &relative[0] } else { self };
-        let seen = TURNS_AND_MIRRORS.iter().map(|&transform| rule.seen_through(transform));
-        seen.chain([rule.clone()]).min_by_key(|rule| rule.table).expect("the rule itself is among them")
+        let begun = if flickers_only { vec![relative[0].clone()] } else { self.begun_later() };
+        let turned = |rule: &BlockRule| TURNS_AND_MIRRORS.map(|transform| rule.seen_through(transform));
+        let seen = begun.iter().flat_map(turned).chain(begun.iter().cloned());
+        seen.min_by_key(|rule| rule.table).expect("the rule itself is among them")
+    }
+
+    /// The rule as it is for a world that begins at a later generation of the vacuum's cycle,
+    /// one rule for every generation of it, the first being the rule itself. Under all of
+    /// them what differs from the vacuum goes through the same tables, only begun elsewhere:
+    /// they are one world, seen some generations apart. Under Critters, whose vacuum flips,
+    /// the other one is Critters with dead and alive exchanged.
+    pub(crate) fn begun_later(&self) -> Vec<BlockRule> {
+        let vacuum = self.vacuum_cycle();
+        let later = |(generation, relative): (usize, &BlockRule)| {
+            // An empty block has to become the vacuum of the generation after, as the
+            // blocks of this one see it.
+            let empty = rotate_180(vacuum[generation] ^ vacuum[(generation + 1) % vacuum.len()]);
+            BlockRule::new(relative.table.map(|outcome| outcome ^ empty)).expect("a permutation relabelled is a permutation")
+        };
+        self.relative_to_vacuum().iter().enumerate().map(later).collect()
     }
 
     pub fn reversed(&self) -> Reversed {
@@ -1149,8 +1167,39 @@ mod tests {
         let plain = BlockRule::from_espca("04caef").unwrap();
         assert_eq!(flickering.representative(), plain.representative());
         assert_eq!(flickering.representative().vacuum_cycle(), [0]);
-        // Critters is not: there the two generations differ, and it stands for itself.
-        assert_eq!(preset("critters").representative(), preset("critters"));
+        // Critters is not: there the two generations differ. It is one world with the rule
+        // that has dead and alive exchanged, which is Critters begun a generation later,
+        // and that one's table comes first.
+        let critters = preset("critters");
+        let exchanged = from_fn(|b| complement(critters.table()[complement(b) as usize]));
+        assert_eq!(critters.begun_later(), [critters.clone(), exchanged.clone()]);
+        assert_eq!(critters.representative(), exchanged);
+        assert_eq!(exchanged.representative(), exchanged);
+        // So are two guns of the search: ESPCA-f6b580 and ESPCA-fd1560.
+        let gun = BlockRule::from_espca("f6b580").unwrap();
+        assert_eq!(BlockRule::from_espca("fd1560").unwrap().representative(), gun.representative());
+    }
+
+    #[test]
+    fn a_rule_begun_later_takes_the_same_tables_from_there() {
+        let mut state = 99u64;
+        let mut random = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state >> 33
+        };
+        let presets = PRESETS.iter().map(|preset| preset.rule());
+        let rules: Vec<BlockRule> = presets.chain((0..200).map(|_| BlockRule::random(&mut random))).collect();
+        for rule in &rules {
+            let relative = rule.relative_to_vacuum();
+            let begun = rule.begun_later();
+            assert_eq!(begun[0], *rule);
+            for (generation, later) in begun.iter().enumerate() {
+                let mut expected = relative.clone();
+                expected.rotate_left(generation);
+                assert_eq!(later.relative_to_vacuum(), expected, "{rule} from generation {generation}");
+                assert_eq!(later.representative(), rule.representative(), "{rule} from generation {generation}");
+            }
+        }
     }
 
     #[test]

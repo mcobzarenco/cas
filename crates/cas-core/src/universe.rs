@@ -525,6 +525,36 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_begun_a_generation_later_makes_the_same_world() {
+        let mut rng = Rng::new(31);
+        let random = (0..40).map(|_| BlockRule::random(|| rng.next_u64()));
+        let rules: Vec<_> = PRESETS.iter().map(|preset| preset.rule()).chain(random).collect();
+        for rule in rules {
+            let mut world = soup(rule.clone(), 7);
+            for (generation, later) in rule.begun_later().iter().enumerate().skip(1) {
+                // The world so many generations on, moved up and left by as many cells: its
+                // blocks are then where a world at its beginning has them.
+                world.step(true);
+                let (width, height) = (world.width, world.height);
+                let moved = |universe: &Universe, x: usize, y: usize| {
+                    universe.get((x + generation) % width, (y + generation) % height)
+                };
+                let mut begun = Universe::new(width, height, later.clone());
+                for (x, y) in (0..height).flat_map(|y| (0..width).map(move |x| (x, y))) {
+                    begun.set(x, y, moved(&world, x, y));
+                }
+                let mut ahead = world.clone();
+                for _ in 0..12 {
+                    ahead.step(true);
+                    begun.step(true);
+                    let same = (0..height).all(|y| (0..width).all(|x| begun.get(x, y) == moved(&ahead, x, y)));
+                    assert!(same, "{rule} and {later} part ways");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn presets_other_than_the_identity_do_something() {
         for preset in &PRESETS {
             let start = soup(preset.rule(), 7);

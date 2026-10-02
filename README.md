@@ -80,9 +80,10 @@ rewrites the outlined blocks and then the outline moves on; stepping back restor
 picture together with its outline. Note that a lone cell orbits *counter*clockwise even though
 every block rotation is clockwise, because consecutive steps use different blocks.
 
-A frame is always a whole number of strides. When the machine cannot keep up with the requested
-rate, frames are dropped rather than queued, the window stays responsive, and the status line
-shows the rate actually achieved.
+A frame is always a whole number of strides. A frame that did not fit in its update is made up
+for by the next ones. When the machine cannot keep up with the requested rate at all, frames are
+dropped rather than queued, the window stays responsive, and the status line shows the rate
+actually achieved.
 
 Nothing obliges a rule to leave empty blocks empty. Under Critters the empty world is all alive
 every other generation; under a random table it is usually some texture that repeats after a few
@@ -220,6 +221,8 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
   them cross the edge (so that time stays reversible) is not there yet, and neither is reseeding
   the grid once a blob has evaporated.
 * The size menu offers square grids only; other sizes need `--width` and `--height`.
+* Catching with a closed border on a grid full of soup is slow, six to nine times a plain step at
+  256×256: everything on the edge is debris, and it is looked at again after every generation.
 * Patterns that leave together and then part ways (a spaceship next to debris, two ships on
   different courses) are one pattern to the catcher. It never comes back to its shape, so it is
   counted as one of the *others* and its ships are missed, which happens a lot in a gas like the

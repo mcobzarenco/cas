@@ -279,6 +279,13 @@ impl Universe {
     /// it, and a closed one nothing.
     fn sweep_edge(&mut self) {
         let (width, height) = (self.width, self.height);
+        // Nearly always there is nothing on the edge, and finding that out has to cost next
+        // to nothing: this runs after every generation.
+        let row = self.cells[..width].iter().fold(0, |any, cell| any | cell);
+        let column = self.cells.chunks_exact(width).fold(0, |any, row| any | row[0]);
+        if row | column == 0 {
+            return;
+        }
         let edge = (0..width).map(|x| (x, 0)).chain((1..height).map(|y| (0, y)));
         // Debris is recognised once: a live cell within reach of it is part of it, and that
         // is how many of the cells to come along the edge still are.
@@ -498,7 +505,8 @@ pub struct Playback {
     pub reverse: bool,
     pub speed: f32,
     pub stride: u32,
-    /// How long one update may spend stepping. Work beyond it is dropped, not owed.
+    /// How long one update may spend stepping. Frames that do not fit wait for the next
+    /// update, or are dropped if too many are waiting: see [`advance`].
     pub budget: Duration,
 }
 
@@ -587,8 +595,10 @@ struct PaceMeter {
 
 /// Runs the simulation while playing: one frame of `stride` generations every `1 / speed`
 /// seconds. Frames are never split, so the picture always shows a multiple of the stride.
-/// When the machine cannot keep up, the frames still owed after `budget` are dropped: the
-/// simulation slows down instead of freezing the window.
+/// An update steps for no longer than `budget`, give or take a frame. The frames that did
+/// not fit stay owed, so that a slow update is made up for by the next ones; but a machine
+/// that cannot keep up must not fall ever further behind, so no more stay owed than an update
+/// brings in. The rest is dropped: the simulation slows down instead of freezing the window.
 fn advance(
     time: Res<Time>,
     playback: Res<Playback>,
@@ -604,7 +614,8 @@ fn advance(
         return;
     }
 
-    *owed += time.delta_secs_f64() * playback.speed as f64;
+    let came_due = time.delta_secs_f64() * playback.speed as f64;
+    *owed += came_due;
     let due = owed.floor() as u32;
     let started = Instant::now();
     let mut done = 0;
@@ -615,8 +626,12 @@ fn advance(
             break;
         }
     }
-    let lagging = done < due;
-    *owed = if lagging { 0.0 } else { *owed - due as f64 };
+    *owed -= done as f64;
+    let backlog = came_due.max(1.0);
+    let lagging = *owed > backlog;
+    if lagging {
+        *owed = backlog;
+    }
 
     meter.generations += done as u64 * playback.stride as u64;
     meter.lagging |= lagging;
@@ -827,6 +842,18 @@ mod tests {
     }
 
     #[test]
+    fn both_lines_of_the_edge_are_watched() {
+        let mut universe = Universe::new(16, 16, BlockRule::identity());
+        universe.open_border = true;
+        for (x, y) in [(5, 0), (0, 9), (5, 9)] {
+            universe.set(x, y, true);
+        }
+        universe.step(true);
+        assert_eq!(universe.population(), 1, "only the cell away from the edge is left");
+        assert!(universe.get(5, 9));
+    }
+
+    #[test]
     fn a_pattern_across_the_edge_keeps_its_shape() {
         let mut universe = Universe::new(16, 16, BlockRule::identity());
         universe.catching = true;
@@ -1034,10 +1061,28 @@ mod pacing {
         assert_eq!(generation(&app), -1);
     }
 
+    fn set_budget(app: &mut App, budget: Duration) {
+        app.world_mut().resource_mut::<Playback>().budget = budget;
+    }
+
     #[test]
-    fn work_over_budget_is_dropped_not_owed() {
-        // 60 frames are due per update, but with no budget only the first one runs; the rest
-        // must not pile up, and the stride stays whole.
+    fn a_slow_update_is_made_up_for() {
+        // Two frames are due per update. With no budget only the first one runs ...
+        let playback = Playback { playing: true, speed: 8.0, budget: Duration::ZERO, ..default() };
+        let mut app = app(playback);
+        app.update();
+        assert_eq!(generation(&app), 1);
+        // ... and the other is still owed when there is time again.
+        set_budget(&mut app, Duration::from_secs(1));
+        app.update();
+        assert_eq!(generation(&app), 4);
+        assert_eq!(app.world().resource::<Pace>().achieved, None);
+    }
+
+    #[test]
+    fn work_far_over_budget_is_dropped_not_owed() {
+        // 60 frames are due per update, but with no budget only the first one runs, and the
+        // stride stays whole.
         let playback = Playback {
             playing: true,
             speed: 240.0,
@@ -1050,6 +1095,10 @@ mod pacing {
             app.update();
             assert_eq!(generation(&app), 7 * update);
         }
+        // Of the 236 frames missed, one update's worth is still owed; the rest did not pile up.
+        set_budget(&mut app, Duration::from_secs(1));
+        app.update();
+        assert_eq!(generation(&app), 7 * (4 + 60 + 60));
     }
 }
 

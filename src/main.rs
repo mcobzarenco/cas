@@ -7,9 +7,7 @@
 mod actions;
 mod catcher;
 mod editor;
-mod pattern;
 mod rig;
-mod rules;
 mod sim;
 mod ui;
 mod view;
@@ -22,10 +20,12 @@ use bevy::{
 };
 use clap::{Parser, ValueEnum};
 
-use crate::{
+use cas_core::{
     rules::BlockRule,
-    sim::{Rng, Settings, Universe},
+    universe::{Rng, Universe},
 };
+
+use crate::sim::Settings;
 
 /// The cells are drawn from a single texture, and this is what GPUs commonly allow.
 const MAX_GRID_SIDE: usize = 16384;
@@ -128,10 +128,7 @@ fn main() -> AppExit {
     if !(0.0..=1.0).contains(&args.density) {
         fail("--density is a probability between 0 and 1");
     }
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.threads.max(1))
-        .build_global()
-        .expect("nothing has used the thread pool yet");
+    cas_core::use_threads(args.threads);
     let script = match (&args.script, &args.script_file) {
         (Some(script), _) => Some(script.clone()),
         (None, Some(path)) => Some(std::fs::read_to_string(path).unwrap_or_else(|e| {

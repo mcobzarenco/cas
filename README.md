@@ -73,6 +73,8 @@ more states.
 cargo run --release
 cargo run --features dev        # dynamic linking: much faster incremental builds while hacking
 cargo run -- --help
+cargo run --release -p cas-search -- --help    # looking for rules, see below
+cargo test --release --workspace
 ```
 
 Useful flags: `--rule critters` (a preset: `single-rotation`, `critters`, `bbm`, `bounce-gas`, `hpp-gas`,
@@ -149,17 +151,25 @@ once, also while the simulation runs. As soon as the table differs from all pres
 shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule back.
 
 * **Identity**, **Inverse** (the rule that undoes the current one) and **Random** replace the table.
-* The read-out analyses the table: whether the population is conserved (possibly only relative
-  to the vacuum, as in Critters); which rotations and mirrors of the square the rule is symmetric
-  under (a rule with rotations but no mirrors has a handedness, like Single Rotation); whether
-  dead and alive are interchangeable; after how many generations the vacuum repeats; and how the
-  rule run backwards relates to the rule run forwards (the same rule, its mirror image, its
-  complement, or something else); and Morita's number, if the rule has one. For a custom rule
-  the main panel shows the same in a sentence.
-* **Rule string**: the table as text. Type or paste a table, a preset name or Morita's number
-  of a rule and it is applied as soon as it is valid (otherwise the reason is shown below the
-  field); **Copy** and **Paste** use the system clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work
-  in the field. While the field has focus the single-key shortcuts are off.
+* **Properties** is what analysis says about the table, each finding in words next to a picture
+  of it:
+  * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
+    picture shows a point and its images under those, and the axes of the mirrors; a rule with
+    rotations but no mirrors, like Single Rotation, shows as a pinwheel: it has a handedness.
+  * *Dead and alive*: whether exchanging the two states turns every run into another run.
+  * *Cell count*: whether a pattern keeps its number of cells (possibly only relative to the
+    vacuum, as in Critters). The picture shows where the blocks go by their number of cells,
+    before across and after upwards: a rule that conserves cells lights the diagonal.
+  * *Backwards*: how the rule run backwards relates to the rule: the same (=), its mirror image
+    (◧◨), with the two states exchanged (■□), both, or none of it (≠).
+  * *Vacuum*: the empty world through the generations of its cycle.
+
+  For a custom rule the main panel says the same in a sentence.
+* **Rule string**: the table as text, with Morita's number under it if the rule has one. Type
+  or paste a table, a preset name or such a number and it is applied as soon as it is valid
+  (otherwise the reason is shown below the field); **Copy** and **Paste** use the system
+  clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work in the field. While the field has focus the
+  single-key shortcuts are off.
 
 ### The edge of the grid, and catching spaceships
 
@@ -192,6 +202,46 @@ was caught under the current rule.
 
 What left or was caught is gone: stepping backwards does not bring it back.
 
+## Searching for rules
+
+`cas-search` looks for interesting rules without opening a window. It puts every rule of a family
+through a few trials and writes one line per rule:
+
+```sh
+cargo run --release -p cas-search -- --family espca --out searches/espca.tsv
+cargo run --release -p cas-search -- --family conserving --out searches/conserving.tsv
+cargo run --release -p cas-search -- --rule critters --rule espca-0925bf
+```
+
+* **Seeds**: small random patterns (one to six cells) are left alone on an unbounded plane. Each
+  comes back to its shape in place (*oscillating*) or elsewhere (*travelling*), flies apart
+  (*scattering*), grows without bound (*growing*), or does none of it in time (*undecided*). The
+  table has the share of each, the number of different periods among the oscillating ones and
+  the longest.
+* **Spaceships**: kinds of spaceship slower than light, among the seeds and among what leaves a
+  blob through an open border; of the latter also how many were *caught* and how many small
+  patterns were *others*.
+* **Damage**: one cell of a random soup is flipped; the share that differs, a hundred generations
+  on, of the cells the flip could have reached.
+* **Remaining**: what is left of the blob.
+
+From these a rule gets a *character*: `explosive` or `growing` (most or some seeds grow without
+bound), `spaceships` (something slower than light travels), `gas` (seeds fly apart, at the speed
+of light), `frozen` (everything stays put, and so does a change), `confined` (everything stays
+put, yet a change spreads). Most rules are explosive. The ones to look at have things that travel
+and things that stay, and little damage: a run ends by printing its best rules, ranked by the
+lesser of their kinds of spaceship and their periods. (By kinds alone the list would be led by
+rules in which a lone cell already flies and nothing stays: cells flying in formation are kinds
+too.) A rule found this way is opened with `cargo run --release -- --rule 0,2,8,3,…` or pasted
+into the rule field.
+
+Families: `espca`, the rules that look the same after a quarter turn (1536, half a minute);
+`conserving`, the rules that keep the number of cells of every block or trade it for the number
+of dead cells as Critters does (829 440, half an hour on four threads); `random`. Rules that
+differ only by a turn or a mirror, or by a vacuum that flickers and changes nothing else, are
+measured once. A search that was interrupted takes up where it stopped if given the same `--out`,
+and `--limit` measures a fair sample.
+
 ## Test rig
 
 The app can drive itself from a tiny script, which is how the UI gets exercised and screenshotted
@@ -207,7 +257,7 @@ for script in rig/*.cas; do cargo run --release -- --script-file $script || brea
 |---------|--------|
 | `wait N` | idle for N frames |
 | `shot NAME` | save `shots/NAME.png` (see `--shots`) and wait until it is written |
-| `click NAME [DX DY]` | pointer move / press / release on the UI node named NAME, optionally offset from its centre in logical pixels. Nodes: `PlayPause`, `StepBack`, `StepForward`, `Reverse`, `HideVacuum`, `ShowGrid`, `ShowBlocks`, `FitView`, `Soup`, `Blob`, `Clear`, the sliders `Speed`, `Stride`, `Density`, `Grid`; the rule menu `RuleMenu` and its items `RuleItem:<preset id>`, `RuleItemCustom`; `EditRule`; in the editor `Out0` … `Out15` (the outcomes), `RuleIdentity`, `RuleInverse`, `RuleRandom`, `RuleString`, `RuleCopy`, `RulePaste`, `EditorClose`; the size menu `GridSize` and its items `GridSize:<side>`; `OpenBorder`, `Catching`, `Spaceships`; in the spaceship list `CatcherCatching`, `Kind0` … (the kinds, in the order they were first caught), `CatcherForget`, `CatcherNote` (the line next to it), `CatcherClose` |
+| `click NAME [DX DY]` | pointer move / press / release on the UI node named NAME, optionally offset from its centre in logical pixels. Nodes: `PlayPause`, `StepBack`, `StepForward`, `Reverse`, `HideVacuum`, `ShowGrid`, `ShowBlocks`, `FitView`, `Soup`, `Blob`, `Clear`, the sliders `Speed`, `Stride`, `Density`, `Grid`; the rule menu `RuleMenu` and its items `RuleItem:<preset id>`, `RuleItemCustom`; `EditRule`; in the editor `Out0` … `Out15` (the outcomes), `RuleIdentity`, `RuleInverse`, `RuleRandom`, `RuleString`, `RuleEspca` (Morita's number under it), `RuleCopy`, `RulePaste`, `EditorClose`; the size menu `GridSize` and its items `GridSize:<side>`; `OpenBorder`, `Catching`, `Spaceships`; in the spaceship list `CatcherCatching`, `Kind0` … (the kinds, in the order they were first caught), `CatcherForget`, `CatcherNote` (the line next to it), `CatcherClose` |
 | `move NAME [DX DY]` | just move the pointer there |
 | `drag NAME DX DY [left\|right\|middle]` | press at the node's centre, move by (DX, DY), release: drags sliders, paints, pans |
 | `hold NAME FRAMES` | keep the left button down on the node for FRAMES frames |
@@ -232,17 +282,24 @@ Example: `shot a; step 500; step -500; expect_gen 0; shot b` produces two byte-i
 
 ## Layout
 
+A cargo workspace of three crates. `cas-core` is the automata without the app and knows nothing
+of Bevy; the app at the root and the search program are built on it.
+
 | file | what |
 |------|------|
-| `src/rules.rs` | rules as permutation tables: presets, text form, Morita's numbers, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, symmetry, time reversal); tests check each preset against its definition and the numbers against the book's statements |
-| `src/sim.rs` | the grid and its stepping kernel, the vacuum kept apart from the cells, resizing, what the edge does (open border, catching), transport and pacing, the system sets that order a frame. Tests hold the kernel against the plain definition of a step, replay the spaceships published with Single Rotation (which pins rotation sense, bit layout and phase to the reference simulator) and run the pacing in a headless app |
-| `src/pattern.rs` | finite patterns on an unbounded plane: period, displacement and canonical form of a pattern left alone, taking apart patterns that only travel together, run-length encoding. Tests use the periods and displacements js-revca's tests give, hold the analysis against the grid, and replay figures of Morita's book (which pins down how his automata lie on the block grid) |
-| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, counts it by kind for each rule, and shows the panel |
+| `crates/cas-core/src/rules.rs` | rules as permutation tables: presets, text form, Morita's numbers, swaps, inverse, the vacuum's cycle and the rule relative to it, analysis (population, symmetry, time reversal), the rule that stands for all that only look different; tests check each preset against its definition and the numbers against the book's statements |
+| `…/universe.rs` | the grid and its stepping kernel, the vacuum kept apart from the cells, resizing, what the edge does (open border, catching). Tests hold the kernel against the plain definition of a step and replay the spaceships published with Single Rotation (which pins rotation sense, bit layout and phase to the reference simulator) |
+| `…/pattern.rs` | finite patterns on an unbounded plane: what becomes of a pattern left alone, its period, displacement and canonical form, taking apart patterns that only travel together, run-length encoding. Tests use the periods and displacements js-revca's tests give, hold the analysis against the grid, and replay figures of Morita's book (which pins down how his automata lie on the block grid) |
+| `…/census.rs` | counting by kind the spaceships a universe caught |
+| `…/search.rs` | the trials a rule is put through and its report, the families of rules |
+| `crates/cas-search` | the command-line search: families, the table, taking up an interrupted search |
+| `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
+| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, and shows the panel |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
 | `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events |
 | `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays |
 | `src/ui.rs` | the control panel as cards, one per aspect, and the aspects' colours (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes); sliders and checkboxes on the headless widgets, widget↔state sync |
-| `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the analysis read-out, the rule string and clipboard |
+| `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the properties with their pictures, the rule string and clipboard |
 | `src/rig.rs`, `rig/*.cas` | the script-driven test rig and the scripts that exercise the app |
 
 Stepping backwards from generation *g* applies the inverse table with the partition the forward
@@ -252,8 +309,8 @@ Stepping: cells are one byte each. The kernel walks the grid a pair of rows at a
 cells of each row at once and looks two blocks up per table access; a 256×256 generation takes
 about 5 µs on one core, a 4096×4096 one about 0.3 ms on six. Small grids are stepped on the calling
 thread, large ones are shared out with rayon (`--threads`; the step is bound by memory, so a
-handful of threads is as fast as all of them). `cargo test --release -- --ignored --nocapture
-stopwatch` times it.
+handful of threads is as fast as all of them). `cargo test --release -p cas-core -- --ignored
+--nocapture stopwatch` times it.
 
 Drawing: the cell array is uploaded as-is into an `R8Uint` texture (one byte per cell, a plain
 `memcpy` when the universe changes) and a UI material's fragment shader does everything else, so
@@ -287,8 +344,10 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
 
 ## Environment notes
 
-* Bevy comes from the sibling checkout `../bevy` (tag `v0.19.1`); its `examples/` are the API
-  reference. Bevy's features are enumerated explicitly in `Cargo.toml` (no 3D, audio or gamepads).
+* Bevy 0.19.1 comes from crates.io; a checkout of that tag next to this repository (`../bevy`) is
+  handy as the API reference, for its `examples/`. Bevy's features are enumerated explicitly in
+  `Cargo.toml` (no 3D, audio or gamepads). `cas-core` has an optional `bevy` feature, which the
+  app turns on: it only makes the universe and the random generator Bevy resources.
   Native Wayland is the crate's default `wayland` feature and needs `libwayland-dev` at build time;
   `cargo build --no-default-features` falls back to winit's X11 backend (XWayland).
 * Vsync: `--vsync auto` (the default) waits for vsync only for native Wayland windows, where it

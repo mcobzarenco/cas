@@ -12,6 +12,8 @@ rule single-rotation
 click EditRule; wait 6; shot rules-2-editor
 click Out1; wait 3; click Out2; wait 3
 expect_rule 0,8,2,3,1,5,6,7,4,9,10,11,12,13,14,15
+# It no longer looks the same after a quarter turn, so it has no number of Morita's.
+expect_text RuleEspca
 shot rules-3-custom
 click RuleInverse; wait 2; expect_rule 0,4,2,3,8,5,6,7,1,9,10,11,12,13,14,15
 click RuleIdentity; wait 2; expect_rule 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
@@ -39,6 +41,7 @@ click RuleMenu; wait 4; click Grid 250 250; wait 4; shot rules-6-menu-closed
 
 # Morita's rules: from the menu, and by number in the rule field, also when it is no preset.
 click RuleMenu; wait 4; click RuleItem:espca-01c5ef; wait 4; expect_rule espca-01c5ef
+expect_text RuleEspca ESPCA-01c5ef
 shot rules-7-morita
 click RuleString; wait 2; key Ctrl+a; type espca-04cadf; wait 3; expect_rule single-rotation
 key Ctrl+a; type ESPCA-04c5bf; wait 3; expect_rule 0,2,8,3,1,5,9,13,4,6,10,7,12,14,11,15

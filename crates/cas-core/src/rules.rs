@@ -501,9 +501,29 @@ impl BlockRule {
         self.commutes_with(complement)
     }
 
+    /// The rule as it looks when the plane is turned or mirrored by `transform`.
+    pub fn seen_through(&self, transform: fn(u8) -> u8) -> BlockRule {
+        let mut table = [0; 16];
+        for block in 0..16u8 {
+            table[transform(block) as usize] = transform(self.table[block as usize]);
+        }
+        BlockRule::new(table).expect("a permutation relabelled is a permutation")
+    }
+
+    /// One rule to stand for all that differ from this one only in how one looks at them:
+    /// turned or mirrored, or with a vacuum that flickers and changes nothing else. Of
+    /// those it is the one whose table comes first.
+    pub fn representative(&self) -> BlockRule {
+        // A rule that is its own complement acts on what differs from its vacuum in one
+        // way at every generation: that way is the rule to look at.
+        let relative = self.relative_to_vacuum();
+        let flickers_only = relative.iter().all(|table| *table == relative[0]);
+        let rule = if flickers_only { &relative[0] } else { self };
+        let seen = TURNS_AND_MIRRORS.iter().map(|&transform| rule.seen_through(transform));
+        seen.chain([rule.clone()]).min_by_key(|rule| rule.table).expect("the rule itself is among them")
+    }
+
     pub fn reversed(&self) -> Reversed {
-        const TURNS_AND_MIRRORS: [fn(u8) -> u8; 7] =
-            [rotate_cw, rotate_180, rotate_ccw, mirror, flip, transpose, anti_transpose];
         // Is the inverse the rule as seen through `transform`, with or without the two states
         // exchanged as well?
         let inverse_through = |transform: fn(u8) -> u8, complemented: bool| {
@@ -590,6 +610,10 @@ impl FromStr for BlockRule {
         Self::new(table).map_err(|error| error.to_string())
     }
 }
+
+/// The ways to turn and mirror a block, other than leaving it alone.
+pub const TURNS_AND_MIRRORS: [fn(u8) -> u8; 7] =
+    [rotate_cw, rotate_180, rotate_ccw, mirror, flip, transpose, anti_transpose];
 
 /// The cases the digits of an ESPCA number are for, as Morita writes a cell: its parts top,
 /// right, bottom and left from the highest bit down. A particle in the top part is moving
@@ -940,6 +964,29 @@ mod tests {
             assert_eq!(BlockRule::from_espca(number), Ok(preset.rule()), "{}", preset.id);
             assert_eq!(preset.name, format!("ESPCA-{number}"));
         }
+    }
+
+    #[test]
+    fn one_rule_stands_for_all_that_only_look_different() {
+        // A mirror image, a quarter turn of a rule without that symmetry, and the rule itself.
+        let rule = BlockRule::from_espca("01caef").unwrap();
+        let representative = rule.representative();
+        assert_eq!(mirrored(&rule).representative(), representative);
+        assert_eq!(preset("double-rotation").representative(), representative);
+        assert_eq!(representative.representative(), representative);
+        let mut lopsided = BlockRule::identity();
+        lopsided.swap_outcomes(1, 3);
+        for transform in TURNS_AND_MIRRORS {
+            assert_eq!(lopsided.seen_through(transform).representative(), lopsided.representative());
+        }
+        assert_eq!(rule.seen_through(rotate_cw), rule, "it looks the same after a quarter turn");
+        // ESPCA-fb3510 is its own complement, and its vacuum only flickers: it is ESPCA-04caef.
+        let flickering = BlockRule::from_espca("fb3510").unwrap();
+        let plain = BlockRule::from_espca("04caef").unwrap();
+        assert_eq!(flickering.representative(), plain.representative());
+        assert_eq!(flickering.representative().vacuum_cycle(), [0]);
+        // Critters is not: there the two generations differ, and it stands for itself.
+        assert_eq!(preset("critters").representative(), preset("critters"));
     }
 
     #[test]

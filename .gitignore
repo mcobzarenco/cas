@@ -3,3 +3,5 @@
 /docs/*.pdf
 # Test-rig screenshots.
 /shots/
+# Tables written by cas-search.
+/searches/

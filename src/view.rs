@@ -20,8 +20,10 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
+use cas_core::universe::Universe;
+
 use crate::{
-    sim::{Settings, SimSystems, Universe},
+    sim::{Settings, SimSystems},
     ui::Aspect,
 };
 

@@ -1,0 +1,13 @@
+[package]
+name = "cas-core"
+version.workspace = true
+edition.workspace = true
+description = "Reversible block cellular automata: rules, the grid, patterns and what they do"
+
+[dependencies]
+rayon = "1"
+bevy_ecs = { version = "0.19.1", default-features = false, features = ["std"], optional = true }
+
+[features]
+# Makes `Universe` and `Rng` Bevy resources, for the app.
+bevy = ["dep:bevy_ecs"]

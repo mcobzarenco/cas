@@ -30,12 +30,16 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
+use cas_core::{
+    rules::{PRESETS, Source},
+    universe::Universe,
+};
+
 use crate::{
     actions::{Action, Does, Toggle},
     catcher::catcher_panel,
     editor::{RuleEditor, describe, editor_panel},
-    rules::{PRESETS, Source},
-    sim::{Pace, Playback, Settings, SimSystems, Universe, rule_changed},
+    sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
 };
 

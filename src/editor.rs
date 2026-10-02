@@ -6,8 +6,9 @@
 //! then another). Every permutation is a product of such swaps, and since each intermediate
 //! table is a valid rule, edits apply immediately, even while the simulation runs.
 //!
-//! The rule is also shown as text (the table, see `rules.rs`), which can be edited, copied and
-//! pasted.
+//! Under the cases the panel shows what analysis says about the rule, each finding with a
+//! picture of it, and the rule as text (its table, and Morita's number if it has one), which
+//! can be edited, copied and pasted.
 
 use bevy::{
     clipboard::Clipboard,
@@ -21,15 +22,22 @@ use bevy::{
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
-    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
+    text::{
+        EditableText, FontSource, FontSourceTemplate, FontWeight, LetterSpacing, TextEdit,
+        TextEditChange,
+    },
     ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
+use cas_core::{
+    rules::{BlockRule, Population, Reversed, Symmetry, TURNS_AND_MIRRORS, popcount},
+    universe::{Rng, Universe},
+};
+
 use crate::{
-    rules::{BlockRule, Population, Reversed, Symmetry},
-    sim::{Rng, SimSystems, Universe, rule_changed},
-    ui::{Aspect, caption, panel_title, readout, section, side_panel},
+    sim::{SimSystems, rule_changed},
+    ui::{Aspect, caption, panel_title, section, side_panel},
     view::{ALIVE, DEAD},
 };
 
@@ -37,6 +45,23 @@ pub const EDITOR_WIDTH: f32 = 376.0;
 
 /// Side of one cell in the little block pictures.
 const CELL: f32 = 12.0;
+/// Side of the square a property's picture is drawn in, and of a cell of the vacuum's tiles.
+const GLYPH: f32 = 48.0;
+const VACUUM_CELL: f32 = 6.0;
+
+/// Where a point just right of the top of a square ends up under each way of turning and
+/// mirroring it, as `(x, y)` from the middle: first as it is, then in the order of
+/// [`TURNS_AND_MIRRORS`]. The ones a rule is symmetric under are a picture of its symmetry.
+const ORBIT: [(f32, f32); 8] = [
+    (6.0, -16.0),
+    (16.0, 6.0),
+    (-6.0, 16.0),
+    (-16.0, -6.0),
+    (-6.0, -16.0),
+    (6.0, 16.0),
+    (-16.0, 6.0),
+    (16.0, -6.0),
+];
 
 /// The cases, one rotation orbit per row: the blocks in a row are quarter turns of each other.
 const ORBITS: [&[u8]; 6] = [
@@ -101,11 +126,59 @@ struct BlockCell {
     outcome: bool,
 }
 
+/// The line under the rule string: what the last action did, or why the text is no rule.
+#[derive(Component, Default, Clone)]
+struct Status;
+
+/// A text that says something about the rule.
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
-enum EditorText {
+enum Finding {
     #[default]
-    Properties,
-    Status,
+    Symmetry,
+    /// Whether dead and alive are interchangeable, in words and as a formula.
+    States,
+    StatesFormula,
+    CellCount,
+    /// How the rule run backwards relates to the rule, in words and as a formula.
+    Reversed,
+    ReversedFormula,
+    Vacuum,
+    /// Morita's number, and a word about it.
+    Espca,
+    EspcaNote,
+}
+
+/// A piece of a picture whose colour says something about the rule.
+#[derive(Component, Clone, Copy)]
+enum Lamp {
+    /// One place of [`ORBIT`]: lit if the rule is symmetric under that turn or mirror.
+    Orbit(usize),
+    /// How many of the blocks with `before` cells get `after` cells.
+    Flow { before: usize, after: usize },
+    /// A cell of the vacuum's tile in one generation of its cycle.
+    Vacuum { generation: usize, bit: u8 },
+}
+
+/// A piece of a picture that is only there for some rules.
+#[derive(Component, Clone, Copy)]
+enum Part {
+    /// The axis of a mirror, by its place in [`ORBIT`].
+    Axis(usize),
+    /// The vacuum's tile in one generation of its cycle.
+    VacuumTile(usize),
+}
+
+// `bsn!` builds a component from its default.
+impl Default for Lamp {
+    fn default() -> Self {
+        Lamp::Orbit(0)
+    }
+}
+
+impl Default for Part {
+    fn default() -> Self {
+        Part::Axis(0)
+    }
 }
 
 /// The text field holding the rule string.
@@ -124,6 +197,7 @@ impl Plugin for EditorPlugin {
                 Update,
                 (
                     follow_rule.run_if(rule_changed),
+                    sync_findings.run_if(rule_changed),
                     sync_editor.run_if(
                         rule_changed
                             .or_eager(resource_changed::<RuleEditor>)
@@ -146,33 +220,18 @@ pub fn describe(rule: &BlockRule) -> String {
     // Morita's number, for the rules that have one.
     let number = rule.espca().map(|number| format!(", ESPCA-{number}")).unwrap_or_default();
     format!(
-        "A custom rule{number}. Population: {}. Symmetry: {}. Vacuum: {}. Reversed: {}.",
-        population(rule),
+        "A custom rule{number}. Symmetry: {}. Dead and alive: {}. Cell count: {}. Backwards: {}. \
+         Vacuum: {}.",
         symmetry(rule),
-        vacuum(rule),
+        states(rule),
+        population(rule),
         reversed(rule),
+        vacuum_words(rule),
     )
 }
 
-/// The same analysis as a table, for the editor.
-fn properties(rule: &BlockRule) -> String {
-    let two_states = if rule.is_complement_symmetric() {
-        "interchangeable"
-    } else {
-        "not interchangeable"
-    };
-    let number = rule.espca().map(|number| format!("\nespca       {number}")).unwrap_or_default();
-    format!(
-        "population  {}\n\
-         symmetry    {}\n\
-         two states  {two_states}\n\
-         vacuum      {}\n\
-         reversed    {}{number}",
-        population(rule),
-        symmetry(rule),
-        vacuum(rule),
-        reversed(rule),
-    )
+fn states(rule: &BlockRule) -> &'static str {
+    if rule.is_complement_symmetric() { "interchangeable" } else { "not interchangeable" }
 }
 
 fn population(rule: &BlockRule) -> &'static str {
@@ -197,10 +256,22 @@ fn symmetry(rule: &BlockRule) -> &'static str {
     }
 }
 
-fn vacuum(rule: &BlockRule) -> String {
+fn vacuum_words(rule: &BlockRule) -> String {
     match rule.vacuum_cycle().len() {
         1 => "stable".to_string(),
         period => format!("repeats every {period} generations"),
+    }
+}
+
+/// The relation of the rule run backwards to the rule, in signs: the same, a mirror image
+/// (two halves facing each other), the two states exchanged, both, or none of it.
+fn reversed_formula(rule: &BlockRule) -> &'static str {
+    match rule.reversed() {
+        Reversed::SameRule => "=",
+        Reversed::Transformed => "◧◨",
+        Reversed::Complemented => "■□",
+        Reversed::TransformedAndComplemented => "◧◨\n■□",
+        Reversed::DifferentRule => "≠",
     }
 }
 
@@ -293,7 +364,7 @@ pub fn editor_panel() -> impl Scene {
                     ),
                 ]
             ),
-            (readout("") template_value(EditorText::Properties)),
+            findings(),
             section("RULE STRING", bsn_list![
                 (
                     @FeathersTextInputContainer
@@ -305,6 +376,18 @@ pub fn editor_panel() -> impl Scene {
                         RuleStringInput
                         on(rule_string_edited)
                     )]
+                ),
+                (
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Baseline,
+                        column_gap: px(8),
+                        padding: UiRect { left: px(5) },
+                    }
+                    Children [
+                        (#RuleEspca mono("", 12.0, palette::LIGHT_GRAY_1) template_value(Finding::Espca)),
+                        (caption("") template_value(Finding::EspcaNote)),
+                    ]
                 ),
                 (
                     Node {
@@ -331,10 +414,338 @@ pub fn editor_panel() -> impl Scene {
                     ]
                 ),
                 caption("The outcome of each block, block 0 first (cells count 1, 2, 4, 8: top-left, top-right, bottom-left, bottom-right). Type or paste a table, a preset name, or Morita's number of a rule, like espca-01c5ef."),
-                (caption("") template_value(EditorText::Status)),
+                (caption("") Status),
             ]),
         ])
         EditorPanel
+    }
+}
+
+/// What analysis says about the rule: each finding in words, next to a picture of it.
+fn findings() -> impl Scene {
+    let formula = |finding: Finding, color: Color| bsn_list![(mono("", 19.0, color) template_value(finding))];
+    let tiles: Vec<_> = (0..16).map(vacuum_tile).collect();
+    section("PROPERTIES", bsn_list![
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: px(6),
+            }
+            Children [
+                finding("SYMMETRY", Finding::Symmetry, symmetry_picture()),
+                finding("DEAD AND ALIVE", Finding::States, formula(Finding::StatesFormula, ALIVE)),
+            ]
+        ),
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: px(6),
+            }
+            Children [
+                finding("CELL COUNT", Finding::CellCount, flow_picture()),
+                finding("BACKWARDS", Finding::Reversed, formula(Finding::ReversedFormula, palette::LIGHT_GRAY_1)),
+            ]
+        ),
+        (
+            // The empty world through the generations of its cycle.
+            tile()
+            Children [
+                (
+                    Node {
+                        width: px(GLYPH),
+                        flex_shrink: 0.0,
+                    }
+                    Children [ label("VACUUM") ]
+                ),
+                (
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        flex_wrap: FlexWrap::Wrap,
+                        column_gap: px(3),
+                        row_gap: px(3),
+                        flex_shrink: 0.0,
+                        // Eight to a row: the longest cycle takes two.
+                        max_width: px(8.0 * (2.0 * VACUUM_CELL + 6.0) - 3.0),
+                    }
+                    Children [ { tiles } ]
+                ),
+                (
+                    value("") template_value(Finding::Vacuum)
+                    Node { flex_grow: 1.0, flex_basis: px(0) }
+                ),
+            ]
+        ),
+    ])
+}
+
+/// The box a finding is shown in.
+fn tile() -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(8),
+            padding: px(6),
+            border_radius: px(5),
+        }
+        BackgroundColor(palette::GRAY_2)
+    }
+}
+
+/// A finding: its picture, its name and what was found.
+fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> impl Scene {
+    bsn! {
+        tile()
+        Node {
+            flex_grow: 1.0,
+            flex_basis: px(0),
+        }
+        Children [
+            (
+                Node {
+                    width: px(GLYPH),
+                    height: px(GLYPH),
+                    flex_shrink: 0.0,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border_radius: px(4),
+                }
+                BackgroundColor(DEAD)
+                Children [ { picture } ]
+            ),
+            (
+                Node {
+                    flex_grow: 1.0,
+                    flex_basis: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                }
+                Children [
+                    label(name),
+                    (value("") template_value(finding)),
+                ]
+            ),
+        ]
+    }
+}
+
+/// The name of a finding.
+fn label(name: &'static str) -> impl Scene {
+    bsn! {
+        Text(name)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::BOLD),
+            font_size: FontSize::Px(9.0),
+            weight: FontWeight::BOLD,
+        }
+        template_value(LetterSpacing::Px(0.5))
+        TextColor(palette::LIGHT_GRAY_2)
+    }
+}
+
+/// What was found, in words.
+fn value(text: &'static str) -> impl Scene {
+    bsn! {
+        Text(text)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::REGULAR),
+            font_size: FontSize::Px(12.0),
+            weight: FontWeight::NORMAL,
+        }
+        TextColor(palette::LIGHT_GRAY_1)
+    }
+}
+
+fn mono(text: &'static str, size: f32, color: Color) -> impl Scene {
+    bsn! {
+        Text(text)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::MONO),
+            font_size: FontSize::Px(size),
+            weight: FontWeight::NORMAL,
+        }
+        TextColor(color)
+        TextLayout { justify: Justify::Center }
+    }
+}
+
+/// The symmetry of the rule as a picture: a point and its images under the turns and mirrors
+/// that leave the rule as it is, with the axes of those mirrors.
+fn symmetry_picture() -> impl SceneList {
+    let middle = GLYPH / 2.0;
+    let dots: Vec<_> = (0..ORBIT.len())
+        .map(|element| {
+            let (x, y) = ORBIT[element];
+            let lamp = Lamp::Orbit(element);
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(middle + x - 2.5),
+                    top: px(middle + y - 2.5),
+                    width: px(5),
+                    height: px(5),
+                    border_radius: BorderRadius::MAX,
+                }
+                BackgroundColor(palette::GRAY_3)
+                template_value(lamp)
+            }
+        })
+        .collect();
+    // Left-right, top-bottom, and the two diagonals: a bar through the middle, turned.
+    let color = Aspect::Rule.color();
+    let axes: Vec<_> = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)]
+        .into_iter()
+        .map(|(element, degrees): (usize, f32)| {
+            let part = Part::Axis(element);
+            let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
+            bsn! {
+                Node {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    left: px(2),
+                    top: px(middle - 0.5),
+                    width: px(GLYPH - 4.0),
+                    height: px(1),
+                }
+                BackgroundColor(color)
+                template_value(turned)
+                template_value(part)
+            }
+        })
+        .collect();
+    bsn_list![{ axes }, { dots }]
+}
+
+/// Where the blocks go, by their number of cells: before across, after upwards. A rule that
+/// conserves the cells of a pattern lights the diagonal.
+fn flow_picture() -> impl SceneList {
+    let squares: Vec<_> = (0..25)
+        .map(|i| {
+            let (before, after) = (i % 5, i / 5);
+            let lamp = Lamp::Flow { before, after };
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(2.0 + 9.0 * before as f32),
+                    bottom: px(2.0 + 9.0 * after as f32),
+                    width: px(8),
+                    height: px(8),
+                    border_radius: px(1),
+                }
+                BackgroundColor(Color::NONE)
+                template_value(lamp)
+            }
+        })
+        .collect();
+    bsn_list![{ squares }]
+}
+
+/// The vacuum in one generation of its cycle, as a small block.
+fn vacuum_tile(generation: usize) -> impl Scene {
+    let part = Part::VacuumTile(generation);
+    let cells: Vec<_> = (0..4u8)
+        .map(|bit| {
+            let lamp = Lamp::Vacuum { generation, bit };
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(1.0 + (VACUUM_CELL + 1.0) * (bit & 1) as f32),
+                    top: px(1.0 + (VACUUM_CELL + 1.0) * (bit >> 1) as f32),
+                    width: px(VACUUM_CELL),
+                    height: px(VACUUM_CELL),
+                }
+                BackgroundColor(DEAD)
+                template_value(lamp)
+            }
+        })
+        .collect();
+    bsn! {
+        Node {
+            display: Display::None,
+            width: px(2.0 * VACUUM_CELL + 3.0),
+            height: px(2.0 * VACUUM_CELL + 3.0),
+            border_radius: px(2),
+        }
+        BackgroundColor(palette::GRAY_3)
+        template_value(part)
+        Children [ { cells } ]
+    }
+}
+
+/// `[before][after]`: of the blocks with `before` cells, the share that gets `after` cells.
+/// The rule is taken relative to its vacuum, over the whole of the vacuum's cycle: that is
+/// what happens to the cells of a pattern.
+fn flow(rule: &BlockRule) -> [[f32; 5]; 5] {
+    let tables = rule.relative_to_vacuum();
+    let mut flow = [[0.0; 5]; 5];
+    for table in &tables {
+        for block in 0..16u8 {
+            let (before, after) = (popcount(block), popcount(table.table()[block as usize]));
+            flow[before as usize][after as usize] += 1.0;
+        }
+    }
+    for (before, shares) in flow.iter_mut().enumerate() {
+        // So many blocks have that many cells.
+        let blocks = [1.0, 4.0, 6.0, 4.0, 1.0][before] * tables.len() as f32;
+        shares.iter_mut().for_each(|share| *share /= blocks);
+    }
+    flow
+}
+
+/// Which ways of turning and mirroring leave the rule as it is, in the order of [`ORBIT`].
+fn symmetries(rule: &BlockRule) -> [bool; 8] {
+    std::array::from_fn(|element| match element {
+        0 => true,
+        _ => rule.commutes_with(TURNS_AND_MIRRORS[element - 1]),
+    })
+}
+
+/// Shows what analysis says about a new rule.
+fn sync_findings(
+    universe: Res<Universe>,
+    mut lamps: Query<(&Lamp, &mut BackgroundColor)>,
+    mut parts: Query<(&Part, &mut Node)>,
+    mut texts: Query<(&Finding, &mut Text)>,
+) {
+    let rule = universe.rule();
+    let (symmetries, flow, vacuum) = (symmetries(rule), flow(rule), rule.vacuum_cycle());
+    for (lamp, mut color) in &mut lamps {
+        color.0 = match *lamp {
+            Lamp::Orbit(element) if symmetries[element] => palette::WHITE,
+            Lamp::Orbit(_) => palette::GRAY_3,
+            Lamp::Flow { before, after } => match flow[before][after] {
+                0.0 => Color::NONE,
+                share => ALIVE.with_alpha(0.3 + 0.7 * share),
+            },
+            Lamp::Vacuum { generation, bit } => {
+                let alive = vacuum.get(generation).is_some_and(|tile| tile >> bit & 1 == 1);
+                if alive { ALIVE } else { DEAD }
+            }
+        };
+    }
+    for (part, mut node) in &mut parts {
+        let shown = match *part {
+            Part::Axis(element) => symmetries[element],
+            Part::VacuumTile(generation) => generation < vacuum.len(),
+        };
+        node.display = if shown { Display::Flex } else { Display::None };
+    }
+    let number = rule.espca();
+    for (finding, mut text) in &mut texts {
+        let content = match finding {
+            Finding::Symmetry => symmetry(rule).to_string(),
+            Finding::States => states(rule).to_string(),
+            Finding::StatesFormula if rule.is_complement_symmetric() => "■↔□".to_string(),
+            Finding::StatesFormula => "■≠□".to_string(),
+            Finding::CellCount => population(rule).to_string(),
+            Finding::Reversed => reversed(rule).to_string(),
+            Finding::ReversedFormula => reversed_formula(rule).to_string(),
+            Finding::Vacuum => vacuum_words(rule),
+            Finding::Espca => number.as_ref().map(|number| format!("ESPCA-{number}")).unwrap_or_default(),
+            Finding::EspcaNote if number.is_some() => "Morita's number".to_string(),
+            Finding::EspcaNote => "No ESPCA number: the rule changes with a quarter turn.".to_string(),
+        };
+        text.set_if_neq(Text(content));
     }
 }
 
@@ -574,7 +985,7 @@ fn sync_editor(
         (&Outcome, &Hovered, &mut BackgroundColor),
         (Without<BlockCell>, Without<CaseCard>),
     >,
-    mut texts: Query<(&EditorText, &mut Text)>,
+    mut status: Single<&mut Text, With<Status>>,
 ) {
     let table = universe.rule().table();
 
@@ -603,17 +1014,11 @@ fn sync_editor(
             palette::GRAY_3
         };
     }
-    for (kind, mut text) in &mut texts {
-        let content = match kind {
-            EditorText::Properties => properties(universe.rule()),
-            EditorText::Status => editor
-                .typing_error
-                .clone()
-                .or_else(|| editor.note.as_ref().map(|(message, _)| message.clone()))
-                .unwrap_or_default(),
-        };
-        text.set_if_neq(Text(content));
-    }
+    let message = editor
+        .typing_error
+        .clone()
+        .or_else(|| editor.note.as_ref().map(|(message, _)| message.clone()));
+    status.set_if_neq(Text(message.unwrap_or_default()));
 }
 
 /// Shows the rule in the text field, unless the user is typing in it: on a rule change, and
@@ -654,7 +1059,7 @@ mod tests {
         assert_eq!(seen, (0..16).collect::<Vec<u8>>());
         for orbit in ORBITS {
             for pair in orbit.windows(2) {
-                assert_eq!(crate::rules::rotate_cw(pair[0]), pair[1]);
+                assert_eq!(cas_core::rules::rotate_cw(pair[0]), pair[1]);
             }
         }
     }
@@ -665,26 +1070,52 @@ mod tests {
         assert!(describe(&single_rotation).starts_with("Blocks with exactly one live cell"));
         assert_eq!(
             describe(&BlockRule::identity()),
-            "A custom rule, ESPCA-08cadf. Population: conserved. Symmetry: all rotations and \
-             mirrors. Vacuum: stable. Reversed: the same rule."
+            "A custom rule, ESPCA-08cadf. Symmetry: all rotations and mirrors. Dead and alive: \
+             interchangeable. Cell count: conserved. Backwards: the same rule. Vacuum: stable."
         );
-        let mut lopsided = BlockRule::identity();
-        lopsided.swap_outcomes(1, 3);
         assert_eq!(
-            describe(&lopsided),
-            "A custom rule. Population: not conserved. Symmetry: none. Vacuum: stable. \
-             Reversed: the same rule."
+            describe(&lopsided()),
+            "A custom rule. Symmetry: none. Dead and alive: not interchangeable. Cell count: not \
+             conserved. Backwards: the same rule. Vacuum: stable."
         );
-        let critters: BlockRule = "critters".parse().unwrap();
-        assert_eq!(
-            properties(&critters),
-            "population  conserved relative to the vacuum\n\
-             symmetry    all rotations and mirrors\n\
-             two states  not interchangeable\n\
-             vacuum      repeats every 2 generations\n\
-             reversed    the rule complemented\n\
-             espca       f7ca80"
-        );
-        assert!(!properties(&lopsided).contains("espca"));
+    }
+
+    #[test]
+    fn findings_are_what_the_pictures_show() {
+        let rule = |name: &str| name.parse::<BlockRule>().unwrap();
+        // Single Rotation looks the same after every turn and in no mirror.
+        assert_eq!(symmetries(&rule("single-rotation")), [true, true, true, true, false, false, false, false]);
+        assert_eq!(symmetries(&rule("critters")), [true; 8]);
+        assert_eq!(symmetries(&lopsided()), [true, false, false, false, false, false, false, false]);
+        // The places of the orbit are the images of the first under the same turns and mirrors.
+        let turned = |(x, y): (f32, f32)| (-y, x);
+        assert_eq!(ORBIT[1], turned(ORBIT[0]));
+        assert_eq!(ORBIT[2], turned(ORBIT[1]));
+        assert_eq!(ORBIT[3], turned(ORBIT[2]));
+        assert_eq!(ORBIT[4], (-ORBIT[0].0, ORBIT[0].1));
+        assert_eq!(ORBIT[5], (ORBIT[0].0, -ORBIT[0].1));
+        assert_eq!(ORBIT[6], (ORBIT[0].1, ORBIT[0].0));
+        assert_eq!(ORBIT[7], (-ORBIT[0].1, -ORBIT[0].0));
+
+        // Cells are conserved: every block keeps its count. Critters does so relative to
+        // its vacuum, which is what the picture shows.
+        let diagonal: [[f32; 5]; 5] = std::array::from_fn(|before| std::array::from_fn(|after| (before == after) as u8 as f32));
+        assert_eq!(flow(&rule("single-rotation")), diagonal);
+        assert_eq!(flow(&rule("critters")), diagonal);
+        // In ESPCA-0945df a lone cell becomes two, and four of the six pairs become one.
+        let growing = flow(&rule("espca-0945df"));
+        assert_eq!((growing[1][2], growing[2][1], growing[2][2]), (1.0, 4.0 / 6.0, 2.0 / 6.0));
+
+        assert_eq!(reversed_formula(&rule("bbm")), "=");
+        assert_eq!(reversed_formula(&rule("single-rotation")), "◧◨");
+        assert_eq!(reversed_formula(&rule("critters")), "■□");
+        assert_eq!((states(&rule("hpp-gas")), states(&rule("critters"))), ("interchangeable", "not interchangeable"));
+        assert_eq!(vacuum_words(&rule("critters")), "repeats every 2 generations");
+    }
+
+    fn lopsided() -> BlockRule {
+        let mut rule = BlockRule::identity();
+        rule.swap_outcomes(1, 3);
+        rule
     }
 }

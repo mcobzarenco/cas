@@ -14,10 +14,12 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use cas_core::universe::{Rng, Universe};
+
 use crate::{
     catcher::Catcher,
     editor::RuleEditor,
-    sim::{Playback, Rng, Settings, SimSystems, Universe},
+    sim::{Playback, Settings, SimSystems},
     ui::{Aspect, Control},
     view::{ViewState, WHEEL_ZOOM},
 };

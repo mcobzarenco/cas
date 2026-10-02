@@ -1,9 +1,9 @@
 //! The spaceship catcher: a panel listing the patterns caught at the edge of the grid.
 //!
 //! While the universe is catching ([`Universe::catching`]), the small patterns that reach its
-//! edge are taken out of the world and handed over as [`Departure`]s. Here each one is run
-//! alone until it repeats ([`Analyser`]); those that travel are spaceships, and are counted by
-//! kind under their canonical form. Every rule has a haul of its own.
+//! edge are taken out of the world and handed over as [`Departure`]s. Here they are identified
+//! and counted by kind ([`Census`]), a little every frame, and listed. Every rule has a haul of
+//! its own.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -25,11 +25,16 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
+use cas_core::{
+    census::{Census, Kind},
+    pattern::{Cell, Heading, to_rle},
+    rules::BlockRule,
+    universe::{Departure, Universe},
+};
+
 use crate::{
     actions::Toggle,
-    pattern::{Analyser, Cell, Heading, Motion, settled, to_rle},
-    rules::BlockRule,
-    sim::{Departure, SimSystems, Universe, rule_changed},
+    sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
     view::{ALIVE, DEAD},
 };
@@ -45,8 +50,6 @@ const LISTED: usize = 200;
 
 /// When more than this many departures wait to be identified, the oldest are let go.
 const QUEUE: usize = 4096;
-/// When this many shapes are remembered, the memory starts over.
-const REMEMBERED: usize = 100_000;
 
 /// Column widths of the list, shared by its header and its rows; the speed takes the rest.
 const PICTURE: (f32, f32) = (64.0, 44.0);
@@ -79,7 +82,7 @@ impl Catcher {
     pub fn totals(&self, rule: &BlockRule) -> (u64, usize) {
         self.hauls
             .get(rule)
-            .map_or((0, 0), |haul| (haul.ships, haul.kinds.len()))
+            .map_or((0, 0), |haul| (haul.census.ships(), haul.census.kinds().len()))
     }
 }
 
@@ -87,83 +90,12 @@ impl Catcher {
 struct Haul {
     /// Tells this haul from every other, also from an earlier one of the same rule.
     number: u64,
-    analyser: Analyser,
-    kinds: Vec<Kind>,
-    /// Shapes that left the grid before, each with the vacuum's phase, and the kinds of the
-    /// spaceships they turned out to be. Most catches are repeats.
-    seen: HashMap<(Vec<Cell>, usize), Vec<usize>>,
-    ships: u64,
-    /// Oscillators, and whatever fell apart or never repeated.
-    others: u64,
+    census: Census,
 }
 
-struct Kind {
-    motion: Motion,
-    count: u64,
-}
-
-impl Kind {
-    /// Its part of `ships` caught in all, from 0 to 1.
-    fn share(&self, ships: u64) -> f32 {
-        self.count as f32 / ships.max(1) as f32
-    }
-}
-
-impl Haul {
-    fn new(rule: &BlockRule, number: u64) -> Self {
-        Self {
-            number,
-            analyser: Analyser::new(rule),
-            kinds: Vec::new(),
-            seen: HashMap::new(),
-            ships: 0,
-            others: 0,
-        }
-    }
-
-    fn identify(&mut self, departure: Departure) {
-        let shape = (settled(&departure.cells), departure.phase);
-        if !self.seen.contains_key(&shape) {
-            let kinds = self.spaceships(&shape.0, shape.1);
-            if self.seen.len() >= REMEMBERED {
-                self.seen.clear();
-            }
-            self.seen.insert(shape.clone(), kinds);
-        }
-        let kinds = &self.seen[&shape];
-        for &kind in kinds {
-            self.kinds[kind].count += 1;
-        }
-        self.ships += kinds.len() as u64;
-        self.others += kinds.is_empty() as u64;
-    }
-
-    /// The kinds of the spaceships a shape consists of: none if it does not travel, and more
-    /// than one if it is several flying side by side.
-    fn spaceships(&mut self, cells: &[Cell], phase: usize) -> Vec<usize> {
-        let travels = |motion: &Motion| motion.heading() != Heading::Still;
-        let Some(whole) = self.analyser.analyse(cells, phase).filter(travels) else {
-            return Vec::new();
-        };
-        let parts = self.analyser.parts(cells, phase, whole.period);
-        let motions = match parts.len() {
-            1 => vec![whole],
-            _ => parts.iter().filter_map(|part| self.analyser.analyse(part, phase)).collect(),
-        };
-        motions.into_iter().map(|motion| self.file(motion)).collect()
-    }
-
-    /// The kind with this canonical form, new if need be.
-    fn file(&mut self, motion: Motion) -> usize {
-        let known = self
-            .kinds
-            .iter()
-            .position(|kind| kind.motion.canonical == motion.canonical);
-        known.unwrap_or_else(|| {
-            self.kinds.push(Kind { motion, count: 0 });
-            self.kinds.len() - 1
-        })
-    }
+/// A kind's part of `ships` caught in all, from 0 to 1.
+fn share_of(kind: &Kind, ships: u64) -> f32 {
+    kind.count as f32 / ships.max(1) as f32
 }
 
 #[derive(Component, Default, Clone)]
@@ -236,10 +168,13 @@ fn identify(mut universe: ResMut<Universe>, mut catcher: ResMut<Catcher>) {
     let Catcher { waiting, hauls, begun, .. } = &mut *catcher;
     let haul = hauls.entry(universe.rule().clone()).or_insert_with(|| {
         *begun += 1;
-        Haul::new(universe.rule(), *begun)
+        Haul {
+            number: *begun,
+            census: Census::new(universe.rule()),
+        }
     });
     while let Some(departure) = waiting.pop_front() {
-        haul.identify(departure);
+        haul.census.record(departure);
         if started.elapsed() >= BUDGET {
             break;
         }
@@ -491,7 +426,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                 template_value(Pickable::IGNORE)
                 Children [(
                     Node {
-                        width: percent(100.0 * kind.share(ships)),
+                        width: percent(100.0 * share_of(kind, ships)),
                         height: percent(100),
                         border_radius: BorderRadius::MAX,
                     }
@@ -576,7 +511,7 @@ fn copy_kind(
     let Some(kind) = catcher
         .hauls
         .get(universe.rule())
-        .and_then(|haul| haul.kinds.get(index))
+        .and_then(|haul| haul.census.kinds().get(index))
     else {
         return;
     };
@@ -642,10 +577,11 @@ fn sync_list(
         return;
     }
     let haul = catcher.hauls.get(universe.rule());
+    let census = haul.map(|haul| &haul.census);
     let now = Shown {
         haul: haul.map(|haul| haul.number),
-        caught: haul.map_or(0, |haul| haul.ships + haul.others),
-        kinds: haul.map_or(0, |haul| haul.kinds.len()),
+        caught: census.map_or(0, |census| census.ships() + census.others()),
+        kinds: census.map_or(0, |census| census.kinds().len()),
         catching: universe.catching,
         note: catcher.note.clone(),
     };
@@ -661,8 +597,8 @@ fn sync_list(
     *shown = Some(now);
     *wait = REFRESH;
 
-    let (ships, others) = haul.map_or((0, 0), |haul| (haul.ships, haul.others));
-    let kinds = haul.map_or(&[][..], |haul| &haul.kinds);
+    let (ships, others) = census.map_or((0, 0), |census| (census.ships(), census.others()));
+    let kinds = census.map_or(&[][..], Census::kinds);
     for (figure, mut text) in &mut figures {
         let value = match *figure {
             Figure::Ships => ships,
@@ -673,7 +609,7 @@ fn sync_list(
         text.set_if_neq(Text(group_digits(value as i64)));
     }
     for (&Share(kind), mut bar) in &mut shares {
-        let width = percent(100.0 * kinds.get(kind).map_or(0.0, |kind| kind.share(ships)));
+        let width = percent(100.0 * kinds.get(kind).map_or(0.0, |kind| share_of(kind, ships)));
         if bar.width != width {
             bar.width = width;
         }
@@ -702,60 +638,5 @@ fn sync_list(
     }
     if children.is_none_or(|children| children[..] != listed[..]) {
         commands.entity(list).replace_children(&listed);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::pattern::from_rle;
-
-    fn departure(rle: &str) -> Departure {
-        Departure {
-            cells: from_rle(rle).unwrap(),
-            phase: 0,
-        }
-    }
-
-    #[test]
-    fn ships_are_counted_by_kind_whatever_way_they_fly() {
-        let rule: BlockRule = "single-rotation".parse().unwrap();
-        let mut haul = Haul::new(&rule, 0);
-        // The lightest ship twice, the second one flying up, and a diagonal one.
-        haul.identify(departure("$2o2$2o"));
-        haul.identify(Departure {
-            cells: vec![(1, 0), (1, 1), (3, 0), (3, 1)],
-            phase: 0,
-        });
-        haul.identify(departure("2bo$obo$o"));
-        assert_eq!((haul.ships, haul.others, haul.kinds.len()), (3, 0, 2));
-        assert_eq!(haul.kinds[0].count, 2);
-        assert_eq!(haul.kinds[0].motion.displacement, (2, 0));
-        assert_eq!(haul.kinds[1].motion.period, 48);
-    }
-
-    #[test]
-    fn ships_flying_side_by_side_are_counted_each() {
-        let rule: BlockRule = "single-rotation".parse().unwrap();
-        let mut haul = Haul::new(&rule, 0);
-        // The lightest ship, and the same again six rows further down.
-        let mut cells = from_rle("$2o2$2o").unwrap();
-        cells.extend(from_rle("$2o2$2o").unwrap().iter().map(|&(x, y)| (x, y + 6)));
-        for _ in 0..2 {
-            haul.identify(Departure { cells: cells.clone(), phase: 0 });
-        }
-        assert_eq!((haul.ships, haul.others, haul.kinds.len()), (4, 0, 1));
-        assert_eq!(haul.kinds[0].motion.canonical.len(), 4);
-    }
-
-    #[test]
-    fn what_does_not_travel_is_not_a_ship() {
-        let rule: BlockRule = "single-rotation".parse().unwrap();
-        let mut haul = Haul::new(&rule, 0);
-        haul.identify(departure("o"));
-        haul.identify(departure("b2o$b2o"));
-        haul.identify(departure("o"));
-        assert_eq!((haul.ships, haul.others, haul.kinds.len()), (0, 3, 0));
-        assert_eq!(haul.seen.len(), 2, "the second lone cell was recognised");
     }
 }

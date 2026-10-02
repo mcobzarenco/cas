@@ -1,0 +1,9 @@
+[package]
+name = "cas-search"
+version.workspace = true
+edition.workspace = true
+description = "Looks for interesting reversible block cellular automata"
+
+[dependencies]
+cas-core = { path = "../cas-core" }
+clap = { version = "4", features = ["derive"] }

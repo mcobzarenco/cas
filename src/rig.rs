@@ -78,11 +78,15 @@ use bevy::{
     window::{CursorMoved, PrimaryWindow, WindowEvent},
 };
 
-use crate::{
-    catcher::Catcher,
+use cas_core::{
     pattern::{Cell, from_rle},
     rules::BlockRule,
-    sim::{Playback, Rng, Settings, Universe},
+    universe::{Rng, Universe},
+};
+
+use crate::{
+    catcher::Catcher,
+    sim::{Playback, Settings},
     view::ViewState,
 };
 

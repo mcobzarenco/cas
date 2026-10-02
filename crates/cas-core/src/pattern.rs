@@ -29,6 +29,19 @@ pub struct Motion {
     pub canonical: Vec<Cell>,
 }
 
+/// What becomes of a pattern left alone, as far as an [`Analyser`] follows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fate {
+    /// It is back in its starting shape after `period` generations, `displacement` away.
+    Returns { period: u32, displacement: (i32, i32) },
+    /// It has more cells than the analyser follows.
+    Grows,
+    /// It is wider than the analyser follows: its parts have flown apart.
+    Scatters,
+    /// Neither, for as many generations as the analyser follows.
+    Undecided,
+}
+
 /// The directions a pattern can travel in, as far as a square grid tells them apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Heading {
@@ -126,7 +139,15 @@ impl Analyser {
     /// the one travelling furthest right, then furthest down, then with the smallest bounding
     /// box, then first in reading order of its cells.
     pub fn analyse(&self, cells: &[Cell], phase: usize) -> Option<Motion> {
-        let (period, moved, phases) = self.run(cells, phase)?;
+        // Nothing at all is no pattern.
+        if cells.is_empty() {
+            return None;
+        }
+        let mut phases = Vec::new();
+        let fate = self.run(cells, phase, |form| phases.push(form.to_vec()));
+        let Fate::Returns { period, displacement: moved } = fate else {
+            return None;
+        };
         let (canonical, displacement) = phases
             .iter()
             .flat_map(|form| self.orientations.iter().map(move |o| reorient(form, moved, o)))
@@ -141,12 +162,16 @@ impl Analyser {
         })
     }
 
-    /// The pattern's period, how far it moves in it as found, and its form along the way,
-    /// every time the tables start over.
-    fn run(&self, cells: &[Cell], phase: usize) -> Option<(u32, (i32, i32), Vec<Vec<Cell>>)> {
-        if cells.is_empty() {
-            return None;
-        }
+    /// What becomes of the pattern, without working out its canonical form: the quick way to
+    /// tell what stays, what travels and what gets out of hand.
+    pub fn fate(&self, cells: &[Cell], phase: usize) -> Fate {
+        self.run(cells, phase, |_| {})
+    }
+
+    /// Runs the pattern until it is back in its starting shape, as it lies, or until it is
+    /// given up. Along the way `seen` gets its form every time the tables start over, the
+    /// first time included.
+    fn run(&self, cells: &[Cell], phase: usize, mut seen: impl FnMut(&[Cell])) -> Fate {
         let mut phase = phase % self.tables.len();
         let mut pattern = cells.to_vec();
         settle(&mut pattern);
@@ -155,26 +180,26 @@ impl Analyser {
             advance(&mut pattern, self.tables[phase].table());
             phase = (phase + 1) % self.tables.len();
         }
-        let mut phases = vec![pattern.clone()];
+        let start = pattern.clone();
         let mut moved = (0, 0);
         let mut generation = 0;
         loop {
+            seen(&pattern);
             for table in &self.tables {
                 let (dx, dy) = advance(&mut pattern, table.table());
                 moved = (moved.0 + dx, moved.1 + dy);
             }
             generation += self.tables.len() as u32;
-            if pattern == phases[0] {
-                return Some((generation, moved, phases));
-            }
             let (width, height) = extent(&pattern);
-            if generation >= self.max_generations
-                || pattern.len() > self.max_cells
-                || width.max(height) > self.max_extent
-            {
-                return None;
+            if pattern == start {
+                return Fate::Returns { period: generation, displacement: moved };
+            } else if pattern.len() > self.max_cells {
+                return Fate::Grows;
+            } else if width.max(height) > self.max_extent {
+                return Fate::Scatters;
+            } else if generation >= self.max_generations {
+                return Fate::Undecided;
             }
-            phases.push(pattern.clone());
         }
     }
 
@@ -375,7 +400,7 @@ mod tests {
     use super::*;
     use crate::{
         rules::PRESETS,
-        sim::{Rng, Universe},
+        universe::{Rng, Universe},
     };
 
     fn rule(name: &str) -> BlockRule {
@@ -425,6 +450,17 @@ mod tests {
         let mut cells = from_rle("$2o2$2o").unwrap();
         cells.extend([(-20, 1), (-21, 1), (-20, 3), (-21, 3)]);
         assert_eq!(analyser.analyse(&cells, 0), None);
+        assert_eq!(analyser.fate(&cells, 0), Fate::Scatters);
+        // The same told by a fate: the lone cell stays, the ship travels.
+        assert_eq!(analyser.fate(&[(0, 0)], 0), Fate::Returns { period: 4, displacement: (0, 0) });
+        let ship = from_rle("$2o2$2o").unwrap();
+        assert_eq!(analyser.fate(&ship, 0), Fate::Returns { period: 12, displacement: (2, 0) });
+        // In ESPCA-0925bf a single cell grows into a disk; nothing is given the time it takes.
+        let growing = Analyser::new(&BlockRule::from_espca("0925bf").unwrap());
+        assert_eq!(growing.fate(&[(0, 0)], 0), Fate::Grows);
+        let mut impatient = Analyser::new(&rule("single-rotation"));
+        impatient.max_generations = 8;
+        assert_eq!(impatient.fate(&ship, 0), Fate::Undecided);
     }
 
     #[test]
@@ -480,7 +516,7 @@ mod tests {
                 }
                 cells.sort_unstable();
                 cells.dedup();
-                let Some((period, ..)) = analyser.run(&cells, 0) else {
+                let Fate::Returns { period, .. } = analyser.fate(&cells, 0) else {
                     continue;
                 };
                 let parts = analyser.parts(&cells, 0, period);
@@ -575,7 +611,7 @@ mod tests {
                 let cells: Vec<Cell> = (0..3 + rng.next_u64() % 5)
                     .map(|_| ((rng.next_u64() % 5) as i32, (rng.next_u64() % 5) as i32))
                     .collect();
-                let Some((period, moved, _)) = analyser.run(&cells, 0) else {
+                let Fate::Returns { period, displacement: moved } = analyser.fate(&cells, 0) else {
                     continue;
                 };
                 recognised += 1;
@@ -615,7 +651,7 @@ mod tests {
 #[cfg(test)]
 mod morita {
     use super::*;
-    use crate::sim::Universe;
+    use crate::universe::Universe;
 
     const STILL: (i32, i32) = (0, 0);
 
@@ -657,8 +693,10 @@ mod morita {
 
     /// The period of a pattern and how far it moves in it, as it lies.
     fn runs(number: &str, cells: &[Cell]) -> Option<(u32, (i32, i32))> {
-        let (period, moved, _) = Analyser::new(&rule(number)).run(cells, 0)?;
-        Some((period, moved))
+        match Analyser::new(&rule(number)).fate(cells, 0) {
+            Fate::Returns { period, displacement } => Some((period, displacement)),
+            _ => None,
+        }
     }
 
     #[test]

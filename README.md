@@ -1,19 +1,185 @@
 # cas
 
-A sandbox for exploring **reversible block cellular automata**, built on [Bevy](https://bevy.org) 0.19.
+A sandbox for **reversible block cellular automata**: small universes in which nothing is ever
+lost, so that time runs backwards as well as forwards. Written in Rust, on [Bevy](https://bevy.org).
 
-Only *block* CAs on the **Margolus neighbourhood** are supported for now: the grid is cut into
-2×2 blocks, every block is rewritten by a lookup table, and the partition shifts by one cell
-diagonally between generations. Because each table is a permutation of the 16 block states, every
-rule has an exact inverse and time can be run backwards.
+<p align="center">
+  <img src="docs/hero.gif" width="100%" alt="The word cas, written in cells, falls apart into a cloud of cells and gliders; then the generation counter runs backwards and the word comes together again.">
+</p>
 
-A rule is its table: the outcome of each of the 16 block states, written as 16 comma-separated
-numbers with the outcome of block 0 first. Cells of a block count 1, 2, 4, 8 for top-left, top-right,
-bottom-left, bottom-right, so `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` is Single Rotation. This is the
-notation of [dmishin's simulator](https://dmishin.github.io/js-revca) (and of MCell, with an `MS,D`
-prefix and `;` separators), so rules can be exchanged with it.
+The name of the program is written in cells and left to the rule *Critters*, which makes a mess
+of it. Seventy-two generations later time is turned round, and the same rule puts the word back
+together, cell for cell.
 
-Presets, all reversible:
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/spaceships.png" width="100%" alt="The list of spaceships caught under Single rotation: 107 of 7 kinds. Each row has a picture of the ship, its speed and direction, its period, its number of cells and how often it was caught.">
+      <p><b>Spaceships are caught and told apart.</b> What flies out of a blob is taken out at
+      the edge of the grid and run on its own until it repeats, which gives its speed, its
+      period and its direction. Every rule keeps a list of its kinds.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/closeup.png" width="100%" alt="A close view of the grid: a blob of cells on the left, two small spaceships to the right of it, and lines around the cells and around the 2×2 blocks.">
+      <p><b>Every cell, every block.</b> Zoomed in, the cells show, and with them the 2×2 blocks
+      that the next step is going to rewrite. Two spaceships have just left the blob.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/cases.png" width="100%" alt="The rule editor: the sixteen blocks, each with an arrow to what Critters makes of it.">
+      <p><b>Rules are edited by swapping.</b> A rule is sixteen cases, and the only edit is to
+      exchange two outcomes. That keeps the rule reversible whatever you do, so an edit takes
+      effect at once, also while the simulation runs.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/properties.png" width="100%" alt="The properties of Critters, each with a small picture: all rotations and mirrors; dead and alive not interchangeable; cells conserved relative to the vacuum; backwards it is the rule complemented; the vacuum repeats every 2 generations.">
+      <p><b>What follows from the table.</b> The turns and mirrors under which a rule looks the
+      same, what it conserves, how it relates to itself run backwards, and what empty space
+      does under it, each with a picture.</p>
+    </td>
+  </tr>
+</table>
+
+Some of the rules in the menu:
+
+<table>
+  <tr>
+    <td width="25%" valign="top">
+      <img src="docs/rule-fractal.png" width="100%" alt="A pinwheel of five patterned squares joined by diagonal lines.">
+      <p><b>ESPCA-0dca8f</b>: a single cell, a hundred generations on.</p>
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/rule-disk.png" width="100%" alt="A large disk of random-looking cells.">
+      <p><b>ESPCA-0925bf</b>: a single cell grows into a disk, and nobody knows why.</p>
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/rule-gun.png" width="100%" alt="Four streams of small spaceships leaving the centre along the diagonals.">
+      <p><b>Four-way gun</b>: a single cell sends out spaceships for ever.</p>
+    </td>
+    <td width="25%" valign="top">
+      <img src="docs/rule-factory.png" width="100%" alt="A compact blob, with small spaceships flying away from it both ways along a diagonal.">
+      <p><b>Ship factory</b>: a blob that makes the cells it sends away.</p>
+    </td>
+  </tr>
+</table>
+
+And further:
+
+* **Any reversible rule.** 26 have names, the 1536 that look the same after a quarter turn
+  have the numbers Morita gave them, and every one can be given as its table.
+* **Empty space may flicker.** Under rules like Critters the empty world changes with every
+  step. The program shows, paints and counts what differs from it.
+* **Fast.** Grids go up to 4096×4096 cells, and a 256×256 one runs at over a hundred thousand
+  generations a second.
+* **A search.** `cas-search` goes through whole families of rules without a window and picks
+  out the ones in which something is going on. Seven of the rules in the menu are its finds.
+
+```sh
+cargo run --release
+```
+
+## Reversible block cellular automata
+
+A cellular automaton is a grid of cells, each dead or alive, that one fixed rule rewrites step
+by step. In the best known one, Conway's Game of Life, a cell looks at its eight neighbours to
+find out what it becomes. Life forgets: many pictures lead to the same next picture, and there
+is no telling which of them came before.
+
+**Blocks.** A *block* automaton cuts the grid into blocks of 2×2 cells, and a step replaces
+every block by another one, looked up in a table. Nothing outside a block has a say in what
+becomes of it. If the cut were always the same, nothing could ever leave its block, so every
+other step the cut is one cell further to the right and down. A cell then shares its block
+with other cells each time, and that is how things get around. The arrangement is called the
+[Margolus neighbourhood](https://en.wikipedia.org/wiki/Block_cellular_automaton).
+
+<p align="center">
+  <img src="docs/partition.svg" width="620" alt="The same patch of the grid twice: cut into blocks at even generations, and cut into blocks shifted by one cell at odd generations. One cell is marked, with the block it is in.">
+</p>
+
+**Rules.** A block has sixteen states, so a rule is a table of sixteen lines. This one is
+*Single rotation*: a block with exactly one live cell is turned clockwise by a quarter, and
+every other block stays as it is.
+
+<p align="center">
+  <img src="docs/rule.svg" width="890" alt="The sixteen blocks, each with what Single rotation makes of it. Four of them change: the blocks with one live cell.">
+</p>
+
+With the cells of a block counting 1, 2, 4 and 8 (top-left, top-right, bottom-left,
+bottom-right) every block is a number from 0 to 15, and a rule is written as its sixteen
+outcomes, that of block 0 first: the line under the picture.
+
+**Reversible.** If no two lines of the table have the same outcome, the table can be read
+from right to left as well, and every step can be undone. The past of a pattern is then as
+certain as its future, and nothing is ever lost, however much of a mess a rule makes: run
+backwards, it tidies up again. Physics is like that at the smallest scale, which is why
+[reversible automata](https://en.wikipedia.org/wiki/Reversible_cellular_automaton) are
+studied as toy worlds: see Toffoli and Margolus, *Cellular Automata Machines* (1987), and
+Morita, [*Reversible World of Cellular Automata*](https://www.worldscientific.com/worldscibooks/10.1142/13516)
+(2024), where several of the rules in the menu are from. A table is reversible exactly when
+it is a permutation of the sixteen blocks, so there are 16! rules, about 21 trillion, and this
+program runs any of them.
+
+**What a single cell does.** Under Single rotation a lone cell is turned clockwise within its
+block. One step on it is in another block and is turned again, and after four steps it is back
+where it began, having gone round *counter*clockwise:
+
+<p align="center">
+  <img src="docs/orbit.svg" width="864" alt="Five pictures of a lone cell and the block it is in, from generation 0 to 4: it goes round a small square and is back at the start.">
+</p>
+
+**Spaceships.** Four cells put together in the right way do not go round in circles. This
+pattern is back in its shape every 12 steps, two cells further on: a *spaceship*. Nothing can
+move faster than a cell per step, the speed of light of these worlds; this one does a sixth
+of that.
+
+<p align="center">
+  <img src="docs/spaceship.svg" width="768" alt="Four cells flying to the right across a small grid.">
+</p>
+
+**Empty space.** Nothing obliges a rule to leave an empty block empty. Under Critters empty
+space is all dead and all alive in turns, and under other rules it is a texture that repeats
+after up to sixteen steps. The program works out this *vacuum* for any rule from its table,
+and shows, paints and counts what differs from it. Below, a glider of Critters in both views:
+
+<p align="center">
+  <img src="docs/vacuum.svg" width="864" alt="Five generations of a Critters glider, twice: as the cells are, where every other picture is inverted, and as what differs from empty space, where the glider simply moves to the right.">
+</p>
+
+**What makes a world.** Most of the 16! rules turn any pattern into noise. The ones worth
+looking at tend to keep something: the number of cells, as Single rotation and Critters do, or
+a symmetry. [Searching for rules](#searching-for-rules) goes through such families, and is
+how the last group of rules in the menu was found.
+
+## Running
+
+It takes [Rust](https://rustup.rs) (stable). It is developed on Linux, where it also needs the
+Wayland development headers (`libwayland-dev` on Debian and Ubuntu), or `--no-default-features`
+to build for X11 instead. Other systems are untried.
+
+```sh
+cargo run --release                           # the app
+cargo run --release -- --rule ship-factory    # starting with another rule
+cargo run --release -p cas-search -- --help   # the search for rules, see below
+cargo test --release --workspace
+```
+
+| flag | |
+|------|---|
+| `--rule RULE` | the rule to start with: a preset (its name in the tables below, in lower case with hyphens: `critters`, `ship-factory`), Morita's number of a rule (`espca-01c5ef`) or any reversible table (`0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`) |
+| `--width W`<br>`--height H` | the size of the grid: even numbers, 256 unless given |
+| `--init KIND` | what the grid starts with: `blob`, a random square in the middle; `soup`, random cells all over; or `empty` |
+| `--density D`<br>`--seed N` | how dense the blob or the soup is, and the seed it is drawn with |
+| `--threads N` | threads for stepping large grids |
+| `--window WxH` | the size of the window |
+| `--vsync MODE` | `auto`, `on` or `off`: see *Environment notes* |
+
+## The rules
+
+A rule is given as its table, as above: `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` is Single
+rotation. This is the notation of [dmishin's simulator](https://dmishin.github.io/js-revca) (and
+of MCell, with an `MS,D` prefix and `;` separators), so rules can be exchanged with it. The rule
+menu has three groups. From the collections of those two programs:
 
 | preset | what it does |
 |--------|--------------|
@@ -43,7 +209,7 @@ number (see below):
 | **ESPCA-0925bf** | a single cell grows into an almost perfect disk; nobody knows why |
 | **ESPCA-0dca8f** | a single cell grows into shapes that look like fractals |
 
-Rules that this project's own search found (see *Searching for rules*), named after what they do:
+Rules that this project's own search found (see [Searching for rules](#searching-for-rules)), named after what they do:
 
 | preset | what it does |
 |--------|--------------|
@@ -80,24 +246,7 @@ stable patterns do): only those of one fit on a grid here. Its irreversible ESPC
 permutations. And its triangular automata (ETPCA) and the 81-state one need another lattice and
 more states.
 
-## Running
-
-```sh
-cargo run --release
-cargo run --features dev        # dynamic linking: much faster incremental builds while hacking
-cargo run -- --help
-cargo run --release -p cas-search -- --help    # looking for rules, see below
-cargo test --release --workspace
-```
-
-Useful flags: `--rule critters` (a preset: `single-rotation`, `critters`, `bbm`, `bounce-gas`, `hpp-gas`,
-`tron`, `rotations`, `double-rotation`, `string-thing`, `swap-on-diagonal`, or a found one: `steady-blob`,
-`creeping-blob`, `ship-factory`, `plus-ships`, `four-way-gun`, `crossing-fleets`, `diagonal-traffic`),
-`--rule espca-01c5ef` (Morita's number of a rule) or `--rule 0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`
-(any reversible table),
-`--width 512 --height 512`, `--init blob|soup|empty`,
-`--density 0.01`, `--seed 7`, `--threads 4`, `--window 1600x1000`, `--vsync auto|on|off` (see
-*Environment notes*).
+## The app
 
 ### Controls
 
@@ -286,26 +435,32 @@ already flies and nothing stays: cells flying in formation are kinds too.) After
 
 | `--family` | the rules | tables | measured | on four threads |
 |------------|-----------|--------|----------|-----------------|
-| `espca` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 760 | seconds |
-| `half-turn` | look the same after a half turn | 1 105 920 | 277 760 | 25 minutes |
-| `mirror` | look the same in a mirror | 1 105 920 | 551 832 | three quarters of an hour |
-| `conserving` | keep the number of cells of every block, or trade it for the number of dead cells as Critters does | 829 440 | 104 432 | 25 minutes |
+| `espca` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 | seconds |
+| `half-turn` | look the same after a half turn | 1 105 920 | 146 252 | 17 minutes |
+| `mirror` | look the same in a mirror | 1 105 920 | 287 732 | about half an hour |
+| `conserving` | keep the number of cells of every block, or trade it for the number of dead cells as Critters does | 829 440 | 78 712 | 16 minutes |
 | `weighted` | keep a weighted number of cells and not their number | 107 664 | 13 746 | 5 minutes |
 | `random` | `--count` random permutations, drawn with `--seed` | | | |
 
-Rules that differ only by a turn or a mirror, or by a vacuum that flickers and changes nothing
-else, are measured once. `--limit` measures a fair sample of a family, or with `--from` the best
-of a table.
+Rules that make the same world are measured once: those that differ only by a turn or a
+mirror, by the generation of the vacuum's cycle they begin at (Critters, and Critters with dead
+and alive exchanged), or by a vacuum that flickers and changes nothing else. `--limit` measures
+a fair sample of a family, or with `--from` the best of a table.
 
 How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`
 (8000 generations). That is enough to go through a family: what character a rule has hardly
 depends on it. The best deserve a closer look with four times as much, for two reasons. Kinds
 and periods are counts that keep growing with the seeds, so they compare only between rules
 measured alike. And a rule that does not conserve cells may look tame for 8000 generations and
-spread later: of the 48 such rules of the half-turn family, 30 were still tame after 32 000
-generations and 18 after 128 000.
+spread later: of the 25 such rules of the half-turn family, 16 were still tame after 32 000
+generations and 11 after 128 000.
 
-## Test rig
+## Development
+
+`cargo run --features dev` links Bevy dynamically, which makes incremental builds much faster
+while hacking.
+
+### Test rig
 
 The app can drive itself from a tiny script, which is how the UI gets exercised and screenshotted
 during development. The scripts in `rig/` cover the panel, the rule menu and editor, the vacuum
@@ -320,6 +475,7 @@ for script in rig/*.cas; do cargo run --release -- --script-file $script || brea
 |---------|--------|
 | `wait N` | idle for N frames |
 | `shot NAME` | save `shots/NAME.png` (see `--shots`) and wait until it is written |
+| `film NAME FRAMES [N]` | FRAMES screenshots `NAME-000.png`, `NAME-001.png`, …, each followed by a step of N generations (1 unless given; negative goes backwards) |
 | `click NAME [DX DY]` | pointer move / press / release on the UI node named NAME, optionally offset from its centre in logical pixels. Nodes: `PlayPause`, `StepBack`, `StepForward`, `Reverse`, `HideVacuum`, `ShowGrid`, `ShowBlocks`, `FitView`, `Soup`, `Blob`, `Clear`, the sliders `Speed`, `Stride`, `Density`, `Grid`; the rule menu `RuleMenu` and its items `RuleItem:<preset id>`, `RuleItemCustom`; `EditRule`; in the editor `Out0` … `Out15` (the outcomes), `RuleIdentity`, `RuleInverse`, `RuleRandom`, `RuleString`, `RuleEspca` (Morita's number under it), `RuleCopy`, `RulePaste`, `EditorClose`; the size menu `GridSize` and its items `GridSize:<side>`; `OpenBorder`, `Catching`, `Spaceships`; in the spaceship list `CatcherCatching`, `Kind0` … (the kinds, in the order they were first caught), `CatcherForget`, `CatcherNote` (the line next to it), `CatcherClose` |
 | `move NAME [DX DY]` | just move the pointer there |
 | `drag NAME DX DY [left\|right\|middle]` | press at the node's centre, move by (DX, DY), release: drags sliders, paints, pans |
@@ -343,7 +499,14 @@ not depend on what else happens at the machine. Naming a UI node that does not e
 
 Example: `shot a; step 500; step -500; expect_gen 0; shot b` produces two byte-identical PNGs.
 
-## Layout
+### The pictures
+
+The figures in `docs/` are drawn by `cargo run --release -p cas-core --example figures`, with
+the code that steps the grid, so they show what the rules do. The screenshots and the animation
+at the top are taken by the test rig: `docs/tour.cas` and `docs/hero.cas` say how in their first
+lines (it takes `ffmpeg`).
+
+### Layout
 
 A cargo workspace of three crates. `cas-core` is the automata without the app and knows nothing
 of Bevy; the app at the root and the search program are built on it.
@@ -356,6 +519,7 @@ of Bevy; the app at the root and the search program are built on it.
 | `…/census.rs` | counting by kind the spaceships a universe caught |
 | `…/search.rs` | the trials a rule is put through, the cheap ones first, and its report |
 | `…/families.rs` | the families of rules a search goes through: by symmetry, by what is conserved, at random |
+| `crates/cas-core/examples/figures.rs` | draws the figures of this file |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
 | `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, and shows the panel |
@@ -365,6 +529,7 @@ of Bevy; the app at the root and the search program are built on it.
 | `src/ui.rs` | the control panel as cards, one per aspect, and the aspects' colours (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes); sliders and checkboxes on the headless widgets, widget↔state sync |
 | `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the properties with their pictures, the rule string and clipboard |
 | `src/rig.rs`, `rig/*.cas` | the script-driven test rig and the scripts that exercise the app |
+| `docs/` | the pictures of this file, and the rig scripts that take its screenshots |
 
 Stepping backwards from generation *g* applies the inverse table with the partition the forward
 step *g−1 → g* used (even generations: blocks aligned with the origin; odd: shifted by (1, 1)).
@@ -381,7 +546,7 @@ Drawing: the cell array is uploaded as-is into an `R8Uint` texture (one byte per
 zooming, panning and toggling overlays cost nothing on the CPU. Zoomed out, the shader looks at
 every cell under a pixel (up to 8×8) and lets any live cell show, so sparse patterns stay visible.
 
-## Known gaps
+### Known gaps
 
 * Catching takes patterns out of the world, and so does the open border. A mode that only watches
   them cross the edge (so that time stays reversible) is not there yet, and neither is reseeding
@@ -406,7 +571,7 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
 * Buttons give up the keyboard focus so that Space and the arrows always drive the simulation,
   which also means there is no Tab navigation.
 
-## Environment notes
+### Environment notes
 
 * Bevy 0.19.1 comes from crates.io; a checkout of that tag next to this repository (`../bevy`) is
   handy as the API reference, for its `examples/`. Bevy's features are enumerated explicitly in
@@ -417,4 +582,3 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
 * Vsync: `--vsync auto` (the default) waits for vsync only for native Wayland windows, where it
   works fine on both the NVIDIA and the Intel adapter (~60 fps; ~150 fps with `--vsync off`).
   Under XWayland `PresentMode::AutoVsync` stalls the frame loop to about 1 fps, hence the default.
-* The book in `docs/` is git-ignored.

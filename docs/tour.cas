@@ -1,0 +1,41 @@
+# The screenshots of the README, taken by the app itself:
+#
+#   cas --script-file docs/tour.cas
+#
+# and cut to size with ffmpeg, where P is "split[a][b];[a]palettegen=max_colors=64[p];[b][p]paletteuse=dither=none":
+#
+#   ffmpeg -i shots/tour-closeup.png    -vf "crop=736:736:1372:532,$P" docs/closeup.png
+#   ffmpeg -i shots/tour-spaceships.png -vf "crop=736:736:620:252,$P"  docs/spaceships.png
+#   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:28,$P"   docs/cases.png
+#   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:780,$P"  docs/properties.png
+#   ffmpeg -i shots/rule-NAME.png -vf "crop=1702:1702:889:49,scale=640:-1:flags=area,$P" docs/rule-NAME.png
+#   oxipng -o max --strip safe docs/*.png
+wait 25
+
+# A close look: the cells, and the blocks the next step rewrites. Spaceships are leaving a
+# blob of Single rotation.
+step 720; wait 3
+scroll Grid 4; wait 6
+drag Grid -196 38 right; wait 6
+shot tour-closeup
+fit; wait 4
+
+# The blob evaporates through an open border, and what leaves is caught and identified.
+blob; key o; wait 2; key s; wait 3; key k; wait 2
+step 40000; wait 150
+shot tour-spaceships
+key s; wait 3; key k; wait 2; key o; wait 2
+
+# The rule editor, on Critters.
+rule critters; blob; step 300; wait 2; key e; wait 8
+shot tour-editor
+key e; wait 4
+
+# Four rules. The first three have grown from a single cell.
+key g; wait 2; key p; wait 2
+rule espca-0dca8f; clear; paint 128 128; step 100; wait 3; shot rule-fractal
+rule espca-0925bf; clear; paint 128 128; step 225; wait 3; shot rule-disk
+click GridSize; wait 4; click GridSize:128; wait 6
+rule four-way-gun; clear; paint 64 64; step 170; wait 3; shot rule-gun
+rule ship-factory; blob; step 2000; wait 3; shot rule-factory
+quit

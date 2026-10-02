@@ -1,0 +1,18 @@
+# The animation at the top of the README: the name of the program, written in cells, comes
+# apart under Critters and is put together again by running time backwards.
+#
+#   cas --rule critters --width 96 --height 72 --init empty --script-file docs/hero.cas
+#   ffmpeg -framerate 12.5 -pattern_type glob -i 'shots/hero-*.png' -vf \
+#     "scale=1440:-1:flags=area,split[a][b];[a]palettegen=max_colors=64[p];[b][p]paletteuse=dither=none" docs/hero.gif
+wait 25; key p; wait 2; key g; wait 2
+place 4b12o12b12o12b16o$4b12o12b12o12b16o$4b12o12b12o12b16o$4b12o12b12o12b16o$4o12b4o20b4o4b4o$4o12b4o20b4o4b4o$4o12b4o20b4o4b4o$4o12b4o20b4o4b4o$4o24b16o8b12o$4o24b16o8b12o$4o24b16o8b12o$4o24b16o8b12o$4o12b4o4b4o12b4o20b4o$4o12b4o4b4o12b4o20b4o$4o12b4o4b4o12b4o20b4o$4o12b4o4b4o12b4o20b4o$4b12o12b16o4b16o$4b12o12b16o4b16o$4b12o12b16o4b16o$4b12o12b16o4b16o 14 26
+wait 4
+film hero-a 10 0
+film hero-b 36 2
+film hero-c 6 0
+key r; wait 2
+film hero-d 5 0
+film hero-e 36 -2
+film hero-f 8 0
+expect_gen 0
+quit

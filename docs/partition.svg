@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 316" width="620" height="316">
+<rect width="620" height="316" rx="10" fill="#1f1f24"/>
+<rect x="30" y="28" width="240" height="240" fill="#0e0f14"/>
+<rect x="90" y="148" width="60" height="60" fill="#d1528b" fill-opacity="0.32"/>
+<rect x="120" y="148" width="30" height="30" fill="#ffc46b"/>
+<line x1="60" y1="28" x2="60" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="120" y1="28" x2="120" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="180" y1="28" x2="180" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="240" y1="28" x2="240" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="30" y1="58" x2="270" y2="58" stroke="#2c2d37" stroke-width="1"/>
+<line x1="30" y1="118" x2="270" y2="118" stroke="#2c2d37" stroke-width="1"/>
+<line x1="30" y1="178" x2="270" y2="178" stroke="#2c2d37" stroke-width="1"/>
+<line x1="30" y1="238" x2="270" y2="238" stroke="#2c2d37" stroke-width="1"/>
+<line x1="30" y1="28" x2="30" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="90" y1="28" x2="90" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="150" y1="28" x2="150" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="210" y1="28" x2="210" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="270" y1="28" x2="270" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="30" y1="28" x2="270" y2="28" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="30" y1="88" x2="270" y2="88" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="30" y1="148" x2="270" y2="148" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="30" y1="208" x2="270" y2="208" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="30" y1="268" x2="270" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<text x="150" y="296" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#9c9ca8" text-anchor="middle">even generations</text>
+<rect x="350" y="28" width="240" height="240" fill="#0e0f14"/>
+<rect x="440" y="118" width="60" height="60" fill="#d1528b" fill-opacity="0.32"/>
+<rect x="440" y="148" width="30" height="30" fill="#ffc46b"/>
+<line x1="350" y1="28" x2="350" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="410" y1="28" x2="410" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="470" y1="28" x2="470" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="530" y1="28" x2="530" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="590" y1="28" x2="590" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="350" y1="28" x2="590" y2="28" stroke="#2c2d37" stroke-width="1"/>
+<line x1="350" y1="88" x2="590" y2="88" stroke="#2c2d37" stroke-width="1"/>
+<line x1="350" y1="148" x2="590" y2="148" stroke="#2c2d37" stroke-width="1"/>
+<line x1="350" y1="208" x2="590" y2="208" stroke="#2c2d37" stroke-width="1"/>
+<line x1="350" y1="268" x2="590" y2="268" stroke="#2c2d37" stroke-width="1"/>
+<line x1="380" y1="28" x2="380" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="440" y1="28" x2="440" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="500" y1="28" x2="500" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="560" y1="28" x2="560" y2="268" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="350" y1="58" x2="590" y2="58" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="350" y1="118" x2="590" y2="118" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="350" y1="178" x2="590" y2="178" stroke="#d1528b" stroke-width="1.5"/>
+<line x1="350" y1="238" x2="590" y2="238" stroke="#d1528b" stroke-width="1.5"/>
+<text x="470" y="296" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#9c9ca8" text-anchor="middle">odd generations</text>
+</svg>

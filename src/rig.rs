@@ -11,6 +11,8 @@
 //! |---------------------|----------------------------------------------------------------|
 //! | `wait N`            | idle for N frames                                              |
 //! | `shot NAME`         | save `<shots dir>/NAME.png` and wait until it is written        |
+//! | `film NAME FRAMES [N]` | FRAMES screenshots `NAME-000.png`, `NAME-001.png`, ..., each |
+//! |                     | followed by a step of N generations (1 unless given)           |
 //! | `click NAME [DX DY]`| move the pointer to the UI node named NAME (plus an offset in  |
 //! |                     | logical pixels from its centre), press, release                |
 //! | `move NAME [DX DY]` | just move the pointer there                                    |
@@ -160,6 +162,16 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 Ok(args.join(" "))
             }
         };
+        // A film is its frames: a screenshot, then the step to the next one.
+        if command == "film" {
+            let name = arg(0, "a file name")?;
+            let frames: u32 = parse(arg(1, "a number of frames")?)?;
+            let step = args.get(2).map_or(Ok(1), |s| parse(s))?;
+            for frame in 0..frames {
+                commands.extend([Command::Shot(format!("{name}-{frame:03}")), Command::Step(step)]);
+            }
+            continue;
+        }
         let parsed = match command {
             "wait" => Command::Wait(parse(arg(0, "a frame count")?)?),
             "shot" => Command::Shot(arg(0, "a file name")?.to_string()),
@@ -889,6 +901,18 @@ mod tests {
                 Command::ExpectText { name: "Note".into(), text: String::new() },
             ]
         );
+        // A film is so many screenshots, each followed by a step.
+        assert_eq!(
+            parse_script("film ship 2 -3").unwrap(),
+            vec![
+                Command::Shot("ship-000".into()),
+                Command::Step(-3),
+                Command::Shot("ship-001".into()),
+                Command::Step(-3),
+            ]
+        );
+        assert_eq!(parse_script("film ship 1").unwrap()[1], Command::Step(1));
+        assert!(parse_script("film ship").is_err());
         assert!(parse_script("place 2x 3 4").is_err());
         assert!(parse_script("expect_size 64").is_err());
         assert!(parse_script("expect_text").is_err());

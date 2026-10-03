@@ -41,13 +41,7 @@ impl Playback {
 
 impl Default for Playback {
     fn default() -> Self {
-        Self {
-            playing: false,
-            reverse: false,
-            speed: 30.0,
-            stride: 1,
-            budget: Duration::from_millis(12),
-        }
+        Self { playing: false, reverse: false, speed: 30.0, stride: 1, budget: Duration::from_millis(12) }
     }
 }
 
@@ -93,10 +87,7 @@ impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Playback>()
             .init_resource::<Pace>()
-            .configure_sets(
-                Update,
-                (SimSystems::Input, SimSystems::Step, SimSystems::Present).chain(),
-            )
+            .configure_sets(Update, (SimSystems::Input, SimSystems::Step, SimSystems::Present).chain())
             .add_systems(Update, advance.in_set(SimSystems::Step));
     }
 }
@@ -156,9 +147,7 @@ fn advance(
     let elapsed = meter.since.get_or_insert(started).elapsed();
     if elapsed >= PACE_WINDOW {
         let rate = meter.generations as f32 / elapsed.as_secs_f32();
-        pace.set_if_neq(Pace {
-            achieved: meter.lagging.then_some(rate),
-        });
+        pace.set_if_neq(Pace { achieved: meter.lagging.then_some(rate) });
         *meter = PaceMeter::default();
     }
 }
@@ -240,13 +229,7 @@ mod pacing {
     fn work_far_over_budget_is_dropped_not_owed() {
         // 60 frames are due per update, but with no budget only the first one runs, and the
         // stride stays whole.
-        let playback = Playback {
-            playing: true,
-            speed: 240.0,
-            stride: 7,
-            budget: Duration::ZERO,
-            ..default()
-        };
+        let playback = Playback { playing: true, speed: 240.0, stride: 7, budget: Duration::ZERO, ..default() };
         let mut app = app(playback);
         for update in 1..=4 {
             app.update();

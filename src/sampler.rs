@@ -121,7 +121,10 @@ enum Count {
     /// It has more rules than are counted.
     Many,
     /// Its rules, and the worlds they make: the canonical forms among them, each once.
-    Known { rules: Vec<BlockRule>, worlds: Vec<BlockRule> },
+    Known {
+        rules: Vec<BlockRule>,
+        worlds: Vec<BlockRule>,
+    },
 }
 
 impl Default for Sampler {
@@ -209,10 +212,7 @@ impl Plugin for SamplerPlugin {
         let chip_hovered = |chips: Query<(), (With<Want>, Changed<Hovered>)>| !chips.is_empty();
         app.init_resource::<Sampler>().add_systems(
             Update,
-            (
-                hear_counts,
-                show.run_if(resource_changed::<Sampler>.or_eager(chip_hovered)),
-            )
+            (hear_counts, show.run_if(resource_changed::<Sampler>.or_eager(chip_hovered)))
                 .chain()
                 .in_set(SimSystems::Present),
         );
@@ -521,7 +521,8 @@ fn named(family: &Family) -> String {
 
 /// Takes the counts as they come in; only the answer to the last question counts.
 fn hear_counts(mut sampler: ResMut<Sampler>) {
-    let answers: Vec<(u64, Count)> = sampler.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
+    let answers: Vec<(u64, Count)> =
+        sampler.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
     for (asked, count) in answers {
         if asked == sampler.asked {
             sampler.count = count;
@@ -569,7 +570,8 @@ fn show(
         _ => named(&family),
     };
     family_name.set_if_neq(Text(asked_for));
-    let so_many = |count: usize, one: &str| format!("{} {one}{}", group_digits(count as i64), if count == 1 { "" } else { "s" });
+    let so_many =
+        |count: usize, one: &str| format!("{} {one}{}", group_digits(count as i64), if count == 1 { "" } else { "s" });
     let count = match &sampler.count {
         _ if family.constraints().is_empty() => "16! rules".to_string(),
         Count::Counting => "counting…".to_string(),

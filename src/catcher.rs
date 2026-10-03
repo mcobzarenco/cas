@@ -93,9 +93,7 @@ impl Catcher {
 
     /// Spaceships caught under `rule`, and how many kinds they are.
     pub fn totals(&self, rule: &BlockRule) -> (u64, usize) {
-        self.hauls
-            .get(rule)
-            .map_or((0, 0), |haul| (haul.census.ships(), haul.census.kinds().len()))
+        self.hauls.get(rule).map_or((0, 0), |haul| (haul.census.ships(), haul.census.kinds().len()))
     }
 }
 
@@ -181,10 +179,7 @@ fn identify(mut universe: ResMut<Universe>, mut catcher: ResMut<Catcher>) {
     let Catcher { waiting, hauls, begun, .. } = &mut *catcher;
     let haul = hauls.entry(universe.rule().clone()).or_insert_with(|| {
         *begun += 1;
-        Haul {
-            number: *begun,
-            census: Census::new(universe.rule()),
-        }
+        Haul { number: *begun, census: Census::new(universe.rule()) }
     });
     while let Some(departure) = waiting.pop_front() {
         haul.census.record(departure);
@@ -497,10 +492,7 @@ fn picture(cells: &[Cell]) -> impl Scene {
     };
     let ((left, right), (top, bottom)) = (span(|cell| cell.0), span(|cell| cell.1));
     let (width, height) = ((right - left + 1) as f32, (bottom - top + 1) as f32);
-    let side = ((PICTURE.0 - 12.0) / width)
-        .min((PICTURE.1 - 12.0) / height)
-        .floor()
-        .clamp(1.0, 7.0);
+    let side = ((PICTURE.0 - 12.0) / width).min((PICTURE.1 - 12.0) / height).floor().clamp(1.0, 7.0);
     // A hairline between neighbours, once the squares are big enough to spare it.
     let ink = if side >= 4.0 { side - 1.0 } else { side };
     let squares: Vec<_> = cells
@@ -579,10 +571,8 @@ fn pick_kind(
     if click.button != PointerButton::Primary {
         return;
     }
-    let Some((haul, kind)) = catcher
-        .hauls
-        .get(universe.rule())
-        .and_then(|haul| Some((haul.number, haul.census.kinds().get(index)?)))
+    let Some((haul, kind)) =
+        catcher.hauls.get(universe.rule()).and_then(|haul| Some((haul.number, haul.census.kinds().get(index)?)))
     else {
         return;
     };
@@ -619,11 +609,7 @@ fn analyse_kind(
     if click.button != PointerButton::Primary {
         return;
     }
-    if let Some(kind) = catcher
-        .hauls
-        .get(universe.rule())
-        .and_then(|haul| haul.census.kinds().get(index))
-    {
+    if let Some(kind) = catcher.hauls.get(universe.rule()).and_then(|haul| haul.census.kinds().get(index)) {
         // A kind is filed at the start of the vacuum's cycle.
         analysis.study(kind.motion.canonical.clone(), 0, &universe);
     }
@@ -706,7 +692,9 @@ fn sync_list(
         return;
     }
     let hint = match (now.held.is_some(), now.kinds, now.catching) {
-        (true, ..) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
+        (true, ..) => {
+            "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
+        }
         (false, 0, false) => "Catching is off.",
         (false, 0, true) => "No spaceships yet: let a blob run.",
         _ => "Click a pattern to pick it up, or shift-click it to copy it as text.",

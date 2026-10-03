@@ -75,11 +75,7 @@ struct GridAssets {
 
 /// The size of the texture that holds the cells.
 fn extent(universe: &Universe) -> Extent3d {
-    Extent3d {
-        width: universe.width as u32,
-        height: universe.height as u32,
-        depth_or_array_layers: 1,
-    }
+    Extent3d { width: universe.width as u32, height: universe.height as u32, depth_or_array_layers: 1 }
 }
 
 impl FromWorld for GridAssets {
@@ -106,12 +102,7 @@ pub struct ViewState {
 
 impl Default for ViewState {
     fn default() -> Self {
-        Self {
-            center: Vec2::ZERO,
-            zoom: 1.0,
-            fit: true,
-            zoom_range: (0.01, MAX_ZOOM),
-        }
+        Self { center: Vec2::ZERO, zoom: 1.0, fit: true, zoom_range: (0.01, MAX_ZOOM) }
     }
 }
 
@@ -214,10 +205,7 @@ pub struct GridMaterial {
 
 impl GridMaterial {
     pub fn new(cells: Handle<Image>) -> Self {
-        Self {
-            params: GridParams::default(),
-            cells,
-        }
+        Self { params: GridParams::default(), cells }
     }
 
     /// Sets the parameters, which re-prepares the bind group only if they changed.
@@ -269,11 +257,7 @@ impl Framing {
     /// The whole universe in the middle of a node of this logical size.
     pub fn fitted(universe: &Universe, size: Vec2, pixel_ratio: f32) -> Self {
         let grid = Vec2::new(universe.width as f32, universe.height as f32);
-        Self {
-            center: 0.5 * grid,
-            zoom: FIT_MARGIN * (size / grid).min_element(),
-            pixel_ratio,
-        }
+        Self { center: 0.5 * grid, zoom: FIT_MARGIN * (size / grid).min_element(), pixel_ratio }
     }
 }
 
@@ -381,10 +365,7 @@ impl Plugin for ViewPlugin {
             // changes are collected for rendering.
             .add_systems(
                 PostUpdate,
-                (constrain_view, update_material)
-                    .chain()
-                    .after(UiSystems::Layout)
-                    .before(AssetEventSystems),
+                (constrain_view, update_material).chain().after(UiSystems::Layout).before(AssetEventSystems),
             );
     }
 }
@@ -411,9 +392,7 @@ pub fn grid_view() -> impl Scene {
 }
 
 fn attach_material(add: On<Add, GridView>, assets: Res<GridAssets>, mut commands: Commands) {
-    commands
-        .entity(add.entity)
-        .insert(MaterialNode(assets.material.clone()));
+    commands.entity(add.entity).insert(MaterialNode(assets.material.clone()));
 }
 
 /// The texture follows the universe whenever it changed.
@@ -426,11 +405,7 @@ fn upload_cells(universe: Res<Universe>, assets: Res<GridAssets>, mut images: Re
 }
 
 /// Keeps the view fitted while `fit` is set, and within bounds otherwise.
-fn constrain_view(
-    mut view: ResMut<ViewState>,
-    node: Single<&ComputedNode, With<GridView>>,
-    universe: Res<Universe>,
-) {
+fn constrain_view(mut view: ResMut<ViewState>, node: Single<&ComputedNode, With<GridView>>, universe: Res<Universe>) {
     let size = node.size * node.inverse_scale_factor;
     if size.min_element() < 1.0 {
         return;
@@ -441,10 +416,7 @@ fn constrain_view(
     let (center, zoom) = if view.fit {
         (0.5 * grid, fit)
     } else {
-        (
-            view.center.clamp(Vec2::ZERO, grid),
-            view.zoom.clamp(zoom_range.0, zoom_range.1),
-        )
+        (view.center.clamp(Vec2::ZERO, grid), view.zoom.clamp(zoom_range.0, zoom_range.1))
     };
     if view.center != center || view.zoom != zoom || view.zoom_range != zoom_range {
         view.center = center;
@@ -463,11 +435,7 @@ fn update_material(
     node: Single<&ComputedNode, With<GridView>>,
     mut materials: ResMut<Assets<GridMaterial>>,
 ) {
-    let framing = Framing {
-        center: view.center,
-        zoom: view.zoom,
-        pixel_ratio: 1.0 / node.inverse_scale_factor,
-    };
+    let framing = Framing { center: view.center, zoom: view.zoom, pixel_ratio: 1.0 / node.inverse_scale_factor };
     let band = analysis.band.map(|(a, b)| (a.min(b), a.max(b)));
     let params = GridParams::new(&universe, framing, &settings, edge_of(&universe), stamp.placement(&universe), band);
     GridMaterial::set(&mut materials, &assets.material, params);
@@ -494,10 +462,8 @@ fn offset_in(node: &ComputedNode, transform: &UiGlobalTransform, position: Vec2)
 }
 
 fn in_grid(cell: IVec2, universe: &Universe) -> Option<(usize, usize)> {
-    let inside = cell.x >= 0
-        && cell.y >= 0
-        && (cell.x as usize) < universe.width
-        && (cell.y as usize) < universe.height;
+    let inside =
+        cell.x >= 0 && cell.y >= 0 && (cell.x as usize) < universe.width && (cell.y as usize) < universe.height;
     inside.then_some((cell.x as usize, cell.y as usize))
 }
 
@@ -626,11 +592,8 @@ fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canv
         canvas.place_stamp();
         return;
     }
-    *canvas.stroke = Stroke {
-        active: true,
-        erase: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
-        ..default()
-    };
+    *canvas.stroke =
+        Stroke { active: true, erase: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]), ..default() };
     canvas.stroke_to(press.entity, press.pointer_location.position);
 }
 
@@ -718,11 +681,7 @@ mod tests {
 
     #[test]
     fn zooming_keeps_the_anchor_cell_in_place() {
-        let mut view = ViewState {
-            center: Vec2::new(100.0, 80.0),
-            zoom: 4.0,
-            ..default()
-        };
+        let mut view = ViewState { center: Vec2::new(100.0, 80.0), zoom: 4.0, ..default() };
         let offset = Vec2::new(120.0, -40.0);
         let before = view.center + offset / view.zoom;
         view.zoom_about(offset, 2.5);
@@ -734,12 +693,7 @@ mod tests {
 
     #[test]
     fn zooming_at_a_limit_leaves_the_view_alone() {
-        let mut view = ViewState {
-            center: Vec2::new(100.0, 80.0),
-            zoom: 2.0,
-            zoom_range: (2.0, 40.0),
-            ..default()
-        };
+        let mut view = ViewState { center: Vec2::new(100.0, 80.0), zoom: 2.0, zoom_range: (2.0, 40.0), ..default() };
         view.zoom_about(Vec2::new(300.0, 200.0), 1.0 / WHEEL_ZOOM);
         assert_eq!((view.center, view.zoom), (Vec2::new(100.0, 80.0), 2.0));
         view.zoom = 40.0;

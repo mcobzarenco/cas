@@ -39,13 +39,7 @@ impl Census {
 
     /// A census that follows what was caught as far as `analyser` does.
     pub fn with(analyser: Analyser) -> Self {
-        Self {
-            analyser,
-            kinds: Vec::new(),
-            seen: HashMap::new(),
-            ships: 0,
-            others: 0,
-        }
+        Self { analyser, kinds: Vec::new(), seen: HashMap::new(), ships: 0, others: 0 }
     }
 
     /// The kinds, in the order they were first caught.
@@ -99,10 +93,7 @@ impl Census {
 
     /// The kind with this canonical form, new if need be.
     fn file(&mut self, motion: Motion) -> usize {
-        let known = self
-            .kinds
-            .iter()
-            .position(|kind| kind.motion.canonical == motion.canonical);
+        let known = self.kinds.iter().position(|kind| kind.motion.canonical == motion.canonical);
         known.unwrap_or_else(|| {
             self.kinds.push(Kind { motion, count: 0 });
             self.kinds.len() - 1
@@ -116,10 +107,7 @@ mod tests {
     use crate::pattern::from_rle;
 
     fn departure(rle: &str) -> Departure {
-        Departure {
-            cells: from_rle(rle).unwrap(),
-            phase: 0,
-        }
+        Departure { cells: from_rle(rle).unwrap(), phase: 0 }
     }
 
     fn census() -> Census {
@@ -131,10 +119,7 @@ mod tests {
         let mut census = census();
         // The lightest ship twice, the second one flying up, and a diagonal one.
         census.record(departure("$2o2$2o"));
-        census.record(Departure {
-            cells: vec![(1, 0), (1, 1), (3, 0), (3, 1)],
-            phase: 0,
-        });
+        census.record(Departure { cells: vec![(1, 0), (1, 1), (3, 0), (3, 1)], phase: 0 });
         census.record(departure("2bo$obo$o"));
         assert_eq!((census.ships(), census.others(), census.kinds().len()), (3, 0, 2));
         assert_eq!(census.kinds()[0].count, 2);

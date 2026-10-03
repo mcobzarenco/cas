@@ -138,16 +138,12 @@ impl Action {
             Key::Home => "home".to_string(),
             _ => return None,
         };
-        KEYS.iter()
-            .find(|(key, _)| *key == name)
-            .map(|(_, action)| *action)
+        KEYS.iter().find(|(key, _)| *key == name).map(|(_, action)| *action)
     }
 
     /// The key to show next to the control for this action.
     pub fn key(self) -> &'static str {
-        KEYS.iter()
-            .find(|(_, action)| *action == self)
-            .map_or("", |(key, _)| key)
+        KEYS.iter().find(|(_, action)| *action == self).map_or("", |(key, _)| key)
     }
 }
 
@@ -159,10 +155,7 @@ impl Plugin for ActionsPlugin {
             .add_observer(on_activate)
             .add_observer(on_toggle)
             .add_systems(Startup, listen_for_keys)
-            .add_systems(
-                Update,
-                (repeat_steps.in_set(SimSystems::Input), release_focus),
-            );
+            .add_systems(Update, (repeat_steps.in_set(SimSystems::Input), release_focus));
     }
 }
 
@@ -276,11 +269,7 @@ fn perform(
 
 /// How far one step goes: a frame of `stride` generations, or a single one with shift.
 fn frame(keys: &ButtonInput<KeyCode>, playback: &Playback) -> i64 {
-    if keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]) {
-        1
-    } else {
-        playback.stride as i64
-    }
+    if keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]) { 1 } else { playback.stride as i64 }
 }
 
 /// Holding a step button or an arrow key repeats after this delay, at this interval.
@@ -319,11 +308,7 @@ fn repeat_steps(
     }
     let direction = direction.signum();
     if direction == 0 || direction != hold.direction {
-        *hold = Hold {
-            direction,
-            elapsed: 0.0,
-            next: REPEAT_DELAY,
-        };
+        *hold = Hold { direction, elapsed: 0.0, next: REPEAT_DELAY };
         return;
     }
     hold.elapsed += time.delta_secs();
@@ -347,9 +332,7 @@ pub struct KeyboardOwner<'w, 's> {
 
 impl KeyboardOwner<'_, '_> {
     pub fn is_some(&self) -> bool {
-        self.focus
-            .get()
-            .is_some_and(|entity| self.owners.contains(entity))
+        self.focus.get().is_some_and(|entity| self.owners.contains(entity))
     }
 }
 
@@ -384,10 +367,7 @@ mod tests {
     #[test]
     fn keys_find_their_action_and_back() {
         for (i, (key, action)) in KEYS.iter().enumerate() {
-            assert!(
-                KEYS[..i].iter().all(|(other, _)| other != key),
-                "{key} is listed twice"
-            );
+            assert!(KEYS[..i].iter().all(|(other, _)| other != key), "{key} is listed twice");
             let typed = match *key {
                 "space" => Key::Space,
                 "←" => Key::ArrowLeft,

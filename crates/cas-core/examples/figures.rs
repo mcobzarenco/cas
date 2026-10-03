@@ -246,7 +246,9 @@ fn spaceship() {
             places.collect::<Vec<_>>().join(";")
         };
         let animate = |attribute: &str, values: String| {
-            format!(r#"<animate attributeName="{attribute}" values="{values}" calcMode="discrete" dur="{seconds}s" repeatCount="indefinite"/>"#)
+            format!(
+                r#"<animate attributeName="{attribute}" values="{values}" calcMode="discrete" dur="{seconds}s" repeatCount="indefinite"/>"#
+            )
         };
         let (x, y) = patch.corner(start[part].0, start[part].1);
         let _ = writeln!(

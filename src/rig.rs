@@ -106,11 +106,27 @@ use crate::{
 pub enum Command {
     Wait(u32),
     Shot(String),
-    Click { name: String, offset: Vec2 },
-    Move { name: String, offset: Vec2 },
-    Drag { name: String, delta: Vec2, button: MouseButton },
-    Scroll { name: String, lines: f32 },
-    Hold { name: String, frames: u32 },
+    Click {
+        name: String,
+        offset: Vec2,
+    },
+    Move {
+        name: String,
+        offset: Vec2,
+    },
+    Drag {
+        name: String,
+        delta: Vec2,
+        button: MouseButton,
+    },
+    Scroll {
+        name: String,
+        lines: f32,
+    },
+    Hold {
+        name: String,
+        frames: u32,
+    },
     /// Keys pressed in order and released in reverse: `[ControlLeft, KeyA]` is Ctrl+A.
     Key(Vec<KeyCode>),
     Press(KeyCode),
@@ -119,8 +135,16 @@ pub enum Command {
     PressButton(MouseButton),
     ReleaseButton(MouseButton),
     Type(String),
-    Paint { x: usize, y: usize, alive: bool },
-    Place { cells: Vec<Cell>, x: i32, y: i32 },
+    Paint {
+        x: usize,
+        y: usize,
+        alive: bool,
+    },
+    Place {
+        cells: Vec<Cell>,
+        x: i32,
+        y: i32,
+    },
     Play,
     Pause,
     Step(i64),
@@ -137,20 +161,39 @@ pub enum Command {
     /// The window's new size, in logical pixels.
     Window(u32, u32),
     ExpectGeneration(i64),
-    ExpectCell { x: usize, y: usize, alive: bool },
+    ExpectCell {
+        x: usize,
+        y: usize,
+        alive: bool,
+    },
     ExpectRule(BlockRule),
     ExpectSpeed(f32),
     ExpectStride(u32),
     ExpectPopulation(usize),
     ExpectSize(usize, usize),
     ExpectPlaying(bool),
-    ExpectChecked { name: String, checked: bool },
-    ExpectShown { name: String, shown: bool },
-    ExpectText { name: String, text: String },
-    ExpectCaught { ships: u64, kinds: usize },
+    ExpectChecked {
+        name: String,
+        checked: bool,
+    },
+    ExpectShown {
+        name: String,
+        shown: bool,
+    },
+    ExpectText {
+        name: String,
+        text: String,
+    },
+    ExpectCaught {
+        ships: u64,
+        kinds: usize,
+    },
     ExpectClipboard(String),
     /// An expectation that is waited for: tried again at every frame, for so many frames.
-    Until { expectation: Box<Command>, frames: u32 },
+    Until {
+        expectation: Box<Command>,
+        frames: u32,
+    },
     Quit,
 }
 
@@ -180,10 +223,8 @@ impl Command {
 
 pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
     let mut commands = Vec::new();
-    let statements = script
-        .lines()
-        .map(|line| line.split('#').next().unwrap_or_default())
-        .flat_map(|line| line.split(';'));
+    let statements =
+        script.lines().map(|line| line.split('#').next().unwrap_or_default()).flat_map(|line| line.split(';'));
     for raw in statements {
         let line = raw.trim();
         if line.is_empty() {
@@ -193,17 +234,11 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
         let command = words.next().unwrap_or_default();
         let args: Vec<&str> = words.collect();
         let arg = |i: usize, what: &str| -> Result<&str, String> {
-            args.get(i)
-                .copied()
-                .ok_or_else(|| format!("`{command}` needs {what}"))
+            args.get(i).copied().ok_or_else(|| format!("`{command}` needs {what}"))
         };
         // Everything after the command, for arguments that may contain spaces.
         let rest = |what: &str| -> Result<String, String> {
-            if args.is_empty() {
-                Err(format!("`{command}` needs {what}"))
-            } else {
-                Ok(args.join(" "))
-            }
+            if args.is_empty() { Err(format!("`{command}` needs {what}")) } else { Ok(args.join(" ")) }
         };
         // What is waited for is an expectation, written as it would be on its own.
         if command == "until" {
@@ -229,23 +264,16 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
         let parsed = match command {
             "wait" => Command::Wait(parse(arg(0, "a frame count")?)?),
             "shot" => Command::Shot(arg(0, "a file name")?.to_string()),
-            "click" => Command::Click {
-                name: arg(0, "a UI node name")?.to_string(),
-                offset: parse_offset(&args, 1)?,
-            },
-            "move" => Command::Move {
-                name: arg(0, "a UI node name")?.to_string(),
-                offset: parse_offset(&args, 1)?,
-            },
+            "click" => Command::Click { name: arg(0, "a UI node name")?.to_string(), offset: parse_offset(&args, 1)? },
+            "move" => Command::Move { name: arg(0, "a UI node name")?.to_string(), offset: parse_offset(&args, 1)? },
             "drag" => Command::Drag {
                 name: arg(0, "a UI node name")?.to_string(),
                 delta: Vec2::new(parse(arg(1, "dx")?)?, parse(arg(2, "dy")?)?),
                 button: args.get(3).map_or(Ok(MouseButton::Left), |s| parse_button(s))?,
             },
-            "hold" => Command::Hold {
-                name: arg(0, "a UI node name")?.to_string(),
-                frames: parse(arg(1, "a frame count")?)?,
-            },
+            "hold" => {
+                Command::Hold { name: arg(0, "a UI node name")?.to_string(), frames: parse(arg(1, "a frame count")?)? }
+            }
             "scroll" => Command::Scroll {
                 name: arg(0, "a UI node name")?.to_string(),
                 lines: parse(arg(1, "a number of wheel notches")?)?,
@@ -310,10 +338,9 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 name: arg(0, "a UI node name")?.to_string(),
                 shown: parse_bool(arg(1, "on/off")?)?,
             },
-            "expect_text" => Command::ExpectText {
-                name: arg(0, "a UI node name")?.to_string(),
-                text: args[1..].join(" "),
-            },
+            "expect_text" => {
+                Command::ExpectText { name: arg(0, "a UI node name")?.to_string(), text: args[1..].join(" ") }
+            }
             "expect_caught" => Command::ExpectCaught {
                 ships: parse(arg(0, "a number of spaceships")?)?,
                 kinds: parse(arg(1, "a number of kinds")?)?,
@@ -409,10 +436,7 @@ const CHARACTER_KEYS: [(char, KeyCode); 43] = [
 
 fn key_for_char(c: char) -> Option<KeyCode> {
     let c = c.to_ascii_lowercase();
-    CHARACTER_KEYS
-        .iter()
-        .find(|(character, _)| *character == c)
-        .map(|(_, code)| *code)
+    CHARACTER_KEYS.iter().find(|(character, _)| *character == c).map(|(_, code)| *code)
 }
 
 fn parse_key(s: &str) -> Result<KeyCode, String> {
@@ -473,9 +497,7 @@ fn logical_key(code: KeyCode) -> Key {
         _ => CHARACTER_KEYS
             .iter()
             .find(|(_, k)| *k == code)
-            .map_or(Key::Unidentified(NativeKey::Unidentified), |(c, _)| {
-                Key::Character(c.to_string().into())
-            }),
+            .map_or(Key::Unidentified(NativeKey::Unidentified), |(c, _)| Key::Character(c.to_string().into())),
     }
 }
 
@@ -518,8 +540,7 @@ pub struct RigPlugin {
 
 impl Plugin for RigPlugin {
     fn build(&self, app: &mut App) {
-        std::fs::create_dir_all(&self.dir)
-            .unwrap_or_else(|e| panic!("cannot create {}: {e}", self.dir.display()));
+        std::fs::create_dir_all(&self.dir).unwrap_or_else(|e| panic!("cannot create {}: {e}", self.dir.display()));
         app.insert_resource(Rig {
             script: self.script.clone().into(),
             dir: self.dir.clone(),
@@ -530,12 +551,7 @@ impl Plugin for RigPlugin {
             shot: None,
         })
         // Before anything reads this frame's input: picking does so in `First` already.
-        .add_systems(
-            First,
-            drive
-                .after(MessageUpdateSystems)
-                .before(PickingSystems::Input),
-        );
+        .add_systems(First, drive.after(MessageUpdateSystems).before(PickingSystems::Input));
     }
 }
 
@@ -581,33 +597,19 @@ impl Input<'_, '_> {
         let window = *self.window;
         match step {
             InputStep::Move(position) => {
-                let event = CursorMoved {
-                    window,
-                    position,
-                    delta: None,
-                };
+                let event = CursorMoved { window, position, delta: None };
                 self.cursor_moved.write(event.clone());
                 self.window_events.write(WindowEvent::CursorMoved(event));
             }
             InputStep::Button(position, button, state) => {
                 self.send(InputStep::Move(position));
-                let event = MouseButtonInput {
-                    button,
-                    state,
-                    window,
-                };
+                let event = MouseButtonInput { button, state, window };
                 self.mouse_buttons.write(event);
-                self.window_events
-                    .write(WindowEvent::MouseButtonInput(event));
+                self.window_events.write(WindowEvent::MouseButtonInput(event));
             }
             InputStep::Wheel(lines) => {
-                let event = MouseWheel {
-                    unit: MouseScrollUnit::Line,
-                    x: 0.0,
-                    y: lines,
-                    window,
-                    phase: TouchPhase::Moved,
-                };
+                let event =
+                    MouseWheel { unit: MouseScrollUnit::Line, x: 0.0, y: lines, window, phase: TouchPhase::Moved };
                 self.mouse_wheel.write(event);
                 self.window_events.write(WindowEvent::MouseWheel(event));
             }
@@ -692,10 +694,7 @@ fn drive(
     let again = waited.map(|_| command.clone());
 
     let node = |name: &str| {
-        nodes
-            .iter()
-            .find(|(_, n, ..)| n.as_str() == name)
-            .ok_or_else(|| format!("no UI node named {name:?}"))
+        nodes.iter().find(|(_, n, ..)| n.as_str() == name).ok_or_else(|| format!("no UI node named {name:?}"))
     };
     // A node takes up room unless it, or what it is in, is not displayed.
     let shown = |computed: &ComputedNode| computed.size.min_element() > 0.0;
@@ -716,10 +715,7 @@ fn drive(
             Command::Wait(frames) => rig.wait = frames,
             Command::Shot(name) => {
                 let path = rig.dir.join(format!("{name}.png"));
-                let entity = commands
-                    .spawn(Screenshot::primary_window())
-                    .observe(save_to_disk(path))
-                    .id();
+                let entity = commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path)).id();
                 rig.shot = Some(entity);
             }
             Command::Click { name, offset } => {
@@ -735,45 +731,30 @@ fn drive(
                 rig.pointer = at;
                 rig.input.push_back(InputStep::Move(at));
             }
-            Command::Drag {
-                name,
-                delta,
-                button,
-            } => {
+            Command::Drag { name, delta, button } => {
                 let center = locate(&name)?;
                 rig.input.push_back(InputStep::Move(center));
-                rig.input
-                    .push_back(InputStep::Button(center, button, Pressed));
+                rig.input.push_back(InputStep::Button(center, button, Pressed));
                 for i in 1..=DRAG_STEPS {
                     let along = delta * (i as f32 / DRAG_STEPS as f32);
                     rig.input.push_back(InputStep::Move(center + along));
                 }
-                rig.input
-                    .push_back(InputStep::Button(center + delta, button, Released));
+                rig.input.push_back(InputStep::Button(center + delta, button, Released));
             }
             Command::Hold { name, frames } => {
                 let center = locate(&name)?;
                 rig.input.push_back(InputStep::Move(center));
-                rig.input
-                    .push_back(InputStep::Button(center, MouseButton::Left, Pressed));
-                rig.input
-                    .extend(std::iter::repeat_n(InputStep::Idle, frames as usize));
-                rig.input
-                    .push_back(InputStep::Button(center, MouseButton::Left, Released));
+                rig.input.push_back(InputStep::Button(center, MouseButton::Left, Pressed));
+                rig.input.extend(std::iter::repeat_n(InputStep::Idle, frames as usize));
+                rig.input.push_back(InputStep::Button(center, MouseButton::Left, Released));
             }
             Command::Scroll { name, lines } => {
                 let center = locate(&name)?;
-                rig.input.extend([
-                    InputStep::Move(center),
-                    InputStep::Move(center),
-                    InputStep::Wheel(lines),
-                ]);
+                rig.input.extend([InputStep::Move(center), InputStep::Move(center), InputStep::Wheel(lines)]);
             }
             Command::Key(chord) => {
-                rig.input
-                    .extend(chord.iter().map(|&code| InputStep::Key(code, Pressed)));
-                rig.input
-                    .extend(chord.iter().rev().map(|&code| InputStep::Key(code, Released)));
+                rig.input.extend(chord.iter().map(|&code| InputStep::Key(code, Pressed)));
+                rig.input.extend(chord.iter().rev().map(|&code| InputStep::Key(code, Released)));
                 rig.input.push_back(InputStep::Idle);
             }
             Command::Press(code) => rig.input.push_back(InputStep::Key(code, Pressed)),
@@ -791,16 +772,12 @@ fn drive(
                 rig.input.push_back(InputStep::Idle);
             }
             Command::Paint { x, y, alive } => {
-                expect(
-                    x < universe.width && y < universe.height,
-                    format!("cell ({x}, {y}) is outside the grid"),
-                )?;
+                expect(x < universe.width && y < universe.height, format!("cell ({x}, {y}) is outside the grid"))?;
                 universe.set(x, y, alive);
             }
             Command::Place { cells, x, y } => {
                 let on_grid = |&(cx, cy): &Cell| {
-                    (0..universe.width as i32).contains(&(x + cx))
-                        && (0..universe.height as i32).contains(&(y + cy))
+                    (0..universe.width as i32).contains(&(x + cx)) && (0..universe.height as i32).contains(&(y + cy))
                 };
                 expect(cells.iter().all(on_grid), "the pattern does not fit on the grid".into())?;
                 for (cx, cy) in cells {
@@ -841,27 +818,18 @@ fn drive(
                 format!("expected generation {expected}, found {}", universe.generation),
             )?,
             Command::ExpectCell { x, y, alive } => {
-                expect(
-                    x < universe.width && y < universe.height,
-                    format!("cell ({x}, {y}) is outside the grid"),
-                )?;
-                expect(
-                    universe.get(x, y) == alive,
-                    format!("expected cell ({x}, {y}) to be {alive}"),
-                )?;
+                expect(x < universe.width && y < universe.height, format!("cell ({x}, {y}) is outside the grid"))?;
+                expect(universe.get(x, y) == alive, format!("expected cell ({x}, {y}) to be {alive}"))?;
             }
-            Command::ExpectRule(expected) => expect(
-                *universe.rule() == expected,
-                format!("expected rule {expected}, found {}", universe.rule()),
-            )?,
-            Command::ExpectSpeed(expected) => expect(
-                playback.speed == expected,
-                format!("expected speed {expected}, found {}", playback.speed),
-            )?,
-            Command::ExpectStride(expected) => expect(
-                playback.stride == expected,
-                format!("expected stride {expected}, found {}", playback.stride),
-            )?,
+            Command::ExpectRule(expected) => {
+                expect(*universe.rule() == expected, format!("expected rule {expected}, found {}", universe.rule()))?
+            }
+            Command::ExpectSpeed(expected) => {
+                expect(playback.speed == expected, format!("expected speed {expected}, found {}", playback.speed))?
+            }
+            Command::ExpectStride(expected) => {
+                expect(playback.stride == expected, format!("expected stride {expected}, found {}", playback.stride))?
+            }
             Command::ExpectPopulation(expected) => expect(
                 universe.population() == expected,
                 format!("expected population {expected}, found {}", universe.population()),
@@ -870,10 +838,9 @@ fn drive(
                 (universe.width, universe.height) == (width, height),
                 format!("expected a grid of {width}×{height}, found {}×{}", universe.width, universe.height),
             )?,
-            Command::ExpectPlaying(expected) => expect(
-                playback.playing == expected,
-                format!("expected playing to be {expected}"),
-            )?,
+            Command::ExpectPlaying(expected) => {
+                expect(playback.playing == expected, format!("expected playing to be {expected}"))?
+            }
             Command::ExpectChecked { name, checked } => {
                 let (_, _, _, _, found, _) = node(&name)?;
                 expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
@@ -949,10 +916,7 @@ mod tests {
             vec![
                 Command::Wait(30),
                 Command::Shot("start".into()),
-                Command::Click {
-                    name: "PlayPause".into(),
-                    offset: Vec2::ZERO,
-                },
+                Command::Click { name: "PlayPause".into(), offset: Vec2::ZERO },
                 Command::Key(vec![KeyCode::Space]),
                 Command::Key(vec![KeyCode::BracketLeft]),
                 Command::Step(-3),
@@ -961,19 +925,9 @@ mod tests {
                 Command::Soup(Some(0.5)),
                 Command::Paint { x: 3, y: 4, alive: false },
                 Command::Quit,
-                Command::Click {
-                    name: "Speed".into(),
-                    offset: Vec2::new(-40.0, 0.0),
-                },
-                Command::Drag {
-                    name: "Grid".into(),
-                    delta: Vec2::new(30.0, -20.0),
-                    button: MouseButton::Right,
-                },
-                Command::Scroll {
-                    name: "Grid".into(),
-                    lines: 3.0,
-                },
+                Command::Click { name: "Speed".into(), offset: Vec2::new(-40.0, 0.0) },
+                Command::Drag { name: "Grid".into(), delta: Vec2::new(30.0, -20.0), button: MouseButton::Right },
+                Command::Scroll { name: "Grid".into(), lines: 3.0 },
                 Command::ExpectCell { x: 1, y: 2, alive: true },
                 Command::Fit,
                 Command::Key(vec![KeyCode::ControlLeft, KeyCode::KeyA]),
@@ -993,19 +947,14 @@ mod tests {
 
     #[test]
     fn keys_can_be_held_and_state_checked() {
-        let script = parse_script(
-            "press Shift; drag Grid 60 0; release Shift; expect_population 12; expect_playing off",
-        )
-        .unwrap();
+        let script =
+            parse_script("press Shift; drag Grid 60 0; release Shift; expect_population 12; expect_playing off")
+                .unwrap();
         assert_eq!(
             script,
             vec![
                 Command::Press(KeyCode::ShiftLeft),
-                Command::Drag {
-                    name: "Grid".into(),
-                    delta: Vec2::new(60.0, 0.0),
-                    button: MouseButton::Left,
-                },
+                Command::Drag { name: "Grid".into(), delta: Vec2::new(60.0, 0.0), button: MouseButton::Left },
                 Command::Release(KeyCode::ShiftLeft),
                 Command::ExpectPopulation(12),
                 Command::ExpectPlaying(false),

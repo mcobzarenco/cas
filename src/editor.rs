@@ -22,10 +22,7 @@ use bevy::{
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
-    text::{
-        EditableText, FontSource, FontSourceTemplate, FontWeight, LetterSpacing, TextEdit,
-        TextEditChange,
-    },
+    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, LetterSpacing, TextEdit, TextEditChange},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
     window::SystemCursorIcon,
 };
@@ -55,26 +52,11 @@ const VACUUM_CELL: f32 = 6.0;
 /// Where a point just right of the top of a square ends up under each way of turning and
 /// mirroring it, as `(x, y)` from the middle: first as it is, then in the order of
 /// [`TURNS_AND_MIRRORS`]. The ones a rule is symmetric under are a picture of its symmetry.
-const ORBIT: [(f32, f32); 8] = [
-    (6.0, -16.0),
-    (16.0, 6.0),
-    (-6.0, 16.0),
-    (-16.0, -6.0),
-    (-6.0, -16.0),
-    (6.0, 16.0),
-    (-16.0, 6.0),
-    (16.0, -6.0),
-];
+const ORBIT: [(f32, f32); 8] =
+    [(6.0, -16.0), (16.0, 6.0), (-6.0, 16.0), (-16.0, -6.0), (-6.0, -16.0), (6.0, 16.0), (-16.0, 6.0), (16.0, -6.0)];
 
 /// The cases, one rotation orbit per row: the blocks in a row are quarter turns of each other.
-const ORBITS: [&[u8]; 6] = [
-    &[0],
-    &[1, 2, 8, 4],
-    &[3, 10, 12, 5],
-    &[6, 9],
-    &[7, 11, 14, 13],
-    &[15],
-];
+const ORBITS: [&[u8]; 6] = [&[0], &[1, 2, 8, 4], &[3, 10, 12, 5], &[6, 9], &[7, 11, 14, 13], &[15]];
 
 #[derive(Resource, Default)]
 pub struct RuleEditor {
@@ -217,25 +199,18 @@ pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut App) {
-        let outcome_hovered =
-            |outcomes: Query<(), (With<Outcome>, Changed<Hovered>)>| !outcomes.is_empty();
-        app.init_resource::<RuleEditor>()
-            .add_observer(use_monospace)
-            .add_systems(
-                Update,
-                (
-                    follow_rule.run_if(rule_changed),
-                    sync_findings.run_if(rule_changed),
-                    sync_editor.run_if(
-                        rule_changed
-                            .or_eager(resource_changed::<RuleEditor>)
-                            .or_eager(outcome_hovered),
-                    ),
-                    sync_rule_string,
-                )
-                    .chain()
-                    .in_set(SimSystems::Present),
-            );
+        let outcome_hovered = |outcomes: Query<(), (With<Outcome>, Changed<Hovered>)>| !outcomes.is_empty();
+        app.init_resource::<RuleEditor>().add_observer(use_monospace).add_systems(
+            Update,
+            (
+                follow_rule.run_if(rule_changed),
+                sync_findings.run_if(rule_changed),
+                sync_editor.run_if(rule_changed.or_eager(resource_changed::<RuleEditor>).or_eager(outcome_hovered)),
+                sync_rule_string,
+            )
+                .chain()
+                .in_set(SimSystems::Present),
+        );
     }
 }
 
@@ -522,78 +497,81 @@ fn findings() -> impl Scene {
     // An icon or two that say how the rule run backwards relates to the rule.
     let formula = |finding: Finding, color: Color| bsn_list![(icons::icon("", 20.0, color) template_value(finding))];
     let tiles: Vec<_> = (0..16).map(vacuum_tile).collect();
-    section("PROPERTIES", bsn_list![
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(6),
-            }
-            Children [
-                finding("SYMMETRY", Finding::Symmetry, symmetry_picture()),
-                finding("DEAD AND ALIVE", Finding::States, sign(icons::STATES, Constraint::Complement)),
-            ]
-        ),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(6),
-            }
-            Children [
-                finding("CELL COUNT", Finding::CellCount, flow_picture()),
-                finding("TIME REVERSAL", Finding::Reversed, formula(Finding::ReversedFormula, palette::LIGHT_GRAY_1)),
-            ]
-        ),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(6),
-            }
-            Children [
-                finding("BLOCKS", Finding::Blocks, blocks_picture()),
-                finding("MOMENTUM", Finding::Momentum, sign(icons::MOMENTUM, Constraint::Momentum)),
-            ]
-        ),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(6),
-            }
-            Children [
-                finding("PARITY", Finding::Parity, sign(icons::PARITY, Constraint::Parity)),
-                finding("SUPERPOSITION", Finding::Linear, sign(icons::LINEAR, Constraint::Linear)),
-            ]
-        ),
-        (
-            // The empty world through the generations of its cycle.
-            tile()
-            Children [
-                (
-                    Node {
-                        width: px(GLYPH),
-                        flex_shrink: 0.0,
-                    }
-                    Children [ label("VACUUM") ]
-                ),
-                (
-                    Node {
-                        flex_direction: FlexDirection::Row,
-                        flex_wrap: FlexWrap::Wrap,
-                        column_gap: px(3),
-                        row_gap: px(3),
-                        flex_shrink: 0.0,
-                        // Eight to a row: the longest cycle takes two.
-                        max_width: px(8.0 * (2.0 * VACUUM_CELL + 6.0) - 3.0),
-                    }
-                    Children [ { tiles } ]
-                ),
-                (
-                    #FindingVacuum
-                    value("") template_value(Finding::Vacuum)
-                    Node { flex_grow: 1.0, flex_basis: px(0) }
-                ),
-            ]
-        ),
-    ])
+    section(
+        "PROPERTIES",
+        bsn_list![
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    finding("SYMMETRY", Finding::Symmetry, symmetry_picture()),
+                    finding("DEAD AND ALIVE", Finding::States, sign(icons::STATES, Constraint::Complement)),
+                ]
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    finding("CELL COUNT", Finding::CellCount, flow_picture()),
+                    finding("TIME REVERSAL", Finding::Reversed, formula(Finding::ReversedFormula, palette::LIGHT_GRAY_1)),
+                ]
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    finding("BLOCKS", Finding::Blocks, blocks_picture()),
+                    finding("MOMENTUM", Finding::Momentum, sign(icons::MOMENTUM, Constraint::Momentum)),
+                ]
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    finding("PARITY", Finding::Parity, sign(icons::PARITY, Constraint::Parity)),
+                    finding("SUPERPOSITION", Finding::Linear, sign(icons::LINEAR, Constraint::Linear)),
+                ]
+            ),
+            (
+                // The empty world through the generations of its cycle.
+                tile()
+                Children [
+                    (
+                        Node {
+                            width: px(GLYPH),
+                            flex_shrink: 0.0,
+                        }
+                        Children [ label("VACUUM") ]
+                    ),
+                    (
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: px(3),
+                            row_gap: px(3),
+                            flex_shrink: 0.0,
+                            // Eight to a row: the longest cycle takes two.
+                            max_width: px(8.0 * (2.0 * VACUUM_CELL + 6.0) - 3.0),
+                        }
+                        Children [ { tiles } ]
+                    ),
+                    (
+                        #FindingVacuum
+                        value("") template_value(Finding::Vacuum)
+                        Node { flex_grow: 1.0, flex_basis: px(0) }
+                    ),
+                ]
+            ),
+        ],
+    )
 }
 
 /// The box a finding is shown in.
@@ -1065,11 +1043,7 @@ fn block(input: u8, outcome: bool) -> impl Scene {
 }
 
 fn block_cell(input: u8, bit: u8, outcome: bool) -> impl Scene {
-    let cell = BlockCell {
-        input,
-        bit,
-        outcome,
-    };
+    let cell = BlockCell { input, bit, outcome };
     bsn! {
         Node {
             width: px(CELL),
@@ -1102,10 +1076,7 @@ fn outcome_clicked(
             let mut rule = universe.rule().clone();
             rule.swap_outcomes(first, input);
             universe.set_rule(rule);
-            editor.say(
-                format!("Swapped the outcomes of blocks {first} and {input}."),
-                universe.rule(),
-            );
+            editor.say(format!("Swapped the outcomes of blocks {first} and {input}."), universe.rule());
         }
     }
 }
@@ -1175,11 +1146,7 @@ fn paste_rule(
 
 /// The rule string reads better in a fixed-width font. The text input's own scene already
 /// sets a `TextFont`, which a second one in ours would duplicate, so it is replaced here.
-fn use_monospace(
-    add: On<Add, RuleStringInput>,
-    assets: Res<AssetServer>,
-    mut commands: Commands,
-) {
+fn use_monospace(add: On<Add, RuleStringInput>, assets: Res<AssetServer>, mut commands: Commands) {
     commands.entity(add.entity).insert(TextFont {
         font: FontSource::Handle(assets.load(fonts::MONO)),
         font_size: FontSize::Px(12.0),
@@ -1204,15 +1171,9 @@ fn sync_editor(
     editor: Res<RuleEditor>,
     universe: Res<Universe>,
     mut panel: Single<&mut Node, (With<EditorPanel>, Without<Status>)>,
-    mut cells: Query<
-        (&BlockCell, &mut BackgroundColor),
-        (Without<CaseCard>, Without<Outcome>),
-    >,
+    mut cells: Query<(&BlockCell, &mut BackgroundColor), (Without<CaseCard>, Without<Outcome>)>,
     mut cards: Query<(&CaseCard, &mut BackgroundColor), (Without<BlockCell>, Without<Outcome>)>,
-    mut outcomes: Query<
-        (&Outcome, &Hovered, &mut BackgroundColor),
-        (Without<BlockCell>, Without<CaseCard>),
-    >,
+    mut outcomes: Query<(&Outcome, &Hovered, &mut BackgroundColor), (Without<BlockCell>, Without<CaseCard>)>,
     mut status: Single<(&mut Text, &mut Node), (With<Status>, Without<EditorPanel>)>,
 ) {
     let table = universe.rule().table();
@@ -1227,11 +1188,7 @@ fn sync_editor(
     }
     // Cases the rule actually changes stand out from the ones it leaves alone.
     for (card, mut color) in &mut cards {
-        color.0 = if table[card.0 as usize] != card.0 {
-            palette::GRAY_2
-        } else {
-            Color::NONE
-        };
+        color.0 = if table[card.0 as usize] != card.0 { palette::GRAY_2 } else { Color::NONE };
     }
     for (outcome, hovered, mut frame) in &mut outcomes {
         frame.0 = if editor.selected == Some(outcome.0) {
@@ -1242,10 +1199,7 @@ fn sync_editor(
             palette::GRAY_3
         };
     }
-    let message = editor
-        .typing_error
-        .clone()
-        .or_else(|| editor.note.as_ref().map(|(message, _)| message.clone()));
+    let message = editor.typing_error.clone().or_else(|| editor.note.as_ref().map(|(message, _)| message.clone()));
     // With nothing to say the line is not there at all.
     let (text, line) = &mut *status;
     let display = if message.is_some() { Display::Flex } else { Display::None };
@@ -1333,7 +1287,8 @@ mod tests {
 
         // Cells are conserved: every block keeps its count. Critters does so relative to
         // its vacuum, which is what the picture shows.
-        let diagonal: [[f32; 5]; 5] = std::array::from_fn(|before| std::array::from_fn(|after| (before == after) as u8 as f32));
+        let diagonal: [[f32; 5]; 5] =
+            std::array::from_fn(|before| std::array::from_fn(|after| (before == after) as u8 as f32));
         assert_eq!(flow(&rule("single-rotation")), diagonal);
         assert_eq!(flow(&rule("critters")), diagonal);
         // In ESPCA-0945df a lone cell becomes two, and four of the six pairs become one.

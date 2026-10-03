@@ -303,10 +303,9 @@ impl fmt::Display for RuleError {
         match self {
             Self::Length(n) => write!(f, "a rule has 16 entries, found {n}"),
             Self::Entry(entry) => write!(f, "{entry:?} is not a block state (0–15)"),
-            Self::NotReversible { output, inputs: (a, b) } => write!(
-                f,
-                "not reversible: blocks {a} and {b} both become {output}"
-            ),
+            Self::NotReversible { output, inputs: (a, b) } => {
+                write!(f, "not reversible: blocks {a} and {b} both become {output}")
+            }
             Self::Espca(number) => write!(
                 f,
                 "{number:?} is not the number of an ESPCA: six hexadecimal digits like 01c5ef, \
@@ -390,10 +389,7 @@ impl BlockRule {
             }
             let earlier = inverse[output as usize];
             if earlier != u8::MAX {
-                return Err(RuleError::NotReversible {
-                    output,
-                    inputs: (earlier, input as u8),
-                });
+                return Err(RuleError::NotReversible { output, inputs: (earlier, input as u8) });
             }
             inverse[output as usize] = input as u8;
         }
@@ -425,10 +421,7 @@ impl BlockRule {
 
     /// The rule that undoes this one.
     pub fn inverted(&self) -> Self {
-        Self {
-            table: self.inverse,
-            inverse: self.table,
-        }
+        Self { table: self.inverse, inverse: self.table }
     }
 
     /// Exchanges the outcomes of two block states. This is the elementary edit that keeps a
@@ -518,8 +511,7 @@ impl BlockRule {
             .into_iter()
             .map(|vacuum| {
                 let after = self.table[vacuum as usize];
-                let table =
-                    std::array::from_fn(|block| self.table[block ^ vacuum as usize] ^ after);
+                let table = std::array::from_fn(|block| self.table[block ^ vacuum as usize] ^ after);
                 BlockRule::new(table).expect("a permutation relabelled is a permutation")
             })
             .collect()
@@ -542,9 +534,8 @@ impl BlockRule {
     }
 
     pub fn population(&self) -> Population {
-        let conserves = |rule: &BlockRule| {
-            (0..16u8).all(|state| popcount(rule.table[state as usize]) == popcount(state))
-        };
+        let conserves =
+            |rule: &BlockRule| (0..16u8).all(|state| popcount(rule.table[state as usize]) == popcount(state));
         if conserves(self) {
             Population::Conserved
         } else if self.relative_to_vacuum().iter().all(conserves) {
@@ -571,9 +562,7 @@ impl BlockRule {
 
     /// Does the rule give the same result whether a block is transformed before or after it?
     pub fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
-        (0..16u8).all(|state| {
-            self.table[transform(state) as usize] == transform(self.table[state as usize])
-        })
+        (0..16u8).all(|state| self.table[transform(state) as usize] == transform(self.table[state as usize]))
     }
 
     pub fn symmetry(&self) -> Symmetry {
@@ -640,7 +629,8 @@ impl BlockRule {
                 }
             }
         }
-        BlockRule::new(least.expect("the rule itself is among them")).expect("a permutation relabelled is a permutation")
+        BlockRule::new(least.expect("the rule itself is among them"))
+            .expect("a permutation relabelled is a permutation")
     }
 
     /// The rule as it is for a world that begins at a later generation of the vacuum's cycle,
@@ -655,7 +645,8 @@ impl BlockRule {
             // An empty block has to become the vacuum of the generation after, as the
             // blocks of this one see it.
             let empty = rotate_180(vacuum[generation] ^ vacuum[(generation + 1) % vacuum.len()]);
-            BlockRule::new(relative.table.map(|outcome| outcome ^ empty)).expect("a permutation relabelled is a permutation")
+            BlockRule::new(relative.table.map(|outcome| outcome ^ empty))
+                .expect("a permutation relabelled is a permutation")
         };
         self.relative_to_vacuum().iter().enumerate().map(later).collect()
     }
@@ -667,9 +658,7 @@ impl BlockRule {
             let through = |block| {
                 if complemented { complement(transform(block)) } else { transform(block) }
             };
-            (0..16u8).all(|state| {
-                self.inverse[through(state) as usize] == through(self.table[state as usize])
-            })
+            (0..16u8).all(|state| self.inverse[through(state) as usize] == through(self.table[state as usize]))
         };
         if self.table == self.inverse {
             Reversed::SameRule
@@ -707,10 +696,7 @@ impl FromStr for BlockRule {
                 .collect()
         };
         let wanted = key(s);
-        if let Some(preset) = PRESETS
-            .iter()
-            .find(|preset| key(preset.id) == wanted || key(preset.name) == wanted)
-        {
+        if let Some(preset) = PRESETS.iter().find(|preset| key(preset.id) == wanted || key(preset.name) == wanted) {
             return Ok(preset.rule());
         }
         if let Some(number) = wanted.strip_prefix("espca") {
@@ -722,10 +708,8 @@ impl FromStr for BlockRule {
             Some(prefix) if prefix.eq_ignore_ascii_case("MS,D") => &body[4..],
             _ => body,
         };
-        let entries: Vec<&str> = body
-            .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
-            .filter(|entry| !entry.is_empty())
-            .collect();
+        let entries: Vec<&str> =
+            body.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).filter(|entry| !entry.is_empty()).collect();
         let is_number = |entry: &&str| entry.bytes().all(|b| b.is_ascii_digit());
         if entries.is_empty() || !entries.iter().all(is_number) {
             let ids: Vec<_> = PRESETS.iter().map(|preset| preset.id).collect();
@@ -740,9 +724,7 @@ impl FromStr for BlockRule {
         }
         let mut table = [0u8; 16];
         for (slot, entry) in table.iter_mut().zip(&entries) {
-            *slot = entry
-                .parse()
-                .map_err(|_| RuleError::Entry(entry.to_string()).to_string())?;
+            *slot = entry.parse().map_err(|_| RuleError::Entry(entry.to_string()).to_string())?;
         }
         Self::new(table).map_err(|error| error.to_string())
     }
@@ -818,7 +800,8 @@ pub const HEAVIEST: u8 = 4;
 /// lighter one in larger numbers.
 pub fn weightings() -> Vec<[u8; 4]> {
     let weights = || 1..=HEAVIEST;
-    let all = weights().flat_map(|a| weights().flat_map(move |b| weights().flat_map(move |c| weights().map(move |d| [a, b, c, d]))));
+    let all = weights()
+        .flat_map(|a| weights().flat_map(move |b| weights().flat_map(move |c| weights().map(move |d| [a, b, c, d]))));
     let common = |weights: &[u8; 4]| (2..=HEAVIEST).any(|divisor| weights.iter().all(|weight| weight % divisor == 0));
     let mut all: Vec<[u8; 4]> = all.filter(|weights| !common(weights)).collect();
     all.sort_by_key(|weights| weights.iter().map(|&weight| weight as u32).sum::<u32>());
@@ -952,14 +935,8 @@ mod tests {
                 _ => b,
             })
         );
-        assert_eq!(
-            preset("hpp-gas"),
-            from_fn(|b| if diagonal(b) { complement(b) } else { rotate_180(b) })
-        );
-        assert_eq!(
-            preset("tron"),
-            from_fn(|b| if b == 0 || b == 15 { complement(b) } else { b })
-        );
+        assert_eq!(preset("hpp-gas"), from_fn(|b| if diagonal(b) { complement(b) } else { rotate_180(b) }));
+        assert_eq!(preset("tron"), from_fn(|b| if b == 0 || b == 15 { complement(b) } else { b }));
         assert_eq!(
             preset("rotations"),
             from_fn(|b| match popcount(b) {
@@ -976,10 +953,7 @@ mod tests {
                 _ => b,
             })
         );
-        assert_eq!(
-            preset("string-thing"),
-            from_fn(|b| if popcount(b) == 2 { complement(b) } else { b })
-        );
+        assert_eq!(preset("string-thing"), from_fn(|b| if popcount(b) == 2 { complement(b) } else { b }));
         assert_eq!(preset("swap-on-diagonal"), from_fn(rotate_180));
 
         for id in ["bbm", "bounce-gas", "hpp-gas", "string-thing", "swap-on-diagonal"] {
@@ -1289,7 +1263,10 @@ mod tests {
             let (world, mut stood_for) = (rule.world(), canonical.world());
             let same = |stood_for: &[BlockRule]| {
                 let seen = |transform: Option<fn(u8) -> u8>| -> Vec<BlockRule> {
-                    stood_for.iter().map(|table| transform.map_or(table.clone(), |transform| table.seen_through(transform))).collect()
+                    stood_for
+                        .iter()
+                        .map(|table| transform.map_or(table.clone(), |transform| table.seen_through(transform)))
+                        .collect()
                 };
                 seen(None) == world || TURNS_AND_MIRRORS.iter().any(|&transform| seen(Some(transform)) == world)
             };
@@ -1447,14 +1424,8 @@ mod tests {
         let single_rotation = preset("single-rotation");
         assert_eq!(single_rotation.to_string(), "0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15");
         assert_eq!("SingleRotation".parse(), Ok(single_rotation.clone()));
-        assert_eq!(
-            "MS,D0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(),
-            Ok(single_rotation.clone())
-        );
-        assert_eq!(
-            "Ms,d0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(),
-            Ok(single_rotation.clone())
-        );
+        assert_eq!("MS,D0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(), Ok(single_rotation.clone()));
+        assert_eq!("Ms,d0;2;8;3;1;5;6;7;4;9;10;11;12;13;14;15".parse(), Ok(single_rotation.clone()));
         assert_eq!(" 0 2 8 3 1 5 6 7  4 9 10 11 12 13 14 15 ".parse(), Ok(single_rotation.clone()));
         // Morita's numbers, also of rules that are not presets.
         for text in ["ESPCA-04cadf", "espca-04cadf", "espca 04CADF", "Espca04cadf"] {
@@ -1473,14 +1444,8 @@ mod tests {
         assert!(parse("+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15").contains("unknown rule"));
         assert!(parse("t,r,o,n").contains("unknown rule"));
         // The "sand" rule of the MCell collection is not reversible.
-        assert_eq!(
-            parse("0,4,8,12,4,12,12,13,8,12,12,14,12,13,14,15"),
-            "not reversible: blocks 1 and 4 both become 4"
-        );
-        assert_eq!(
-            BlockRule::new([0; 16]),
-            Err(RuleError::NotReversible { output: 0, inputs: (0, 1) })
-        );
+        assert_eq!(parse("0,4,8,12,4,12,12,13,8,12,12,14,12,13,14,15"), "not reversible: blocks 1 and 4 both become 4");
+        assert_eq!(BlockRule::new([0; 16]), Err(RuleError::NotReversible { output: 0, inputs: (0, 1) }));
         // The book's example of an irreversible ESPCA (Example 2.2), and numbers that are
         // none: too short, or without the symmetry.
         assert!(parse("espca-09458f").starts_with("not reversible"));

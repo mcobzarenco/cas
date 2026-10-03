@@ -17,9 +17,7 @@ use std::{
     },
 };
 
-use crate::rules::{
-    BlockRule, anti_transpose, flip, mirror, rotate_180, rotate_ccw, rotate_cw, transpose,
-};
+use crate::rules::{BlockRule, anti_transpose, flip, mirror, rotate_180, rotate_ccw, rotate_cw, transpose};
 
 /// `(x, y)`, with `y` pointing down.
 pub type Cell = (i32, i32);
@@ -130,8 +128,13 @@ pub struct Piece {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceKind {
     StillLife,
-    Oscillator { period: u32 },
-    Spaceship { period: u32, displacement: (i32, i32) },
+    Oscillator {
+        period: u32,
+    },
+    Spaceship {
+        period: u32,
+        displacement: (i32, i32),
+    },
     Grows,
     Scatters,
     Undecided,
@@ -301,11 +304,7 @@ impl Analyser {
                 let reading = |cells: &[Cell]| cells.iter().map(|&(x, y)| (y, x)).collect::<Vec<_>>();
                 (Reverse(a_moved), area(a), reading(a)).cmp(&(Reverse(b_moved), area(b), reading(b)))
             })?;
-        Some(Motion {
-            period,
-            displacement,
-            canonical,
-        })
+        Some(Motion { period, displacement, canonical })
     }
 
     /// What becomes of the pattern, without working out its canonical form: the quick way to
@@ -502,11 +501,16 @@ impl Analyser {
     fn follow(&self, cells: &[Cell], phase: usize) -> (Fate, bool, f32, u32) {
         let mut still = true;
         let mut populations = Vec::new();
-        let fate = self.run(cells, phase, |_| {}, |from, pattern, moved| {
-            let in_place = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1));
-            still &= in_place.eq(from.iter().copied());
-            populations.push(pattern.len());
-        });
+        let fate = self.run(
+            cells,
+            phase,
+            |_| {},
+            |from, pattern, moved| {
+                let in_place = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1));
+                still &= in_place.eq(from.iter().copied());
+                populations.push(pattern.len());
+            },
+        );
         (fate, still, growth_of(&populations), populations.len() as u32)
     }
 
@@ -578,10 +582,7 @@ impl Analyser {
             advance_groups(&mut pattern, table.table(), &mut groups);
         }
         let first = root(&mut groups, 0);
-        (0..cells.len())
-            .filter(|&index| root(&mut groups, index) == first)
-            .map(|index| cells[index])
-            .collect()
+        (0..cells.len()).filter(|&index| root(&mut groups, index) == first).map(|index| cells[index]).collect()
     }
 
     /// The pattern taken apart into the groups of cells that never meet, where cells meet by
@@ -644,9 +645,7 @@ fn place(&(x, y): &Cell) -> ((i32, i32), u8) {
 /// ones, and coordinates are relative to a corner of those.
 fn cells_of(block: (i32, i32), state: u8) -> impl Iterator<Item = Cell> {
     let (y, x) = block;
-    (0..4)
-        .filter(move |bit| (state >> bit) & 1 == 1)
-        .map(move |bit| (2 * x + (bit & 1) - 1, 2 * y + (bit >> 1) - 1))
+    (0..4).filter(move |bit| (state >> bit) & 1 == 1).map(move |bit| (2 * x + (bit & 1) - 1, 2 * y + (bit >> 1) - 1))
 }
 
 /// One generation: every block with a cell in it is rewritten. The pattern is settled again;
@@ -788,10 +787,7 @@ fn extent(cells: &[Cell]) -> (i32, i32) {
         let (min, max) = values.fold((i32::MAX, i32::MIN), |(min, max), v| (min.min(v), max.max(v)));
         if min > max { 0 } else { max - min + 1 }
     };
-    (
-        span(&mut cells.iter().map(|cell| cell.0)),
-        span(&mut cells.iter().map(|cell| cell.1)),
-    )
+    (span(&mut cells.iter().map(|cell| cell.0)), span(&mut cells.iter().map(|cell| cell.1)))
 }
 
 fn area(cells: &[Cell]) -> i32 {
@@ -866,9 +862,7 @@ mod tests {
     }
 
     fn analyse(name: &str, rle: &str) -> Motion {
-        Analyser::new(&rule(name))
-            .analyse(&from_rle(rle).unwrap(), 0)
-            .unwrap()
+        Analyser::new(&rule(name)).analyse(&from_rle(rle).unwrap(), 0).unwrap()
     }
 
     #[test]
@@ -1194,9 +1188,8 @@ mod tests {
         for orientation in ORIENTATIONS {
             for state in 0..16u8 {
                 let cells = (0..4).filter(|bit| (state >> bit) & 1 == 1).map(|bit| (bit & 1, bit >> 1));
-                let turned = cells
-                    .map(|cell| (orientation.cell)(cell))
-                    .fold(0, |turned, (x, y)| turned | 1 << (x + 2 * y));
+                let turned =
+                    cells.map(|cell| (orientation.cell)(cell)).fold(0, |turned, (x, y)| turned | 1 << (x + 2 * y));
                 assert_eq!(turned, (orientation.block)(state));
             }
             // The block grid stays where it is: the four cells of a block stay one block.
@@ -1325,9 +1318,8 @@ mod morita {
         assert_eq!(runs("016a7f", &ship), Some((3, moved(0, 1))));
         // Figs. 5.47 and 5.49: the glider-3 and the glider-5, both going east.
         let glider_3 = figure(&[('R', 1, 2), ('B', 2, 1), ('R', 2, 1)]);
-        let glider_5 = figure(&[
-            ('L', 2, 1), ('B', 2, 1), ('T', 1, 2), ('R', 1, 2), ('B', 1, 2), ('L', 2, 3), ('T', 2, 3),
-        ]);
+        let glider_5 =
+            figure(&[('L', 2, 1), ('B', 2, 1), ('T', 1, 2), ('R', 1, 2), ('B', 1, 2), ('L', 2, 3), ('T', 2, 3)]);
         for number in ["0945df", "09457f"] {
             assert_eq!(runs(number, &glider_3), Some((3, moved(1, 0))), "{number}");
         }
@@ -1367,9 +1359,7 @@ mod morita {
         };
         // Fig. 5.42 draws spaceships of ESPCA-01caef too small to read off. These are the
         // ones a search of small patterns turns up, with the periods of the figure.
-        for (rle, expected) in
-            [("2o2$2o", 12), ("2o2$obo", 28), ("$bo$2o2$o", 44), ("b2o$bo$bo", 61), ("2ob2o", 368)]
-        {
+        for (rle, expected) in [("2o2$2o", 12), ("2o2$obo", 28), ("$bo$2o2$o", 44), ("b2o$bo$bo", 61), ("2ob2o", 368)] {
             assert_eq!(period("01caef", rle), expected, "{rle}");
         }
         // Likewise Fig. 5.45 for ESPCA-016a7f, and the glider-10 of Fig. 5.54.
@@ -1423,8 +1413,14 @@ mod morita {
         // Fig. 2.11: in ESPCA-0945df this pattern sends out two glider-3's every 10 steps. Its
         // particles are about to fill two cells, which is two full blocks side by side.
         let seed = figure(&[
-            ('B', 5, 2), ('R', 4, 3), ('B', 4, 3), ('L', 6, 3),
-            ('R', 3, 4), ('L', 5, 4), ('T', 5, 4), ('T', 4, 5),
+            ('B', 5, 2),
+            ('R', 4, 3),
+            ('B', 4, 3),
+            ('L', 6, 3),
+            ('R', 3, 4),
+            ('L', 5, 4),
+            ('T', 5, 4),
+            ('T', 4, 5),
         ]);
         assert_eq!(to_rle(&settled(&seed)), "4o$4o");
         let mut universe = Universe::new(256, 256, rule("0945df"));
@@ -1440,7 +1436,3 @@ mod morita {
         }
     }
 }
-
-
-
-

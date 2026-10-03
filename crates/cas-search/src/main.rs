@@ -99,9 +99,25 @@ fn default_threads() -> usize {
 }
 
 const COLUMNS: [&str; 19] = [
-    "rule", "espca", "character", "cells", "vacuum", "oscillating", "travelling", "scattering",
-    "growing", "undecided", "growth", "spaceships", "periods", "longest", "damage", "blob",
-    "remaining", "caught", "others",
+    "rule",
+    "espca",
+    "character",
+    "cells",
+    "vacuum",
+    "oscillating",
+    "travelling",
+    "scattering",
+    "growing",
+    "undecided",
+    "growth",
+    "spaceships",
+    "periods",
+    "longest",
+    "damage",
+    "blob",
+    "remaining",
+    "caught",
+    "others",
 ];
 
 fn column(name: &str) -> usize {
@@ -215,11 +231,7 @@ fn merit(line: &[String]) -> (u8, u64, u64, u64) {
 fn main() {
     let args = Args::parse();
     cas_core::use_threads(args.threads);
-    let effort = Effort {
-        seeds: args.seeds,
-        generations: args.generations,
-        blob: args.blob,
-    };
+    let effort = Effort { seeds: args.seeds, generations: args.generations, blob: args.blob };
     // The table first: if it cannot be written, or holds rules measured otherwise, there is
     // no point in going through a family. Lines of an earlier run count as done.
     let (file, mut lines) = match &args.out {
@@ -332,7 +344,8 @@ fn show(title: &str, lines: &[&Vec<String>], columns: &[&str]) {
     let cell = |line: &Vec<String>, name: &str| line[column(name)].clone();
     let width = |name: &str| lines.iter().map(|line| cell(line, name).len()).max().unwrap_or(0).max(name.len());
     let print = |cells: Vec<String>| {
-        let padded: Vec<String> = cells.iter().zip(columns).map(|(cell, name)| format!("{cell:<width$}", width = width(name))).collect();
+        let padded: Vec<String> =
+            cells.iter().zip(columns).map(|(cell, name)| format!("{cell:<width$}", width = width(name))).collect();
         println!("{}", padded.join("  ").trim_end());
     };
     println!("\n{title}");

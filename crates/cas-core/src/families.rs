@@ -14,8 +14,8 @@ use std::{collections::HashSet, fmt, str::FromStr};
 
 use crate::{
     rules::{
-        BlockRule, Population, TURNS_AND_MIRRORS, anti_transpose, complement, flip, keeps_weight, mirror,
-        popcount, rotate_180, rotate_cw, transpose, weigh, weightings,
+        BlockRule, Population, TURNS_AND_MIRRORS, anti_transpose, complement, flip, keeps_weight, mirror, popcount,
+        rotate_180, rotate_cw, transpose, weigh, weightings,
     },
     universe::Rng,
 };
@@ -91,7 +91,11 @@ const NAMES: [(&str, Constraint, &str); 16] = [
         "The 1536 rules that look the same after a quarter turn: Morita's ESPCAs",
     ),
     ("half-turn", Constraint::Symmetric(Turn::Half), "The 1 105 920 rules that look the same after a half turn"),
-    ("mirror", Constraint::Symmetric(Turn::Mirror), "The 1 105 920 rules that look the same in a mirror, left to right"),
+    (
+        "mirror",
+        Constraint::Symmetric(Turn::Mirror),
+        "The 1 105 920 rules that look the same in a mirror, left to right",
+    ),
     (
         "flip",
         Constraint::Symmetric(Turn::Flip),
@@ -160,15 +164,14 @@ impl Constraint {
         let table = rule.table();
         match *self {
             Constraint::Symmetric(turn) => rule.commutes_with(turn.transform()),
-            Constraint::Conserving => matches!(
-                rule.population(),
-                Population::Conserved | Population::ConservedRelativeToVacuum
-            ),
+            Constraint::Conserving => {
+                matches!(rule.population(), Population::Conserved | Population::ConservedRelativeToVacuum)
+            }
             Constraint::Weighted(Some(weights)) => relative().iter().all(|rule| keeps_weight(rule.table(), &weights)),
             Constraint::Weighted(None) => matches!(rule.population(), Population::Weighted(_)),
-            Constraint::Parity => relative().iter().all(|rule| {
-                (0..16u8).all(|block| popcount(rule.table()[block as usize]) % 2 == popcount(block) % 2)
-            }),
+            Constraint::Parity => relative()
+                .iter()
+                .all(|rule| (0..16u8).all(|block| popcount(rule.table()[block as usize]) % 2 == popcount(block) % 2)),
             Constraint::Momentum => relative().iter().all(|rule| {
                 (0..16u8).all(|block| momentum(rotate_180(rule.table()[block as usize])) == momentum(block))
             }),
@@ -177,9 +180,7 @@ impl Constraint {
             Constraint::StableVacuum => table[0] == 0,
             Constraint::Turning => (0..16).all(|block| orbit(block as u8) >> table[block] & 1 == 1),
             Constraint::Sparse(most) => (0..16).filter(|&block| table[block] != block as u8).count() <= most as usize,
-            Constraint::Linear => {
-                (0..16).all(|a| (0..16).all(|b| table[a ^ b] == table[a] ^ table[b] ^ table[0]))
-            }
+            Constraint::Linear => (0..16).all(|a| (0..16).all(|b| table[a ^ b] == table[a] ^ table[b] ^ table[0])),
         }
     }
 }
@@ -190,7 +191,8 @@ impl fmt::Display for Constraint {
             Constraint::Weighted(Some(w)) => write!(f, "weights={},{},{},{}", w[0], w[1], w[2], w[3]),
             Constraint::Sparse(most) => write!(f, "sparse={most}"),
             other => {
-                let (name, ..) = NAMES.iter().find(|(_, known, _)| *known == other).expect("every constraint has a name");
+                let (name, ..) =
+                    NAMES.iter().find(|(_, known, _)| *known == other).expect("every constraint has a name");
                 f.write_str(name)
             }
         }
@@ -214,7 +216,9 @@ impl FromStr for Constraint {
                 "weights" => {
                     let weights: Vec<u8> = value.split(',').filter_map(|w| w.trim().parse().ok()).collect();
                     match weights[..] {
-                        [a, b, c, d] if weights.iter().all(|w| (1..=9).contains(w)) => Ok(Constraint::Weighted(Some([a, b, c, d]))),
+                        [a, b, c, d] if weights.iter().all(|w| (1..=9).contains(w)) => {
+                            Ok(Constraint::Weighted(Some([a, b, c, d])))
+                        }
                         _ => Err(format!(
                             "weights={value:?}: four weights from 1 to 9, top-left, top-right, bottom-left, bottom-right"
                         )),
@@ -223,14 +227,10 @@ impl FromStr for Constraint {
                 other => Err(format!("{other:?} takes no value")),
             };
         }
-        NAMES
-            .iter()
-            .find(|(name, ..)| *name == text)
-            .map(|(_, constraint, _)| *constraint)
-            .ok_or_else(|| {
-                let names: Vec<&str> = catalogue().into_iter().map(|(name, _)| name).collect();
-                format!("no property of rules is called {text:?}; there are {}", names.join(", "))
-            })
+        NAMES.iter().find(|(name, ..)| *name == text).map(|(_, constraint, _)| *constraint).ok_or_else(|| {
+            let names: Vec<&str> = catalogue().into_iter().map(|(name, _)| name).collect();
+            format!("no property of rules is called {text:?}; there are {}", names.join(", "))
+        })
     }
 }
 
@@ -352,7 +352,8 @@ impl Family {
         let weighted = constraints.iter().position(|c| *c == Constraint::Weighted(None));
         if let Some(place) = weighted {
             let weightings: Vec<[u8; 4]> = weightings().into_iter().filter(|weights| *weights != [1; 4]).collect();
-            constraints[place] = Constraint::Weighted(Some(weightings[(rng.next_u64() % weightings.len() as u64) as usize]));
+            constraints[place] =
+                Constraint::Weighted(Some(weightings[(rng.next_u64() % weightings.len() as u64) as usize]));
         }
         let mut found = None;
         Filler::new(&constraints, Some(rng)).fill(&mut |rule| {
@@ -579,7 +580,7 @@ impl<'a> Filler<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rules::{Population, Preset, PRESETS};
+    use crate::rules::{PRESETS, Population, Preset};
 
     fn family(text: &str) -> Family {
         Family::parse(text).unwrap()
@@ -618,7 +619,9 @@ mod tests {
         // Together, symmetries make the group they generate.
         assert_eq!(family("mirror+flip").rules().len(), 512);
         assert_eq!(family("quarter-turn+mirror").rules().len(), 64);
-        assert!(family("quarter-turn+mirror").rules().iter().all(|rule| rule.symmetry() == crate::rules::Symmetry::Full));
+        assert!(
+            family("quarter-turn+mirror").rules().iter().all(|rule| rule.symmetry() == crate::rules::Symmetry::Full)
+        );
     }
 
     #[test]
@@ -633,7 +636,10 @@ mod tests {
         let unique: HashSet<&BlockRule> = rules.iter().collect();
         assert_eq!(unique.len(), rules.len());
         for rule in rules.iter().step_by(997) {
-            assert!(matches!(rule.population(), Population::Conserved | Population::ConservedRelativeToVacuum), "{rule}");
+            assert!(
+                matches!(rule.population(), Population::Conserved | Population::ConservedRelativeToVacuum),
+                "{rule}"
+            );
             assert_eq!(rule.conserved_weights(), Some([1; 4]), "{rule}");
         }
         assert!(rules.contains(&preset("critters")) && rules.contains(&preset("single-rotation")));
@@ -714,12 +720,22 @@ mod tests {
 
     #[test]
     fn a_family_is_read_from_names_and_random_requires_nothing() {
-        assert_eq!(family("mirror+conserving").constraints(), [Constraint::Symmetric(Turn::Mirror), Constraint::Conserving]);
+        assert_eq!(
+            family("mirror+conserving").constraints(),
+            [Constraint::Symmetric(Turn::Mirror), Constraint::Conserving]
+        );
         assert_eq!(family("random"), Family::default());
         assert_eq!(family("random+mirror"), family("mirror"));
         assert_eq!(family("mirror+mirror"), family("mirror"));
-        assert_eq!(family(" sparse=5 + weights=1,2,4,1 ").constraints(), [Constraint::Sparse(5), Constraint::Weighted(Some([1, 2, 4, 1]))]);
-        assert!(Family::parse("mirrored").is_err() && Family::parse("sparse=17").is_err() && Family::parse("weights=1,2").is_err());
+        assert_eq!(
+            family(" sparse=5 + weights=1,2,4,1 ").constraints(),
+            [Constraint::Sparse(5), Constraint::Weighted(Some([1, 2, 4, 1]))]
+        );
+        assert!(
+            Family::parse("mirrored").is_err()
+                && Family::parse("sparse=17").is_err()
+                && Family::parse("weights=1,2").is_err()
+        );
         for constraint in NAMES.map(|(_, constraint, _)| constraint) {
             assert_eq!(constraint.to_string().parse::<Constraint>(), Ok(constraint));
         }

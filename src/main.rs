@@ -102,15 +102,10 @@ impl Vsync {
             Vsync::On => true,
             Vsync::Off => false,
             Vsync::Auto => {
-                cfg!(feature = "wayland")
-                    && std::env::var_os("WAYLAND_DISPLAY").is_some_and(|d| !d.is_empty())
+                cfg!(feature = "wayland") && std::env::var_os("WAYLAND_DISPLAY").is_some_and(|d| !d.is_empty())
             }
         };
-        if on {
-            PresentMode::AutoVsync
-        } else {
-            PresentMode::AutoNoVsync
-        }
+        if on { PresentMode::AutoVsync } else { PresentMode::AutoNoVsync }
     }
 }
 
@@ -136,14 +131,12 @@ fn main() -> AppExit {
     cas_core::use_threads(args.threads);
     let script = match (&args.script, &args.script_file) {
         (Some(script), _) => Some(script.clone()),
-        (None, Some(path)) => Some(std::fs::read_to_string(path).unwrap_or_else(|e| {
-            fail(&format!("cannot read {}: {e}", path.display()))
-        })),
+        (None, Some(path)) => Some(
+            std::fs::read_to_string(path).unwrap_or_else(|e| fail(&format!("cannot read {}: {e}", path.display()))),
+        ),
         (None, None) => None,
     };
-    let script = script.map(|script| {
-        rig::parse_script(&script).unwrap_or_else(|e| fail(&format!("bad script: {e}")))
-    });
+    let script = script.map(|script| rig::parse_script(&script).unwrap_or_else(|e| fail(&format!("bad script: {e}"))));
 
     let mut rng = Rng::new(args.seed);
     let mut universe = Universe::new(args.width, args.height, args.rule);
@@ -164,10 +157,7 @@ fn main() -> AppExit {
         }),
         // A scripted run is not for clicking on: let the real pointer through to whatever
         // is behind the window.
-        primary_cursor_options: Some(CursorOptions {
-            hit_test: script.is_none(),
-            ..default()
-        }),
+        primary_cursor_options: Some(CursorOptions { hit_test: script.is_none(), ..default() }),
         ..default()
     }))
     .insert_resource(ClearColor(view::BACKGROUND))
@@ -175,9 +165,7 @@ fn main() -> AppExit {
     .insert_resource(rng)
     .insert_resource(Settings {
         hide_vacuum: true,
-        density: args
-            .density
-            .clamp(Settings::MIN_DENSITY, Settings::MAX_DENSITY),
+        density: args.density.clamp(Settings::MIN_DENSITY, Settings::MAX_DENSITY),
         show_grid: true,
         // The outline of the blocks is for a closer look: off until asked for.
         show_blocks: false,
@@ -194,24 +182,15 @@ fn main() -> AppExit {
         sampler::SamplerPlugin,
     ));
     if let Some(script) = script {
-        app.add_plugins(rig::RigPlugin {
-            script,
-            dir: args.shots,
-        });
+        app.add_plugins(rig::RigPlugin { script, dir: args.shots });
     }
     // The exit code matters to scripts: the rig fails with a non-zero status.
     app.run()
 }
 
 fn parse_window(spec: &str) -> Result<(u32, u32), String> {
-    let (w, h) = spec
-        .split_once(['x', 'X', '×'])
-        .ok_or_else(|| format!("window size {spec:?} is not WIDTHxHEIGHT"))?;
-    let parse = |s: &str| {
-        s.trim()
-            .parse::<u32>()
-            .map_err(|e| format!("window size {spec:?}: {e}"))
-    };
+    let (w, h) = spec.split_once(['x', 'X', '×']).ok_or_else(|| format!("window size {spec:?} is not WIDTHxHEIGHT"))?;
+    let parse = |s: &str| s.trim().parse::<u32>().map_err(|e| format!("window size {spec:?}: {e}"));
     Ok((parse(w)?, parse(h)?))
 }
 

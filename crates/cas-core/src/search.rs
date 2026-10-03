@@ -68,11 +68,7 @@ pub struct Effort {
 
 impl Default for Effort {
     fn default() -> Self {
-        Self {
-            seeds: 400,
-            generations: 3000,
-            blob: 8000,
-        }
+        Self { seeds: 400, generations: 3000, blob: 8000 }
     }
 }
 
@@ -420,11 +416,7 @@ mod tests {
 
     /// Enough to tell the characters apart, and quick.
     fn glance() -> Effort {
-        Effort {
-            seeds: 200,
-            generations: 1000,
-            blob: 4000,
-        }
+        Effort { seeds: 200, generations: 1000, blob: 4000 }
     }
 
     #[test]
@@ -553,7 +545,9 @@ mod tests {
 
         // Every one of them flies the same way, at a sixth of the speed of light.
         let plus = fleet(&rule("plus-ships"), 8000);
-        assert!(!plus.is_empty() && plus.iter().all(|ship| ship.speed() == (1, 6) && ship.heading() == Heading::Diagonal));
+        assert!(
+            !plus.is_empty() && plus.iter().all(|ship| ship.speed() == (1, 6) && ship.heading() == Heading::Diagonal)
+        );
         assert_eq!(found("plus-ships").character(), Character::Spaceships);
 
         let gun = measure(&rule("four-way-gun"), &glance());

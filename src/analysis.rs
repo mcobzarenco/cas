@@ -368,9 +368,7 @@ impl Plugin for AnalysisPlugin {
 }
 
 fn attach_material(add: On<Add, SmallView>, assets: Res<SmallAssets>, mut commands: Commands) {
-    commands
-        .entity(add.entity)
-        .insert(MaterialNode(assets.material.clone()));
+    commands.entity(add.entity).insert(MaterialNode(assets.material.clone()));
 }
 
 pub fn analysis_panel() -> impl Scene {
@@ -606,12 +604,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
 
 /// The pattern goes back on the grid: picked up, to be put down wherever. Under another rule
 /// than it was studied in, the same cells go down, filed for that rule's vacuum.
-fn place_subject(
-    _: On<Activate>,
-    universe: Res<Universe>,
-    mut analysis: ResMut<Analysis>,
-    mut stamp: ResMut<Stamp>,
-) {
+fn place_subject(_: On<Activate>, universe: Res<Universe>, mut analysis: ResMut<Analysis>, mut stamp: ResMut<Stamp>) {
     if let Some(subject) = analysis.shown() {
         let forms = if universe.rule() == &subject.rule {
             subject.forms.clone()
@@ -746,7 +739,10 @@ fn sync_panel(
     mut findings: Query<(&Finding, &mut Text, &mut TextFont)>,
     assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
-    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
+    mut rule_name: Single<
+        &mut Text,
+        (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>),
+    >,
     mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut mark: Single<&mut BorderColor, With<ChoosingMark>>,
@@ -806,10 +802,16 @@ fn sync_panel(
     let rule = subject.map(|subject| &subject.rule).or(busy.map(|studying| &studying.rule));
     rule_name.set_if_neq(Text(rule.map_or("", |rule| rule.name()).to_string()));
     let what_next = match (analysis.selecting, subject.is_some(), now.holding) {
-        _ if busy.is_some() => "Stop takes what is known by then for the study. A drag over another pattern studies that one instead.",
-        (_, _, true) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
+        _ if busy.is_some() => {
+            "Stop takes what is known by then for the study. A drag over another pattern studies that one instead."
+        }
+        (_, _, true) => {
+            "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
+        }
         (true, false, _) => "Drag over the pattern on the grid. Escape calls it off.",
-        (true, true, _) => "Drag over another pattern, or Place picks this one up to be put down on the grid where you click.",
+        (true, true, _) => {
+            "Drag over another pattern, or Place picks this one up to be put down on the grid where you click."
+        }
         (false, false, _) => "Nothing yet.",
         (false, true, _) => "Place picks the pattern up, to be put down on the grid where you click.",
     };
@@ -872,7 +874,9 @@ fn found(finding: Finding, subject: &Subject) -> String {
                 let how = if study.growth >= Some(SPREADING) { "over the plane" } else { "along lines, as a gun does" };
                 format!("Grows {how}: {} cells after {}", count(study.cells.1), generations(study.generations))
             }
-            (_, _, Fate::Grows) => format!("Grows: {} cells after {}", count(study.cells.1), generations(study.generations)),
+            (_, _, Fate::Grows) => {
+                format!("Grows: {} cells after {}", count(study.cells.1), generations(study.generations))
+            }
             (_, _, Fate::Scatters) => format!(
                 "Flies apart: {} cells across after {}",
                 study.extent.0.max(study.extent.1),

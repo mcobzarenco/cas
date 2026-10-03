@@ -10,8 +10,8 @@ use bevy::{
         FeathersPlugins,
         constants::fonts,
         controls::{
-            ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider,
-            FeathersMenuItem, FeathersMenuPopup, FeathersScrollbar,
+            ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
+            FeathersMenuPopup, FeathersScrollbar,
         },
         cursor::EntityCursor,
         dark_theme::create_dark_theme,
@@ -24,8 +24,8 @@ use bevy::{
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
     ui::{Checked, UiGlobalTransform},
     ui_widgets::{
-        Activate, ActivateOnPress, Checkbox, ControlOrientation, ScrollArea, Scrollbar, Slider,
-        SliderDragState, SliderOrientation, SliderThumb, SliderValue, TrackClick, ValueChange,
+        Activate, ActivateOnPress, Checkbox, ControlOrientation, ScrollArea, Scrollbar, Slider, SliderDragState,
+        SliderOrientation, SliderThumb, SliderValue, TrackClick, ValueChange,
     },
     window::{PrimaryWindow, SystemCursorIcon},
 };
@@ -267,8 +267,7 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 (
-                    (sync_widgets.run_if(rule_changed.or_eager(options_changed)), style_toggles)
-                        .chain(),
+                    (sync_widgets.run_if(rule_changed.or_eager(options_changed)), style_toggles).chain(),
                     (sync_sliders.run_if(options_changed), style_sliders).chain(),
                     update_status,
                     show_scrollbars,
@@ -447,11 +446,9 @@ fn make_room(
     mut open: Local<Vec<Side>>,
 ) {
     // The panels that are open, in the order they were opened.
-    for (side, is_open) in [
-        (Side::Editor, editor.is_open()),
-        (Side::Spaceships, catcher.is_open()),
-        (Side::Analysis, analysis.is_open()),
-    ] {
+    for (side, is_open) in
+        [(Side::Editor, editor.is_open()), (Side::Spaceships, catcher.is_open()), (Side::Analysis, analysis.is_open())]
+    {
         match (is_open, open.contains(&side)) {
             (true, false) => open.push(side),
             (false, true) => open.retain(|other| *other != side),
@@ -881,64 +878,68 @@ fn rule_card() -> impl Scene {
         listed.map(rule_item).collect()
     };
     let (collections, morita, found) = (from(Source::Collections), from(Source::Morita), from(Source::Search));
-    card(Aspect::Rule, None, bsn_list![
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(6),
-            }
-            Children [
-                (
-                    @FeathersMenu
-                    Node { flex_grow: 1.0 }
-                    Children [
-                        (
-                            #RuleMenu
-                            @FeathersMenuButton {
-                                @caption: bsn! { Text("") ThemedText template_value(Readout::RuleName) }
-                            }
-                            Node { flex_grow: 1.0 }
-                        ),
-                        (
-                            // Its height is the window's business: see `fit_menus`.
-                            @FeathersMenuPopup
-                            Node { overflow: Overflow::scroll_y() }
-                            ScrollArea
-                            Children [
-                                menu_heading("FROM THE COLLECTIONS"),
-                                { collections },
-                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                menu_heading("FROM MORITA'S BOOK"),
-                                { morita },
-                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                menu_heading("FOUND BY SEARCH"),
-                                { found },
-                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                (
-                                    #RuleItemCustom
-                                    @FeathersMenuItem {
-                                        @caption: bsn! { Text("Custom…") ThemedText }
-                                    }
-                                    Node { flex_shrink: 0.0 }
-                                    on(|_: On<Activate>,
-                                        mut editor: ResMut<RuleEditor>,
-                                        mut universe: ResMut<Universe>| {
-                                        editor.open_custom(&mut universe);
-                                    })
-                                ),
-                            ]
-                        ),
-                    ]
-                ),
-                (
-                    action_button("Edit", "EditRule", Action::EditRule)
-                    Node { flex_grow: 0.0 }
-                ),
-            ]
-        ),
-        (caption("") template_value(Readout::RuleBlurb)),
-    ])
+    card(
+        Aspect::Rule,
+        None,
+        bsn_list![
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(6),
+                }
+                Children [
+                    (
+                        @FeathersMenu
+                        Node { flex_grow: 1.0 }
+                        Children [
+                            (
+                                #RuleMenu
+                                @FeathersMenuButton {
+                                    @caption: bsn! { Text("") ThemedText template_value(Readout::RuleName) }
+                                }
+                                Node { flex_grow: 1.0 }
+                            ),
+                            (
+                                // Its height is the window's business: see `fit_menus`.
+                                @FeathersMenuPopup
+                                Node { overflow: Overflow::scroll_y() }
+                                ScrollArea
+                                Children [
+                                    menu_heading("FROM THE COLLECTIONS"),
+                                    { collections },
+                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
+                                    menu_heading("FROM MORITA'S BOOK"),
+                                    { morita },
+                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
+                                    menu_heading("FOUND BY SEARCH"),
+                                    { found },
+                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
+                                    (
+                                        #RuleItemCustom
+                                        @FeathersMenuItem {
+                                            @caption: bsn! { Text("Custom…") ThemedText }
+                                        }
+                                        Node { flex_shrink: 0.0 }
+                                        on(|_: On<Activate>,
+                                            mut editor: ResMut<RuleEditor>,
+                                            mut universe: ResMut<Universe>| {
+                                            editor.open_custom(&mut universe);
+                                        })
+                                    ),
+                                ]
+                            ),
+                        ]
+                    ),
+                    (
+                        action_button("Edit", "EditRule", Action::EditRule)
+                        Node { flex_grow: 0.0 }
+                    ),
+                ]
+            ),
+            (caption("") template_value(Readout::RuleBlurb)),
+        ],
+    )
 }
 
 /// The name of a group of items in a menu.
@@ -984,36 +985,40 @@ fn rule_item(index: usize) -> impl Scene {
 /// The space the automaton lives in: how big it is, and what its edge does.
 fn world_card() -> impl Scene {
     let sizes: Vec<_> = GRID_SIDES.into_iter().map(size_item).collect();
-    card(Aspect::World, None, bsn_list![
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-            }
-            Children [
-                caption("Grid size"),
-                (Node { flex_grow: 1.0 }),
-                (
-                    @FeathersMenu
-                    Children [
-                        (
-                            #GridSize
-                            @FeathersMenuButton {
-                                @caption: bsn! { Text("") ThemedText template_value(Readout::GridSize) }
-                            }
-                        ),
-                        (
-                            @FeathersMenuPopup
-                            Node { overflow: Overflow::scroll_y() }
-                            ScrollArea
-                            Children [ { sizes } ]
-                        ),
-                    ]
-                ),
-            ]
-        ),
-        toggle("Open border", "OpenBorder", Toggle::OpenBorder),
-    ])
+    card(
+        Aspect::World,
+        None,
+        bsn_list![
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                }
+                Children [
+                    caption("Grid size"),
+                    (Node { flex_grow: 1.0 }),
+                    (
+                        @FeathersMenu
+                        Children [
+                            (
+                                #GridSize
+                                @FeathersMenuButton {
+                                    @caption: bsn! { Text("") ThemedText template_value(Readout::GridSize) }
+                                }
+                            ),
+                            (
+                                @FeathersMenuPopup
+                                Node { overflow: Overflow::scroll_y() }
+                                ScrollArea
+                                Children [ { sizes } ]
+                            ),
+                        ]
+                    ),
+                ]
+            ),
+            toggle("Open border", "OpenBorder", Toggle::OpenBorder),
+        ],
+    )
 }
 
 /// A size in the grid-size menu.
@@ -1043,150 +1048,158 @@ fn time_card() -> impl Scene {
     ]
     .into();
     let keys = |down: Action, up: Action| format!("{} {}", down.key(), up.key());
-    card(Aspect::Time, Some(Readout::Generation), bsn_list![
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(6),
-            }
-            Children [
-                (
-                    #StepBack
-                    @FeathersButton {
-                        @caption: bsn! { Text("← step") ThemedText }
-                    }
-                    Node { flex_grow: 1.0 }
-                    ActivateOnPress
-                    template_value(back)
-                ),
-                (
-                    #PlayPause
-                    @FeathersButton {
-                        @caption: {play_caption},
-                        @variant: ButtonVariant::Primary,
-                    }
-                    Node {
-                        flex_grow: 1.5,
-                        min_width: px(96),
-                    }
-                    template_value(play)
-                ),
-                (
-                    #StepForward
-                    @FeathersButton {
-                        @caption: bsn! { Text("step →") ThemedText }
-                    }
-                    Node { flex_grow: 1.0 }
-                    ActivateOnPress
-                    template_value(forward)
-                ),
-            ]
-        ),
-        caption("hold to repeat · with shift: a single generation"),
-        toggle("Run backwards in time", "Reverse", Toggle::Reverse),
-        slider_row(
-            "Frames per second",
-            "Speed",
-            Control::Speed,
-            keys(Action::Slower, Action::Faster),
-        ),
-        slider_row(
-            "Generations per frame",
-            "Stride",
-            Control::Stride,
-            keys(Action::ShorterStride, Action::LongerStride),
-        ),
-        // What the two sliders come to.
-        (readout("") template_value(Readout::Transport)),
-    ])
+    card(
+        Aspect::Time,
+        Some(Readout::Generation),
+        bsn_list![
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(6),
+                }
+                Children [
+                    (
+                        #StepBack
+                        @FeathersButton {
+                            @caption: bsn! { Text("← step") ThemedText }
+                        }
+                        Node { flex_grow: 1.0 }
+                        ActivateOnPress
+                        template_value(back)
+                    ),
+                    (
+                        #PlayPause
+                        @FeathersButton {
+                            @caption: {play_caption},
+                            @variant: ButtonVariant::Primary,
+                        }
+                        Node {
+                            flex_grow: 1.5,
+                            min_width: px(96),
+                        }
+                        template_value(play)
+                    ),
+                    (
+                        #StepForward
+                        @FeathersButton {
+                            @caption: bsn! { Text("step →") ThemedText }
+                        }
+                        Node { flex_grow: 1.0 }
+                        ActivateOnPress
+                        template_value(forward)
+                    ),
+                ]
+            ),
+            caption("hold to repeat · with shift: a single generation"),
+            toggle("Run backwards in time", "Reverse", Toggle::Reverse),
+            slider_row(
+                "Frames per second",
+                "Speed",
+                Control::Speed,
+                keys(Action::Slower, Action::Faster),
+            ),
+            slider_row(
+                "Generations per frame",
+                "Stride",
+                Control::Stride,
+                keys(Action::ShorterStride, Action::LongerStride),
+            ),
+            // What the two sliders come to.
+            (readout("") template_value(Readout::Transport)),
+        ],
+    )
 }
 
 fn view_card() -> impl Scene {
-    let navigation = format!(
-        "wheel or {} {} zooms · right-drag pans",
-        Action::ZoomIn.key(),
-        Action::ZoomOut.key(),
-    );
-    card(Aspect::View, None, bsn_list![
-        toggle("Hide vacuum fluctuations", "HideVacuum", Toggle::HideVacuum),
-        toggle("Cell grid", "ShowGrid", Toggle::ShowGrid),
-        toggle("2×2 blocks of the next step", "ShowBlocks", Toggle::ShowBlocks),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(8),
-            }
-            Children [
-                (
-                    action_button("Fit", "FitView", Action::Fit)
-                    Node { flex_grow: 0.0 }
-                ),
-                caption(navigation),
-            ]
-        ),
-    ])
+    let navigation = format!("wheel or {} {} zooms · right-drag pans", Action::ZoomIn.key(), Action::ZoomOut.key());
+    card(
+        Aspect::View,
+        None,
+        bsn_list![
+            toggle("Hide vacuum fluctuations", "HideVacuum", Toggle::HideVacuum),
+            toggle("Cell grid", "ShowGrid", Toggle::ShowGrid),
+            toggle("2×2 blocks of the next step", "ShowBlocks", Toggle::ShowBlocks),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(8),
+                }
+                Children [
+                    (
+                        action_button("Fit", "FitView", Action::Fit)
+                        Node { flex_grow: 0.0 }
+                    ),
+                    caption(navigation),
+                ]
+            ),
+        ],
+    )
 }
 
 /// What is on the grid: seeding it, and catching the spaceships that reach its edge. How many
 /// cells there are is the card's figure.
 fn pattern_card() -> impl Scene {
-    card(Aspect::Pattern, Some(Readout::Population), bsn_list![
-        slider_row("Density", "Density", Control::Density, String::new()),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(6),
-            }
-            Children [
-                action_button("Soup", "Soup", Action::Soup),
-                action_button("Blob", "Blob", Action::Blob),
-                action_button("Cloud", "Cloud", Action::Cloud),
-                action_button("Clear", "Clear", Action::Clear),
-            ]
-        ),
-        caption("left-drag paints · with shift it erases"),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(8),
-            }
-            Children [
-                (
-                    // Outlined in the pattern's colour while a pattern is being chosen.
-                    action_button_hinted("Analyse", "Analyse", Action::Analyse, Action::Analysis)
-                    Node { flex_grow: 0.0, border: px(1) }
-                    BorderColor::all(Color::NONE)
-                    ChoosingMark
-                ),
-                (
-                    #SelectHint
-                    caption("on the grid, or from the list")
-                    SelectHint
-                    Node { flex_grow: 1.0, flex_basis: px(0) }
-                ),
-            ]
-        ),
-        (
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(8),
-            }
-            Children [
-                (
-                    toggle("Catch spaceships", "Catching", Toggle::Catching)
-                    Node { flex_grow: 1.0 }
-                ),
-                (
-                    action_button("Spaceships", "Spaceships", Action::Spaceships)
-                    Node { flex_grow: 0.0 }
-                ),
-            ]
-        ),
-    ])
+    card(
+        Aspect::Pattern,
+        Some(Readout::Population),
+        bsn_list![
+            slider_row("Density", "Density", Control::Density, String::new()),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    action_button("Soup", "Soup", Action::Soup),
+                    action_button("Blob", "Blob", Action::Blob),
+                    action_button("Cloud", "Cloud", Action::Cloud),
+                    action_button("Clear", "Clear", Action::Clear),
+                ]
+            ),
+            caption("left-drag paints · with shift it erases"),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(8),
+                }
+                Children [
+                    (
+                        // Outlined in the pattern's colour while a pattern is being chosen.
+                        action_button_hinted("Analyse", "Analyse", Action::Analyse, Action::Analysis)
+                        Node { flex_grow: 0.0, border: px(1) }
+                        BorderColor::all(Color::NONE)
+                        ChoosingMark
+                    ),
+                    (
+                        #SelectHint
+                        caption("on the grid, or from the list")
+                        SelectHint
+                        Node { flex_grow: 1.0, flex_basis: px(0) }
+                    ),
+                ]
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(8),
+                }
+                Children [
+                    (
+                        toggle("Catch spaceships", "Catching", Toggle::Catching)
+                        Node { flex_grow: 1.0 }
+                    ),
+                    (
+                        action_button("Spaceships", "Spaceships", Action::Spaceships)
+                        Node { flex_grow: 0.0 }
+                    ),
+                ]
+            ),
+        ],
+    )
 }
 
 /// Dragging or clicking a slider: the value goes to its resource, and the slider is moved to
@@ -1203,9 +1216,7 @@ fn slider_changed(
     };
     let value = control.value_at(change.value);
     control.set(value, &mut playback, &mut settings);
-    commands
-        .entity(change.source)
-        .insert(SliderValue(control.position_of(value)));
+    commands.entity(change.source).insert(SliderValue(control.position_of(value)));
 }
 
 /// The wheel steps a slider to its next value; unless the panel has to scroll, and then the
@@ -1276,15 +1287,13 @@ fn style_toggles(
     mut ticks: Query<(&mut BorderColor, &mut Visibility), With<ToggleTick>>,
 ) {
     for (aspect, hovered, checked, children) in &toggles {
-        let Some((mut fill, children)) = children.first().and_then(|&child| boxes.get_mut(child).ok())
-        else {
+        let Some((mut fill, children)) = children.first().and_then(|&child| boxes.get_mut(child).ok()) else {
             continue;
         };
         let color = if checked { aspect.color() } else { palette::GRAY_3 };
         let color = if hovered.0 { color.lighter(0.06) } else { color };
         fill.set_if_neq(BackgroundColor(color));
-        let Some((mut ink, mut visibility)) = children.first().and_then(|&child| ticks.get_mut(child).ok())
-        else {
+        let Some((mut ink, mut visibility)) = children.first().and_then(|&child| ticks.get_mut(child).ok()) else {
             continue;
         };
         ink.set_if_neq(BorderColor::all(aspect.ink()));
@@ -1317,14 +1326,7 @@ fn sync_sliders(
 fn style_sliders(
     sliders: Query<
         (Entity, &SliderValue, &Hovered, &SliderDragState),
-        (
-            With<Control>,
-            Or<(
-                Changed<SliderValue>,
-                Changed<Hovered>,
-                Changed<SliderDragState>,
-            )>,
-        ),
+        (With<Control>, Or<(Changed<SliderValue>, Changed<Hovered>, Changed<SliderDragState>)>),
     >,
     children: Query<&Children>,
     mut thumbs: Query<(&mut Node, &mut BackgroundColor), (With<SliderThumb>, Without<SliderFill>)>,
@@ -1332,11 +1334,7 @@ fn style_sliders(
 ) {
     for (slider, value, hovered, drag) in &sliders {
         let position = percent(100.0 * value.0.clamp(0.0, 1.0));
-        let color = if hovered.0 || drag.dragging {
-            palette::WHITE
-        } else {
-            palette::LIGHT_GRAY_1
-        };
+        let color = if hovered.0 || drag.dragging { palette::WHITE } else { palette::LIGHT_GRAY_1 };
         for child in children.iter_descendants(slider) {
             if let Ok((mut node, mut background)) = thumbs.get_mut(child) {
                 node.left = position;
@@ -1364,11 +1362,9 @@ fn update_status(
         let requested = playback.speed * playback.stride as f32;
         match pace.achieved {
             // A few dropped frames are not worth a second number.
-            Some(achieved) if achieved < 0.95 * requested => format!(
-                "{direction} · {} of {} gen/s",
-                format_rate(achieved),
-                format_rate(requested)
-            ),
+            Some(achieved) if achieved < 0.95 * requested => {
+                format!("{direction} · {} of {} gen/s", format_rate(achieved), format_rate(requested))
+            }
             _ => format!("{direction} · {} gen/s", format_rate(requested)),
         }
     } else {
@@ -1434,10 +1430,7 @@ mod tests {
             (Control::Density, 0.0025),
         ] {
             let back = control.value_at(control.position_of(value));
-            assert!(
-                (back - value).abs() <= 1e-3 * value,
-                "{control:?}: {value} came back as {back}"
-            );
+            assert!((back - value).abs() <= 1e-3 * value, "{control:?}: {value} came back as {back}");
         }
     }
 

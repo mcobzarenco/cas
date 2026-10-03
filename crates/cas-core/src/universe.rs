@@ -134,12 +134,7 @@ impl Universe {
         self.kernels = rule
             .relative_to_vacuum()
             .iter()
-            .map(|table| {
-                (
-                    Kernel::new(table.table_for(true)),
-                    Kernel::new(table.table_for(false)),
-                )
-            })
+            .map(|table| (Kernel::new(table.table_for(true)), Kernel::new(table.table_for(false))))
             .collect();
         self.phase = 0;
         self.rule = rule;
@@ -249,10 +244,7 @@ impl Universe {
 
     pub fn population(&self) -> usize {
         // Chunks short enough for `u32` sums, which vectorise far better than a `usize` one.
-        self.cells
-            .chunks(1 << 16)
-            .map(|chunk| chunk.iter().map(|&cell| cell as u32).sum::<u32>() as usize)
-            .sum()
+        self.cells.chunks(1 << 16).map(|chunk| chunk.iter().map(|&cell| cell as u32).sum::<u32>() as usize).sum()
     }
 
     /// Partition offset of the forward step that takes generation `g` to `g + 1`.
@@ -415,10 +407,7 @@ impl Universe {
             }
             pattern = own;
         }
-        Some(Departure {
-            cells: relative(&pattern),
-            phase: self.phase,
-        })
+        Some(Departure { cells: relative(&pattern), phase: self.phase })
     }
 
     pub fn has_departures(&self) -> bool {
@@ -485,14 +474,7 @@ impl Kernel {
 ///
 /// A block lives in two rows, so the grid is walked a pair of rows at a time. Pairs are
 /// independent of each other, which is what lets rayon share them out.
-fn step_blocks(
-    cells: &[u8],
-    next: &mut [u8],
-    width: usize,
-    kernel: &Kernel,
-    offset: usize,
-    parallel: bool,
-) {
+fn step_blocks(cells: &[u8], next: &mut [u8], width: usize, kernel: &Kernel, offset: usize, parallel: bool) {
     debug_assert!(width.is_multiple_of(2) && cells.len().is_multiple_of(2 * width));
     debug_assert_eq!(cells.len(), next.len());
 
@@ -521,10 +503,7 @@ fn step_blocks(
             .with_min_len((TASK_CELLS / pair).max(1))
             .for_each(step_pair);
     } else {
-        cells
-            .chunks_exact(pair)
-            .zip(next.chunks_exact_mut(pair))
-            .for_each(step_pair);
+        cells.chunks_exact(pair).zip(next.chunks_exact_mut(pair)).for_each(step_pair);
     }
 }
 
@@ -972,8 +951,20 @@ mod tests {
     fn the_kernel_matches_the_definition() {
         // Widths around the eight-cell chunks of the kernel, the smallest grids, tall and wide.
         let sizes = [
-            (2, 2), (2, 6), (6, 2), (4, 4), (8, 4), (10, 6), (16, 2), (18, 8), (26, 6), (34, 4),
-            (62, 8), (64, 6), (66, 10), (130, 12),
+            (2, 2),
+            (2, 6),
+            (6, 2),
+            (4, 4),
+            (8, 4),
+            (10, 6),
+            (16, 2),
+            (18, 8),
+            (26, 6),
+            (34, 4),
+            (62, 8),
+            (64, 6),
+            (66, 10),
+            (130, 12),
         ];
         let mut rng = Rng::new(5);
         let mut rules: Vec<BlockRule> = PRESETS.iter().map(|preset| preset.rule()).collect();
@@ -1026,7 +1017,10 @@ mod tests {
             let started = Instant::now();
             universe.step_by(2000);
             let per_step = started.elapsed().as_secs_f64() / 2000.0;
-            println!("256×256 of soup, catching {catching}, open border {open_border}: {:.1} µs per generation", 1e6 * per_step);
+            println!(
+                "256×256 of soup, catching {catching}, open border {open_border}: {:.1} µs per generation",
+                1e6 * per_step
+            );
         }
     }
 
@@ -1126,9 +1120,8 @@ mod published_patterns {
         let start = live(&universe);
         universe.step_by(12);
         let end = live(&universe);
-        let reappears = (-12..=12)
-            .flat_map(|dx| (-12..=12).map(move |dy| (dx, dy)))
-            .any(|by| shifted(&start, by) == end);
+        let reappears =
+            (-12..=12).flat_map(|dx| (-12..=12).map(move |dy| (dx, dy))).any(|by| shifted(&start, by) == end);
         assert!(!reappears, "the rule has no mirror symmetry");
     }
 

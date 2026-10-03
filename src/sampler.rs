@@ -40,10 +40,10 @@ use crate::{
     ui::{Aspect, caption, checkbox, group_digits},
 };
 
-/// Rules are counted up to so many; of a family with more, that is all that is said.
-const COUNTED: usize = 1_000_000;
-/// A family of at most so many rules is kept, to draw from evenly and to count its worlds.
-const KEPT: usize = 300_000;
+/// Rules are counted up to so many, and a family that can be counted is kept, to draw from
+/// evenly and to tell how many worlds it makes; of a family with more, that is all that is
+/// said.
+const COUNTED: usize = 2_000_000;
 /// So often a draw is tried that finds no rule: where any weighting will do, the one drawn
 /// may have none.
 const TRIES: usize = 20;
@@ -95,6 +95,9 @@ const KEEPS: std::ops::Range<usize> = 6..10;
 const TABLE: std::ops::Range<usize> = 10..16;
 /// The chip that takes a number.
 const SPARSE: usize = 15;
+/// The chips of which only one can be on: a rule that keeps a weight in the sense of the
+/// second is one that does not keep the number of cells.
+const EITHER: [usize; 2] = [6, 7];
 
 #[derive(Resource)]
 pub struct Sampler {
@@ -108,21 +111,17 @@ pub struct Sampler {
     count: Count,
     /// How many counts were asked for: tells the answer to the last one from the others.
     asked: u64,
-    answers: Mutex<Receiver<(u64, Known)>>,
-    reply: Sender<(u64, Known)>,
+    answers: Mutex<Receiver<(u64, Count)>>,
+    reply: Sender<(u64, Count)>,
 }
 
 /// What is known of the family asked for.
 enum Count {
     Counting,
-    Known(Known),
-}
-
-struct Known {
-    /// How many rules it has, unless that is more than [`COUNTED`].
-    tables: Option<usize>,
-    /// The rules themselves, and how many worlds they make, for a family small enough.
-    kept: Option<(Vec<BlockRule>, usize)>,
+    /// It has more rules than are counted.
+    Many,
+    /// Its rules, and the worlds they make: the canonical forms among them, each once.
+    Known { rules: Vec<BlockRule>, worlds: Vec<BlockRule> },
 }
 
 impl Default for Sampler {
@@ -133,7 +132,7 @@ impl Default for Sampler {
             wanted: [false; CHIPS.len()],
             sparse: 4,
             canonical: false,
-            count: Count::Known(Known { tables: None, kept: None }),
+            count: Count::Many,
             asked: 0,
             answers: Mutex::new(answers),
             reply,
@@ -156,20 +155,22 @@ impl Sampler {
         self.asked += 1;
         let family = self.family();
         if family.constraints().is_empty() {
-            self.count = Count::Known(Known { tables: None, kept: None });
+            self.count = Count::Many;
             return;
         }
         self.count = Count::Counting;
         let (asked, reply) = (self.asked, self.reply.clone());
         std::thread::spawn(move || {
-            let tables = family.count(COUNTED);
-            let kept = tables.filter(|tables| *tables <= KEPT).map(|_| {
-                let rules = family.rules();
-                let worlds = families::distinct(rules.iter().cloned()).len();
-                (rules, worlds)
-            });
+            let count = match family.count(COUNTED) {
+                None => Count::Many,
+                Some(_) => {
+                    let rules = family.rules();
+                    let worlds = families::distinct(rules.iter().cloned());
+                    Count::Known { rules, worlds }
+                }
+            };
             // Nobody listens if the app has gone.
-            let _ = reply.send((asked, Known { tables, kept }));
+            let _ = reply.send((asked, count));
         });
     }
 }
@@ -303,7 +304,7 @@ pub fn sampler_section() -> impl Scene {
                             { mirrors },
                         ]
                     ),
-                    heading("PATTERNS KEEP"),
+                    heading("CONSERVES"),
                     (row() Children [ { keeps } ]),
                     heading("THE TABLE"),
                     (
@@ -412,6 +413,13 @@ fn chip_scene(index: usize) -> impl Scene {
         on(|click: On<Pointer<Click>>, chips: Query<&Want>, mut sampler: ResMut<Sampler>| {
             if let Ok(&Want(index)) = chips.get(click.entity) {
                 sampler.wanted[index] = !sampler.wanted[index];
+                // The number of cells or a weight in its place: asking for one lets go of
+                // the other.
+                if sampler.wanted[index] && EITHER.contains(&index) {
+                    for other in EITHER.into_iter().filter(|other| *other != index) {
+                        sampler.wanted[other] = false;
+                    }
+                }
                 sampler.ask();
             }
         })
@@ -476,21 +484,25 @@ fn draw(
 ) {
     let family = sampler.family();
     let rule = match &sampler.count {
-        Count::Known(Known { tables: Some(0), .. }) => None,
-        Count::Known(Known { kept: Some((rules, _)), .. }) => {
-            Some(rules[(rng.next_u64() % rules.len() as u64) as usize].clone())
+        // In canonical form every world is as likely as any other; otherwise every table is.
+        Count::Known { rules, worlds } => {
+            let from = if sampler.canonical { worlds } else { rules };
+            (!from.is_empty()).then(|| from[(rng.next_u64() % from.len().max(1) as u64) as usize].clone())
         }
-        _ => (0..TRIES).find_map(|_| family.draw(&mut rng)),
+        _ => {
+            let drawn = (0..TRIES).find_map(|_| family.draw(&mut rng));
+            drawn.map(|rule| if sampler.canonical { rule.canonical() } else { rule })
+        }
     };
     let Some(rule) = rule else {
         let why = match sampler.count {
             Count::Counting => "No rule drawn: the rules with all of this are still being counted.",
-            Count::Known(_) => "No rule has all of this.",
+            _ => "No rule has all of this.",
         };
         editor.say(why, universe.rule());
         return;
     };
-    universe.set_rule(if sampler.canonical { rule.canonical() } else { rule });
+    universe.set_rule(rule);
     let what = match (family.constraints(), sampler.canonical) {
         ([], false) => "A random permutation.".to_string(),
         ([], true) => "A random permutation, in canonical form.".to_string(),
@@ -508,10 +520,10 @@ fn named(family: &Family) -> String {
 
 /// Takes the counts as they come in; only the answer to the last question counts.
 fn hear_counts(mut sampler: ResMut<Sampler>) {
-    let answers: Vec<(u64, Known)> = sampler.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
-    for (asked, known) in answers {
+    let answers: Vec<(u64, Count)> = sampler.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
+    for (asked, count) in answers {
         if asked == sampler.asked {
-            sampler.count = Count::Known(known);
+            sampler.count = count;
         }
     }
 }
@@ -556,15 +568,17 @@ fn show(
         _ => named(&family),
     };
     family_name.set_if_neq(Text(asked_for));
+    let so_many = |count: usize, one: &str| format!("{} {one}{}", group_digits(count as i64), if count == 1 { "" } else { "s" });
     let count = match &sampler.count {
         _ if family.constraints().is_empty() => "16! rules".to_string(),
         Count::Counting => "counting…".to_string(),
-        Count::Known(Known { tables: Some(0), .. }) => "no rule has all of this".to_string(),
-        Count::Known(Known { tables: Some(tables), kept: Some((_, worlds)) }) => {
-            format!("{} rules, {} worlds", group_digits(*tables as i64), group_digits(*worlds as i64))
+        Count::Known { rules, .. } if rules.is_empty() => "no rule has all of this".to_string(),
+        // In canonical form it is the worlds that are drawn from.
+        Count::Known { rules, worlds } if sampler.canonical => {
+            format!("{}, of {}", so_many(worlds.len(), "world"), so_many(rules.len(), "rule"))
         }
-        Count::Known(Known { tables: Some(tables), kept: None }) => format!("{} rules", group_digits(*tables as i64)),
-        Count::Known(Known { tables: None, .. }) => format!("more than {} rules", group_digits(COUNTED as i64)),
+        Count::Known { rules, worlds } => format!("{}, {}", so_many(rules.len(), "rule"), so_many(worlds.len(), "world")),
+        Count::Many => format!("more than {} rules", group_digits(COUNTED as i64)),
     };
     counted.set_if_neq(Text(count));
     let (checkbox, checked) = *canonical;

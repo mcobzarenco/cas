@@ -308,13 +308,14 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
 * **Random** draws a rule. Left alone it is any of the 16! permutations, nearly all of which turn
   everything to noise. The title next to it, *Random rule*, opens the properties to ask for,
   the same that [a search](#searching-for-rules) goes through, each a chip to switch on: the
-  turns and mirrors the rule looks the same under, what patterns keep (their cells, a weight,
-  the parity of their number, their momentum), and the form of the table (it only turns blocks,
-  is linear, is its own inverse, treats the two states alike, leaves the empty world empty,
-  changes at most so many blocks). Under the chips it says how many rules have all that is
-  asked for and how many different worlds they make, counted up to a million; some properties
-  have nothing in common, and then no rule is drawn. *In canonical form* puts every rule drawn
-  in its canonical form.
+  turns and mirrors the rule looks the same under, what it conserves (the cells of a pattern or
+  a weight in their place, the parity of their number, their momentum), and the form of the
+  table (it only turns blocks, is linear, is its own inverse, treats the two states alike,
+  leaves the empty world empty, changes at most so many blocks). Under the chips it says how
+  many rules have all that is asked for and how many different worlds they make, counted up to
+  two million; some properties have nothing in common, and then no rule is drawn. A rule is
+  drawn evenly among the rules; *In canonical form* draws evenly among the worlds instead, and
+  gives the rule in its canonical form.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The

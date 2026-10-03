@@ -94,10 +94,15 @@ expect_text FindingVacuum stable
 shot rules-10-random
 # In canonical form, there is nothing left for the Canonical button to do.
 click RandomCanonical; wait 3; expect_checked RandomCanonical on
+expect_text RandomCount 16 worlds, of 16 rules
 click RuleRandom; wait 3; click RuleCanonical; wait 3
 expect_text EditorNote This table is already canonical: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.
 click RandomCanonical; wait 3; expect_checked RandomCanonical off
 click Want:quarter-turn; click Want:mirror; click Want:conserving; click Want:stable-vacuum; wait 3
+# The number of cells, or a weight in its place: asking for one lets go of the other.
+click Want:conserving; click Want:weighted; wait 3; expect_text RandomFamily weighted
+click Want:conserving; wait 3; expect_text RandomFamily conserving
+click Want:conserving; wait 3; expect_text RandomFamily any rule there is
 # Some properties have nothing in common: no rule keeps a weight of its own and looks the
 # same after a half turn.
 click Want:weighted; click Want:half-turn; wait 60
@@ -114,7 +119,7 @@ expect_text RandomCount 1 241 rules, 190 worlds
 click RuleRandom; wait 3; expect_text EditorNote A random rule that is sparse=3.
 # A family too big to count is said to be so, and drawn from all the same.
 click Want:sparse; click Want:involution; wait 60
-expect_text RandomCount more than 1 000 000 rules
+expect_text RandomCount more than 2 000 000 rules
 click RuleRandom; wait 3; expect_text FindingReversed the same rule
 click Want:involution; click RandomWith; wait 3
 key e; wait 4; shot rules-11-editor-closed

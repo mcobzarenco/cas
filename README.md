@@ -34,7 +34,7 @@ and the same rule brings it back, cell for cell.
       simulation runs.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/properties.png" width="100%" alt="The properties of Critters, each with a small diagram: all rotations and mirrors; dead and alive not interchangeable; cells conserved relative to the vacuum; backwards it is the rule complemented; the vacuum repeats every 2 generations.">
+      <img src="docs/properties.png" width="100%" alt="The properties of Critters, each with a small diagram: all rotations and mirrors; dead and alive not interchangeable; cells conserved relative to the vacuum; backwards it is the rule complemented; 10 of 16 blocks change; momentum not kept; parity kept; patterns do not superpose; the vacuum repeats every 2 generations.">
       <p><b>What follows from the table.</b> Symmetries, conserved quantities, how the rule
       relates to its own inverse, and what empty space does under it.</p>
     </td>
@@ -299,12 +299,22 @@ reached that way, and since every intermediate table is itself a valid rule, edi
 once, also while the simulation runs. As soon as the table differs from all presets the rule menu
 shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule back.
 
-* **Identity**, **Inverse** (the rule that undoes the current one) and **Random** replace the table.
+* **Identity** and **Inverse** (the rule that undoes the current one) replace the table.
   **Canonical** replaces it with the rule's canonical form, the one table that stands for every
   rule making the same world: the least among its turns and mirrors and the generations of its
   vacuum's cycle it could begin at, which is the one the search measures. A preset is not always
   in canonical form: Critters' is Critters turned, so the menu then says *Custom* of the same
   world.
+* **Random** draws a rule. Left alone it is any of the 16! permutations, nearly all of which turn
+  everything to noise. The title next to it, *Random rule*, opens the properties to ask for,
+  the same that [a search](#searching-for-rules) goes through, each a chip to switch on: the
+  turns and mirrors the rule looks the same under, what patterns keep (their cells, a weight,
+  the parity of their number, their momentum), and the form of the table (it only turns blocks,
+  is linear, is its own inverse, treats the two states alike, leaves the empty world empty,
+  changes at most so many blocks). Under the chips it says how many rules have all that is
+  asked for and how many different worlds they make, counted up to a million; some properties
+  have nothing in common, and then no rule is drawn. *In canonical form* puts every rule drawn
+  in its canonical form.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
@@ -318,9 +328,17 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
     that keeps a weighted count it shows the four weights in a block instead.
   * *Backwards*: how the rule run backwards relates to the rule: the same (=), its mirror image
     (◧◨), with the two states exchanged (■□), both, or none of it (≠).
+  * *Blocks*: how many of the sixteen blocks the rule changes, lit in a small copy of the cases
+    above, and whether each only becomes a turn of itself, as under Single Rotation.
+  * *Momentum*: whether patterns keep their momentum, taking a cell's corner of its block for
+    the way it is going, as Morita does: the cells going east less those going west, and north
+    less south, stay as many. The HPP gas keeps it.
+  * *Parity*: whether a pattern's number of cells stays odd or even.
+  * *Superposition*: whether the rule is linear, so that two patterns laid over each other run
+    as each would alone, laid over each other.
   * *Vacuum*: the empty world through the generations of its cycle.
 
-  For a custom rule the main panel says the same in a sentence.
+  For a custom rule the main panel says the first of these in a sentence.
 * **Rule string**: the table as text, with Morita's number under it if the rule has one. Type
   or paste a table, a preset name or such a number and it is applied as soon as it is valid
   (otherwise the reason is shown below the field); **Copy** and **Paste** use the system

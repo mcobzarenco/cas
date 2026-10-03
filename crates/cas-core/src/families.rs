@@ -317,40 +317,45 @@ impl Family {
         rules
     }
 
-    /// So many rules of the family drawn at random, for a family too big to go through. The
-    /// table is filled in with the blocks in a random order each time, which favours no rule
-    /// in particular but is not quite even-handed either.
+    /// So many rules of the family drawn at random, for a family too big to go through.
     pub fn sample(&self, count: usize, seed: u64) -> Vec<BlockRule> {
         let mut rng = Rng::new(seed);
-        if self.constraints.is_empty() {
-            return (0..count).map(|_| BlockRule::random(|| rng.next_u64())).collect();
-        }
-        let mut constraints = self.constraints.clone();
-        // A weighting is drawn with each rule.
-        let weighted = constraints.iter().position(|c| *c == Constraint::Weighted(None));
-        let weightings: Vec<[u8; 4]> = weightings().into_iter().filter(|weights| *weights != [1; 4]).collect();
         let mut rules = Vec::with_capacity(count);
         // A draw fails when the weighting drawn has no rule of its own in the family; a
         // family with no rule at all fails every time, and is given up on.
         let mut failures = 0;
         while rules.len() < count && failures < GIVEN_UP {
-            if let Some(place) = weighted {
-                constraints[place] = Constraint::Weighted(Some(weightings[(rng.next_u64() % weightings.len() as u64) as usize]));
-            }
-            let mut found = None;
-            Filler::new(&constraints, Some(&mut rng)).fill(&mut |rule| {
-                found = Some(rule);
-                false
-            });
-            match found {
-                Some(rule) if weighted.is_none() || Constraint::Weighted(None).holds(&rule) => {
+            match self.draw(&mut rng) {
+                Some(rule) => {
                     rules.push(rule);
                     failures = 0;
                 }
-                _ => failures += 1,
+                None => failures += 1,
             }
         }
         rules
+    }
+
+    /// One rule of the family drawn at random, or none if the draw found none: a family can
+    /// be empty, and where any weighting will do, one is drawn first that may have no rule
+    /// of its own. The table is filled in with the outcomes in a random order, which favours
+    /// no rule in particular but is not quite even-handed either.
+    pub fn draw(&self, rng: &mut Rng) -> Option<BlockRule> {
+        if self.constraints.is_empty() {
+            return Some(BlockRule::random(|| rng.next_u64()));
+        }
+        let mut constraints = self.constraints.clone();
+        let weighted = constraints.iter().position(|c| *c == Constraint::Weighted(None));
+        if let Some(place) = weighted {
+            let weightings: Vec<[u8; 4]> = weightings().into_iter().filter(|weights| *weights != [1; 4]).collect();
+            constraints[place] = Constraint::Weighted(Some(weightings[(rng.next_u64() % weightings.len() as u64) as usize]));
+        }
+        let mut found = None;
+        Filler::new(&constraints, Some(rng)).fill(&mut |rule| {
+            found = Some(rule);
+            false
+        });
+        found.filter(|rule| weighted.is_none() || Constraint::Weighted(None).holds(rule))
     }
 }
 

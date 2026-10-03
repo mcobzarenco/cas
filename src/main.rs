@@ -9,6 +9,7 @@ mod analysis;
 mod catcher;
 mod editor;
 mod rig;
+mod sampler;
 mod sim;
 mod ui;
 mod view;
@@ -187,6 +188,7 @@ fn main() -> AppExit {
         editor::EditorPlugin,
         catcher::CatcherPlugin,
         analysis::AnalysisPlugin,
+        sampler::SamplerPlugin,
     ));
     if let Some(script) = script {
         app.add_plugins(rig::RigPlugin {

@@ -588,9 +588,18 @@ fn action_button_hinted(label: &'static str, name: &'static str, action: Action,
 /// A checkbox for an on/off option, ticked in the colour of its aspect. Its checked state
 /// always follows the resource, see [`sync_widgets`].
 pub(crate) fn toggle(label: &'static str, name: &'static str, option: Toggle) -> impl Scene {
-    let name = Name::new(name);
     let does = Does(Action::Flip(option));
-    let aspect = option.aspect();
+    let (aspect, key) = (option.aspect(), Action::Flip(option).key());
+    bsn! {
+        checkbox(label, name, aspect, key)
+        template_value(does)
+    }
+}
+
+/// A checkbox ticked in the colour of an aspect, with the key that flips it, if it has one.
+/// Whoever makes it keeps its `Checked` in step with what it stands for.
+pub(crate) fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, key: &'static str) -> impl Scene {
+    let name = Name::new(name);
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -600,7 +609,6 @@ pub(crate) fn toggle(label: &'static str, name: &'static str, option: Toggle) ->
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
         template_value(name)
-        template_value(does)
         template_value(aspect)
         Children [
             (
@@ -637,7 +645,7 @@ pub(crate) fn toggle(label: &'static str, name: &'static str, option: Toggle) ->
                 }
                 ThemeTextColor(tokens::TEXT_MAIN)
             ),
-            key_hint(Action::Flip(option).key()),
+            key_hint(key),
         ]
     }
 }

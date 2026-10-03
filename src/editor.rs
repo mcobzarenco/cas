@@ -14,7 +14,7 @@ use bevy::{
     clipboard::Clipboard,
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersTextInput, FeathersTextInputContainer},
+        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput, FeathersTextInputContainer},
         cursor::EntityCursor,
         palette,
         theme::ThemedText,
@@ -26,16 +26,18 @@ use bevy::{
         EditableText, FontSource, FontSourceTemplate, FontWeight, LetterSpacing, TextEdit,
         TextEditChange,
     },
-    ui_widgets::Activate,
+    ui_widgets::{Activate, ControlOrientation, ScrollArea},
     window::SystemCursorIcon,
 };
 
 use cas_core::{
+    families::Constraint,
     rules::{BlockRule, Population, Reversed, Symmetry, TURNS_AND_MIRRORS, popcount},
-    universe::{Rng, Universe},
+    universe::Universe,
 };
 
 use crate::{
+    sampler::sampler_section,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, panel_title, section, side_panel},
     view::{ALIVE, DEAD},
@@ -88,7 +90,7 @@ pub struct RuleEditor {
 }
 
 impl RuleEditor {
-    fn say(&mut self, message: impl Into<String>, rule: &BlockRule) {
+    pub(crate) fn say(&mut self, message: impl Into<String>, rule: &BlockRule) {
         self.note = Some((message.into(), rule.clone()));
     }
 
@@ -109,6 +111,14 @@ impl RuleEditor {
 /// The panel.
 #[derive(Component, Default, Clone)]
 struct EditorPanel;
+
+/// What is in the panel under its title, which scrolls when the window is too low for it, and
+/// the scrollbar it then gets.
+#[derive(Component, Default, Clone)]
+struct EditorBody;
+
+#[derive(Component, Default, Clone)]
+struct EditorScrollbar;
 
 /// One case; the value is the block before the step.
 #[derive(Component, Default, Clone, Copy)]
@@ -131,7 +141,7 @@ struct BlockCell {
 struct Status;
 
 /// A text that says something about the rule.
-#[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Default, Clone, Copy, PartialEq, Eq, Debug)]
 enum Finding {
     #[default]
     Symmetry,
@@ -145,6 +155,12 @@ enum Finding {
     Reversed,
     ReversedFormula,
     Vacuum,
+    /// How many of the sixteen blocks the rule changes, and whether only by turning them.
+    Blocks,
+    /// Whether patterns keep their momentum, the parity of their cells, and superpose.
+    Momentum,
+    Parity,
+    Linear,
     /// Morita's number, and a word about it.
     Espca,
     EspcaNote,
@@ -159,6 +175,10 @@ enum Lamp {
     Flow { before: usize, after: usize },
     /// A cell of the vacuum's tile in one generation of its cycle.
     Vacuum { generation: usize, bit: u8 },
+    /// A block, in the small picture of the cases: lit if the rule changes it.
+    Changed(u8),
+    /// The sign of a property: bright if the rule has it.
+    Has(Constraint),
 }
 
 /// A piece of a picture that is only there for some rules.
@@ -210,6 +230,7 @@ impl Plugin for EditorPlugin {
                             .or_eager(outcome_hovered),
                     ),
                     sync_rule_string,
+                    show_scrollbar,
                 )
                     .chain()
                     .in_set(SimSystems::Present),
@@ -270,6 +291,21 @@ fn vacuum_words(rule: &BlockRule) -> String {
     }
 }
 
+/// How many of the sixteen blocks the rule changes, and whether it only turns them.
+fn blocks(rule: &BlockRule) -> String {
+    let changed = (0..16).filter(|&block| rule.table()[block] != block as u8).count();
+    match (changed, Constraint::Turning.holds(rule)) {
+        (0, _) => "none changes".to_string(),
+        // (A mirror image of a block is always a turn of it as well.)
+        (_, true) => format!("{changed} of 16 change, each turned"),
+        (_, false) => format!("{changed} of 16 change"),
+    }
+}
+
+fn kept(kept: bool) -> &'static str {
+    if kept { "kept" } else { "not kept" }
+}
+
 /// The relation of the rule run backwards to the rule, in signs: the same, a mirror image
 /// (two halves facing each other), the two states exchanged, both, or none of it.
 fn reversed_formula(rule: &BlockRule) -> &'static str {
@@ -314,7 +350,55 @@ pub fn editor_panel() -> impl Scene {
                     ),
                 ]
             ),
-            caption("Each case is a 2×2 block before → after one step. A reversible rule is a permutation of the 16 blocks, so you edit it by swapping: click one outcome, then another, to exchange them."),
+            (
+                // The frame holds the scrollbar, in the margin of the panel; what is in it
+                // scrolls.
+                Node {
+                    flex_grow: 1.0,
+                    min_height: px(0),
+                    flex_direction: FlexDirection::Column,
+                }
+                Children [
+                    (
+                        #EditorBody
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(12),
+                            overflow: Overflow::scroll_y(),
+                        }
+                        ScrollArea
+                        EditorBody
+                        Children [
+                            { editor_body(orbits) },
+                        ]
+                    ),
+                    (
+                        @FeathersScrollbar {
+                            @target: #EditorBody,
+                            @orientation: {ControlOrientation::Vertical}
+                        }
+                        EditorScrollbar
+                        Node {
+                            display: Display::None,
+                            position_type: PositionType::Absolute,
+                            right: px(-10),
+                            top: px(0),
+                            bottom: px(0),
+                            width: px(6),
+                        }
+                    ),
+                ]
+            ),
+        ])
+        EditorPanel
+    }
+}
+
+/// The cases, the buttons that replace the table, what analysis says, the drawing of a rule
+/// at random, and the rule as text.
+fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
+    bsn_list![
+            caption("Each of the 16 blocks before → after one step. To edit the rule, swap two outcomes: click one, then the other."),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
@@ -356,20 +440,6 @@ pub fn editor_panel() -> impl Scene {
                         })
                     ),
                     (
-                        #RuleRandom
-                        @FeathersButton {
-                            @caption: bsn! { Text("Random") ThemedText }
-                        }
-                        Node { flex_grow: 1.0 }
-                        on(|_: On<Activate>,
-                            mut rng: ResMut<Rng>,
-                            mut universe: ResMut<Universe>,
-                            mut editor: ResMut<RuleEditor>| {
-                            universe.set_rule(BlockRule::random(|| rng.next_u64()));
-                            editor.say("A random permutation.", universe.rule());
-                        })
-                    ),
-                    (
                         // The canonical form: the least table among the rule's turns and
                         // mirrors, the generations of its vacuum's cycle it could begin at,
                         // and the vacuum's flickering away.
@@ -392,6 +462,7 @@ pub fn editor_panel() -> impl Scene {
                     ),
                 ]
             ),
+            sampler_section(),
             findings(),
             section("RULE STRING", bsn_list![
                 (
@@ -441,12 +512,10 @@ pub fn editor_panel() -> impl Scene {
                         ),
                     ]
                 ),
-                caption("The outcome of each block, block 0 first (cells count 1, 2, 4, 8: top-left, top-right, bottom-left, bottom-right). Type or paste a table, a preset name, or Morita's number of a rule, like espca-01c5ef."),
-                (caption("") Status),
+                caption("Outcomes of blocks 0 to 15 (cells count 1, 2, 4, 8 from the top-left), a preset's name, or espca-01c5ef."),
+                (#EditorNote caption("") Status),
             ]),
-        ])
-        EditorPanel
-    }
+    ]
 }
 
 /// What analysis says about the rule: each finding in words, next to a picture of it.
@@ -475,6 +544,26 @@ fn findings() -> impl Scene {
             ]
         ),
         (
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: px(6),
+            }
+            Children [
+                finding("BLOCKS", Finding::Blocks, blocks_picture()),
+                finding("MOMENTUM", Finding::Momentum, sign("Σ→", Constraint::Momentum)),
+            ]
+        ),
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: px(6),
+            }
+            Children [
+                finding("PARITY", Finding::Parity, sign("±", Constraint::Parity)),
+                finding("SUPERPOSITION", Finding::Linear, sign("A+B", Constraint::Linear)),
+            ]
+        ),
+        (
             // The empty world through the generations of its cycle.
             tile()
             Children [
@@ -498,6 +587,7 @@ fn findings() -> impl Scene {
                     Children [ { tiles } ]
                 ),
                 (
+                    #FindingVacuum
                     value("") template_value(Finding::Vacuum)
                     Node { flex_grow: 1.0, flex_basis: px(0) }
                 ),
@@ -522,6 +612,8 @@ fn tile() -> impl Scene {
 
 /// A finding: its picture, its name and what was found.
 fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> impl Scene {
+    // The rig finds what was found by this name.
+    let named = Name::new(format!("Finding{finding:?}"));
     bsn! {
         tile()
         Node {
@@ -550,7 +642,7 @@ fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> imp
                 }
                 Children [
                     label(name),
-                    (value("") template_value(finding)),
+                    (value("") template_value(finding) template_value(named)),
                 ]
             ),
         ]
@@ -642,6 +734,41 @@ fn symmetry_picture() -> impl SceneList {
         })
         .collect();
     bsn_list![{ axes }, { dots }]
+}
+
+/// The cases above in small, a square for each block: lit where the rule changes it.
+fn blocks_picture() -> impl SceneList {
+    const SIDE: f32 = 6.0;
+    const STEP: f32 = 7.5;
+    let squares: Vec<_> = ORBITS
+        .iter()
+        .enumerate()
+        .flat_map(|(row, orbit)| {
+            let left = (GLYPH - (orbit.len() as f32 * STEP - (STEP - SIDE))) / 2.0;
+            orbit.iter().enumerate().map(move |(place, &block)| {
+                let lamp = Lamp::Changed(block);
+                bsn! {
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(left + STEP * place as f32),
+                        top: px(2.0 + STEP * row as f32),
+                        width: px(SIDE),
+                        height: px(SIDE),
+                        border_radius: px(1),
+                    }
+                    BackgroundColor(palette::GRAY_3)
+                    template_value(lamp)
+                }
+            })
+        })
+        .collect();
+    bsn_list![{ squares }]
+}
+
+/// The sign a property goes by, bright when the rule has it.
+fn sign(sign: &'static str, property: Constraint) -> impl SceneList {
+    let lamp = Lamp::Has(property);
+    bsn_list![(mono(sign, 19.0, palette::GRAY_3) template_value(lamp))]
 }
 
 /// Where the blocks go, by their number of cells: before across, after upwards. A rule that
@@ -786,6 +913,7 @@ fn symmetries(rule: &BlockRule) -> [bool; 8] {
 fn sync_findings(
     universe: Res<Universe>,
     mut lamps: Query<(&Lamp, &mut BackgroundColor)>,
+    mut signs: Query<(&Lamp, &mut TextColor)>,
     mut parts: Query<(&Part, &mut Node)>,
     mut texts: Query<(&Finding, &mut Text)>,
 ) {
@@ -803,7 +931,15 @@ fn sync_findings(
                 let alive = vacuum.get(generation).is_some_and(|tile| tile >> bit & 1 == 1);
                 if alive { ALIVE } else { DEAD }
             }
+            Lamp::Changed(block) if rule.table()[block as usize] != block => Aspect::Rule.color(),
+            Lamp::Changed(_) => palette::GRAY_3,
+            Lamp::Has(_) => continue,
         };
+    }
+    for (lamp, mut color) in &mut signs {
+        if let Lamp::Has(property) = *lamp {
+            color.0 = if property.holds(rule) { ALIVE } else { palette::GRAY_3 };
+        }
     }
     let weights = match rule.population() {
         Population::Weighted(weights) => Some(weights),
@@ -830,6 +966,11 @@ fn sync_findings(
             Finding::Reversed => reversed(rule).to_string(),
             Finding::ReversedFormula => reversed_formula(rule).to_string(),
             Finding::Vacuum => vacuum_words(rule),
+            Finding::Blocks => blocks(rule),
+            Finding::Momentum => kept(Constraint::Momentum.holds(rule)).to_string(),
+            Finding::Parity => kept(Constraint::Parity.holds(rule)).to_string(),
+            Finding::Linear if Constraint::Linear.holds(rule) => "patterns superpose".to_string(),
+            Finding::Linear => "patterns do not superpose".to_string(),
             Finding::Espca => number.as_ref().map(|number| format!("ESPCA-{number}")).unwrap_or_default(),
             Finding::EspcaNote if number.is_some() => "Morita's number".to_string(),
             Finding::EspcaNote => "No ESPCA number: the rule changes with a quarter turn.".to_string(),
@@ -1064,7 +1205,7 @@ fn follow_rule(universe: Res<Universe>, mut editor: ResMut<RuleEditor>) {
 fn sync_editor(
     editor: Res<RuleEditor>,
     universe: Res<Universe>,
-    mut panel: Single<&mut Node, With<EditorPanel>>,
+    mut panel: Single<&mut Node, (With<EditorPanel>, Without<Status>)>,
     mut cells: Query<
         (&BlockCell, &mut BackgroundColor),
         (Without<CaseCard>, Without<Outcome>),
@@ -1074,7 +1215,7 @@ fn sync_editor(
         (&Outcome, &Hovered, &mut BackgroundColor),
         (Without<BlockCell>, Without<CaseCard>),
     >,
-    mut status: Single<&mut Text, With<Status>>,
+    mut status: Single<(&mut Text, &mut Node), (With<Status>, Without<EditorPanel>)>,
 ) {
     let table = universe.rule().table();
 
@@ -1107,7 +1248,25 @@ fn sync_editor(
         .typing_error
         .clone()
         .or_else(|| editor.note.as_ref().map(|(message, _)| message.clone()));
-    status.set_if_neq(Text(message.unwrap_or_default()));
+    // With nothing to say the line is not there at all.
+    let (text, line) = &mut *status;
+    let display = if message.is_some() { Display::Flex } else { Display::None };
+    if line.display != display {
+        line.display = display;
+    }
+    text.set_if_neq(Text(message.unwrap_or_default()));
+}
+
+/// The panel's scrollbar is there while there is something to scroll.
+fn show_scrollbar(
+    body: Single<&ComputedNode, With<EditorBody>>,
+    mut scrollbar: Single<&mut Node, With<EditorScrollbar>>,
+) {
+    let scrolls = body.content_size().y > body.size().y + 0.5;
+    let display = if scrolls { Display::Flex } else { Display::None };
+    if scrollbar.display != display {
+        scrollbar.display = display;
+    }
 }
 
 /// Shows the rule in the text field, unless the user is typing in it: on a rule change, and

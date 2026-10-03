@@ -36,7 +36,7 @@ pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
 const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
 /// The blocks are what the rule rewrites.
-pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.3);
+pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.22);
 /// A pattern about to be placed shows through at this opacity.
 const GHOST: f32 = 0.55;
 /// So many cells of a stamp are shown as a ghost; a larger one is placed whole all the same.

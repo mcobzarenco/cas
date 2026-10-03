@@ -1,6 +1,6 @@
 # cas
 
-A sandbox for **reversible block cellular automata**, written in Rust on [Bevy](https://bevy.org).
+A sandbox for **reversible [block cellular automata](https://en.wikipedia.org/wiki/Block_cellular_automaton)**, written in Rust on [Bevy](https://bevy.org).
 The rules act on 2×2 blocks of cells through a permutation table, so every step can be undone
 and the simulation runs backwards as well as forwards. Any of the 16! such rules can be loaded;
 a rule editor, a spaceship catcher and a search over families of rules come with it.

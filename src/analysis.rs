@@ -139,14 +139,14 @@ impl Subject {
         analyser.max_extent = (WIDEST.0 * width.max(height)).max(WIDEST.1);
         analyser.watch = Some(watch);
         let study = analyser.study(cells, phase)?;
-        let pace = match &study.motion {
-            Some(motion) => (motion.period as f32 / PERIOD_SECONDS).clamp(PACE.0, PACE.1),
+        let pace = match study.period {
+            Some(period) => (period as f32 / PERIOD_SECONDS).clamp(PACE.0, PACE.1),
             None => OPEN_PACE,
         };
         let mut world = small_world(&study, &rule);
         // A pattern that repeats is left to go round its torus. One that does not would fill
         // it: what it sends out leaves through an open border instead, and is counted.
-        let census = (study.motion.is_none()).then(|| {
+        let census = (study.period.is_none()).then(|| {
             world.open_border = true;
             world.catching = true;
             Census::with(Analyser::new(&rule))
@@ -1109,6 +1109,8 @@ fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
             (true, ..) => "Still life".to_string(),
             (_, true, _) => "Spaceship".to_string(),
             (_, _, Fate::Returns { .. }) => "Oscillator".to_string(),
+            // Known by its pieces to come back, though it was not followed until it did.
+            _ if study.period.is_some() => "Oscillator".to_string(),
             // A gun's streams get too wide before they are too many cells: what grows while
             // it flies apart grows.
             (_, _, Fate::Grows | Fate::Scatters) if study.growth.is_some_and(|growth| growth >= GROWING) => {
@@ -1130,12 +1132,13 @@ fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
                 Some((after, turn)) if !study.still => format!(" ({} after {after})", turned(turn)),
                 _ => String::new(),
             };
-            match (study.still, study.fate) {
-                (true, _) => generations(1),
-                (false, Fate::Returns { period, displacement: (dx, dy) }) if travels => {
+            match (study.still, study.fate, study.period) {
+                (true, ..) => generations(1u32),
+                (false, Fate::Returns { period, displacement: (dx, dy) }, _) if travels => {
                     format!("{}{sooner}, moving ({dx}, {dy})", generations(period))
                 }
-                (false, Fate::Returns { period, .. }) => format!("{}{sooner}", generations(period)),
+                (false, Fate::Returns { period, .. }, _) => format!("{}{sooner}", generations(period)),
+                (false, _, Some(period)) => format!("{}, when all its pieces are back at once", generations(period)),
                 _ => "—".to_string(),
             }
         }
@@ -1150,13 +1153,13 @@ fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
             (fewest, most) if fewest == most => count(fewest),
             (fewest, most) => format!("{} to {}", count(fewest), count(most)),
         },
-        Finding::Changes => match study.fate {
+        Finding::Changes => match study.period {
             _ if study.still => "none".to_string(),
-            Fate::Returns { displacement: (0, 0), .. } if study.stator > 0 => {
+            Some(_) if !travels && study.stator > 0 => {
                 format!("{:.1} cells a generation, {} never change", study.heat, study.stator)
             }
-            Fate::Returns { .. } => format!("{:.1} cells a generation", study.heat),
-            _ => "—".to_string(),
+            Some(_) => format!("{:.1} cells a generation", study.heat),
+            None => "—".to_string(),
         },
         Finding::Size => {
             let (width, height) = bounding_box(&study.start);
@@ -1177,18 +1180,18 @@ fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
             Symmetry::All => "every turn and mirror",
         }
         .to_string(),
-        Finding::Pieces => match study.fate {
-            Fate::Returns { .. } => match study.parts {
+        Finding::Pieces => match study.period {
+            Some(_) => match study.parts {
                 1 => "one piece".to_string(),
                 parts => format!("{parts} that never meet"),
             },
-            _ if study.pieces.is_empty() => "—".to_string(),
+            None if study.pieces.is_empty() => "—".to_string(),
             // With the pieces listed underneath, the line only says how many there are.
-            _ if listing && lists(&study.pieces) => match study.pieces.len() + study.more_pieces {
+            None if listing && lists(&study.pieces) => match study.pieces.len() + study.more_pieces {
                 1 => "one piece".to_string(),
                 total => format!("{total} pieces"),
             },
-            _ => pieces(&study.pieces, study.more_pieces),
+            None => pieces(&study.pieces, study.more_pieces),
         },
         Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
             Some((end, _)) => format!("{}…", &subject.rle[..end]),
@@ -1216,8 +1219,9 @@ fn runs(line: &str) -> Vec<(String, bool)> {
     runs
 }
 
-fn generations(n: u32) -> String {
-    format!("{} generation{}", group_digits(n as i64), if n == 1 { "" } else { "s" })
+fn generations(n: impl Into<u128>) -> String {
+    let n = n.into();
+    format!("{} generation{}", group_digits(n), if n == 1 { "" } else { "s" })
 }
 
 /// A number of cells, as it is written everywhere in the panel.

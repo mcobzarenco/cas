@@ -1396,8 +1396,9 @@ fn format_rate(generations_per_second: f32) -> String {
     }
 }
 
-/// `1234567` → `1 234 567`.
-pub(crate) fn group_digits(n: i64) -> String {
+/// `1234567` → `1 234 567`, for a number of any width.
+pub(crate) fn group_digits(n: impl TryInto<i128>) -> String {
+    let n = n.try_into().unwrap_or(i128::MAX);
     let digits = n.unsigned_abs().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
     if n < 0 {
@@ -1484,6 +1485,7 @@ mod tests {
         assert_eq!(Control::Density.format(0.001), "0.10 %");
         assert_eq!(Control::Density.format(0.0001), "0.010 %");
         assert_eq!(group_digits(-1234567), "-1 234 567");
+        assert_eq!(group_digits(69_481_732_320_u128), "69 481 732 320");
         assert_eq!(format_rate(122_880.0), "122 880");
         assert_eq!(format_rate(0.5), "0.5");
     }

@@ -258,7 +258,8 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | hide vacuum fluctuations | *View* checkbox | `v` |
 | cell grid | *Cell grid* | `g` |
 | outline the current partition: the 2×2 blocks the next forward step rewrites (off to begin with) | *2×2 blocks of the next step* | `p` |
-| zoom about the pointer | | mouse wheel, `+` / `−` |
+| zoom about the pointer | | mouse wheel |
+| zoom about the middle of the view | | `+` / `−` |
 | pan | | right- or middle-drag |
 | fit the grid to the window | **Fit** | `f` |
 | soup / blob density (0.01 % – 90 %, log scale) | *Density* slider (drag, click, or wheel) | |
@@ -320,8 +321,10 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
   leaves the empty world empty, changes at most so many blocks). Under the chips it says how
   many rules have all that is asked for and how many of them are canonical, one for every world
   they make, counted up to two million; some properties have nothing in common, and then no
-  rule is drawn. A rule is drawn evenly among the rules; *In canonical form* draws evenly among
-  the canonical ones instead.
+  rule is drawn. A rule is drawn evenly among the rules, and *In canonical form* evenly among
+  the canonical ones instead. Of a family too large to count, a table is filled in at random
+  under the properties, which is not even: every outcome a block can have is as likely as any
+  other, however many rules lie behind it.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
@@ -518,7 +521,7 @@ everywhere else: Critters conserves cells.
 | `conserving` | patterns keep their number of cells | 845 040 | 79 612 |
 | `weighted` | patterns keep a weighted number of cells and not their number; `weights=1,2,4,1` names the weights of the corners | 216 480 | 20 729 |
 | `momentum` | patterns keep their momentum, a cell's corner being the way it is going, as Morita reads it | 228 | 41 |
-| `parity` | patterns keep the parity of their number of cells | 1.6 billion | sampled |
+| `parity` | patterns keep the parity of their number of cells | 3.3 billion | sampled |
 | `turning` | every block becomes a turn or a mirror of itself: Single rotation, the billiard ball machine, the HPP gas | 27 648 | 3 808 |
 | `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933) | | 2 351, 24 995, 263 646 |
 | `linear` | patterns superpose: the rule is affine over the field of two elements | 322 560 | 2 606 |
@@ -539,8 +542,10 @@ to go through: `diagonal+conserving` is 241 worlds, `half-turn+involution` 2 695
 `mirror+flip` 200, `quarter-turn+mirror` (every turn and mirror) 40. Some have nothing in common:
 no rule keeps a weight of its own and looks the same after a half turn. A family of more than
 eight million tables is not gone through but sampled: `--limit` rules of it (1000 unless said)
-are drawn with `--seed`. `--limit` also measures a fair sample of a family that is gone through,
-or with `--from` the best of a table.
+are drawn with `--seed`, by filling in tables at random under the properties. That is no even
+sample: of the rules that are their own inverse, more than a fifth leave the empty world empty,
+and one draw in sixteen does. `--limit` also measures a fair sample of a family that is gone
+through, or with `--from` the best of a table.
 
 How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`
 (8000 generations). That is enough to go through a family: what character a rule has hardly

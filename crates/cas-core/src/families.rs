@@ -338,8 +338,12 @@ impl Family {
 
     /// One rule of the family drawn at random, or none if the draw found none: a family can
     /// be empty, and where any weighting will do, one is drawn first that may have no rule
-    /// of its own. The table is filled in with the outcomes in a random order, which favours
-    /// no rule in particular but is not quite even-handed either.
+    /// of its own.
+    ///
+    /// The table is filled in block by block with the outcomes tried in a random order, so
+    /// every outcome a block can have is as likely as any other, however many rules lie
+    /// behind it: the draw is not even. Of the rules that are their own inverse, more than a
+    /// fifth leave the empty block empty, and one draw in sixteen does.
     pub fn draw(&self, rng: &mut Rng) -> Option<BlockRule> {
         if self.constraints.is_empty() {
             return Some(BlockRule::random(|| rng.next_u64()));

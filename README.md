@@ -467,19 +467,42 @@ spaceship and their periods. (By kinds alone the list would be led by rules in w
 already flies and nothing stays: cells flying in formation are kinds too.) After them come the
 `linear` rules that send out spaceships.
 
-| `--family` | the rules | tables | measured | on four threads |
-|------------|-----------|--------|----------|-----------------|
-| `quarter-turn` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 | seconds |
-| `half-turn` | look the same after a half turn | 1 105 920 | 146 252 | 17 minutes |
-| `mirror` | look the same in a mirror | 1 105 920 | 287 732 | about half an hour |
-| `conserving` | keep the number of cells of every block, or trade it for the number of dead cells as Critters does | 829 440 | 78 712 | 16 minutes |
-| `weighted` | keep a weighted number of cells and not their number | 107 664 | 13 746 | 5 minutes |
-| `random` | `--count` random permutations, drawn with `--seed` | | | |
+A family is the set of rules with some properties in common, named after `--family` and joined
+by `+`: `--family mirror+conserving` is the rules that look the same in a mirror *and* keep the
+number of cells. Whatever is about the cells of a pattern is judged relative to the vacuum, as
+everywhere else: Critters conserves cells.
 
-Rules that make the same world are measured once: those that differ only by a turn or a
-mirror, by the generation of the vacuum's cycle they begin at (Critters, and Critters with dead
-and alive exchanged), or by a vacuum that flickers and changes nothing else. `--limit` measures
-a fair sample of a family, or with `--from` the best of a table.
+| property | the rules | tables | worlds |
+|----------|-----------|--------|--------|
+| `quarter-turn` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 |
+| `half-turn` | look the same after a half turn | 1 105 920 | 146 252 |
+| `mirror`, `flip` | look the same in a mirror, left to right or top to bottom (the same worlds, turned) | 1 105 920 | 287 732 |
+| `diagonal`, `anti-diagonal` | look the same in a mirror across a diagonal | 15 482 880 | sampled |
+| `conserving` | patterns keep their number of cells | 845 040 | 79 706 |
+| `weighted` | patterns keep a weighted number of cells and not their number; `weights=1,2,4,1` names the weights of the corners | 216 480 | 20 743 |
+| `momentum` | patterns keep their momentum, a cell's corner being the way it is going, as Morita reads it | 228 | 44 |
+| `parity` | patterns keep the parity of their number of cells | 1.6 billion | sampled |
+| `turning` | every block becomes a turn or a mirror of itself: Single rotation, the billiard ball machine, the HPP gas | 27 648 | 3 808 |
+| `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933) | | 2 351, 24 995, 263 691 |
+| `linear` | patterns superpose: the rule is affine over the field of two elements | 322 560 | 2 606 |
+| `involution` | the rule is its own inverse | 46 million | sampled |
+| `complement` | dead and alive are interchangeable | 10 million | sampled |
+| `stable-vacuum` | the empty world stays empty | | sampled |
+| `random` | nothing required: every rule there is | 16! | sampled |
+
+*Tables* is how many rules have the property, *worlds* how many are left to measure: rules that
+make the same world are measured once, those that differ only by a turn or a mirror, by the
+generation of the vacuum's cycle they begin at (Critters, and Critters with dead and alive
+exchanged), or by a vacuum that flickers and changes nothing else. A world takes 7 to 15 ms on
+four threads, the tame ones longest: the half-turn family 17 minutes, the turning rules one.
+
+Together the properties cut each other down to size, which is how to get at the ones too large
+to go through: `diagonal+conserving` is 272 worlds, `half-turn+involution` 2 728,
+`mirror+flip` 200, `quarter-turn+mirror` (every turn and mirror) 40. Some have nothing in common:
+no rule keeps a weight of its own and looks the same after a half turn. A family of more than
+eight million tables is not gone through but sampled: `--limit` rules of it (1000 unless said)
+are drawn with `--seed`. `--limit` also measures a fair sample of a family that is gone through,
+or with `--from` the best of a table.
 
 How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`
 (8000 generations). That is enough to go through a family: what character a rule has hardly

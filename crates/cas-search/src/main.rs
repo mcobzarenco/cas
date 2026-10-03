@@ -12,20 +12,35 @@ use std::{
 };
 
 use cas_core::{
-    families,
-    rules::{BlockRule, Population, mirror, rotate_180, rotate_cw},
+    families::{self, ENUMERABLE, Family},
+    rules::{BlockRule, Population},
     search::{self, Effort, Report},
     universe::Rng,
 };
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 
 /// Looks for interesting reversible block cellular automata.
 #[derive(Parser, Debug)]
 #[command(name = "cas-search", version, about)]
 struct Args {
-    /// The rules to measure. Rules that differ only by a turn or a mirror are measured once.
-    #[arg(long, value_enum, default_value = "quarter-turn")]
-    family: Family,
+    /// The rules to measure: those with all of the properties named, joined by `+`, as in
+    /// `mirror+conserving`. Rules that make the same world are measured once.
+    ///
+    /// Turns and mirrors the rule looks the same under: `quarter-turn` (Morita's 1536 ESPCAs),
+    /// `half-turn`, `mirror` (left to right), `flip` (top to bottom), `diagonal`,
+    /// `anti-diagonal`. What patterns keep: `conserving` (their number of cells), `weighted`
+    /// (a weighted number and not the number; `weights=1,2,4,1` for the weights of the corners
+    /// top-left, top-right, bottom-left, bottom-right), `parity` (whether it is odd), `momentum`
+    /// (a cell's corner taken for the way it is going). The table: `turning` (every block
+    /// becomes a turn or mirror of itself), `sparse=N` (at most N of the 16 blocks change),
+    /// `linear` (patterns superpose), `involution` (the rule is its own inverse), `complement`
+    /// (dead and alive are interchangeable), `stable-vacuum`. `random` requires nothing: every
+    /// rule there is.
+    ///
+    /// A family of more than eight million rules is not gone through but sampled, `--limit`
+    /// rules of it drawn with `--seed`.
+    #[arg(long, default_value = "quarter-turn", verbatim_doc_comment)]
+    family: Vec<String>,
     /// Measure these rules instead of a family: presets, ESPCA numbers or tables.
     #[arg(long = "rule")]
     rules: Vec<BlockRule>,
@@ -33,10 +48,7 @@ struct Args {
     /// first. With --limit and more seeds or generations: a closer look at the best of it.
     #[arg(long)]
     from: Option<PathBuf>,
-    /// How many random rules to draw.
-    #[arg(long, default_value_t = 1000)]
-    count: usize,
-    /// The seed the random rules are drawn with.
+    /// The seed the rules of a family too big to go through are drawn with.
     #[arg(long, default_value_t = 1)]
     seed: u64,
     /// Small random patterns each rule is tried on.
@@ -53,7 +65,8 @@ struct Args {
     #[arg(long)]
     out: Option<PathBuf>,
     /// Measure at most this many rules now. Those of a family are taken in a shuffled order,
-    /// so that a part of it is a fair sample.
+    /// so that a part of it is a fair sample; of a family too big to go through, so many are
+    /// drawn, 1000 unless said.
     #[arg(long)]
     limit: Option<usize>,
     /// How many of the best rules to print at the end.
@@ -64,23 +77,8 @@ struct Args {
     threads: usize,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum Family {
-    /// The 1536 rules that look the same after a quarter turn: Morita's ESPCAs.
-    QuarterTurn,
-    /// The 1 105 920 rules that look the same after a half turn.
-    HalfTurn,
-    /// The 1 105 920 rules that look the same in a mirror.
-    Mirror,
-    /// The 829 440 rules that keep the number of cells of every block, or trade it for the
-    /// number of its dead cells as Critters does: patterns keep their number of cells.
-    Conserving,
-    /// The rules that keep a weighted number of cells, some cells counting for several, and
-    /// not their number: cells are made and unmade, yet nothing can explode.
-    Weighted,
-    /// Random permutations of the sixteen blocks, `--count` of them.
-    Random,
-}
+/// So many rules are drawn of a family too big to go through, unless `--limit` says.
+const DRAWN: usize = 1000;
 
 fn default_threads() -> usize {
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -180,14 +178,23 @@ fn main() {
         let rule = |line: &Vec<String>| line[0].parse().unwrap_or_else(|error: String| fail(&error));
         lines.iter().map(rule).collect()
     } else {
-        families::distinct(match args.family {
-            Family::QuarterTurn => families::symmetric_under(rotate_cw),
-            Family::HalfTurn => families::symmetric_under(rotate_180),
-            Family::Mirror => families::symmetric_under(mirror),
-            Family::Conserving => families::conserving(),
-            Family::Weighted => families::weighted(),
-            Family::Random => families::random(args.count, args.seed),
-        })
+        let family = Family::parse(&args.family.join("+")).unwrap_or_else(|error| fail(&error));
+        let named = match family.constraints() {
+            [] => "every rule there is".to_string(),
+            constraints => constraints.iter().map(|constraint| constraint.to_string()).collect::<Vec<_>>().join("+"),
+        };
+        let rules = match family.count(ENUMERABLE) {
+            Some(count) => {
+                eprintln!("{named}: {count} rules");
+                family.rules()
+            }
+            None => {
+                let drawn = args.limit.unwrap_or(DRAWN);
+                eprintln!("{named}: too many rules to go through, {drawn} drawn with seed {}", args.seed);
+                family.sample(drawn, args.seed)
+            }
+        };
+        families::distinct(rules)
     };
 
     // Lines of an earlier run count as done.

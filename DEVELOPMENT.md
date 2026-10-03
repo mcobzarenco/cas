@@ -66,7 +66,7 @@ of Bevy; the app at the root and the search program are built on it.
 | `…/pattern.rs` | finite patterns on an unbounded plane: what becomes of a pattern left alone, its period, displacement and canonical form, taking apart patterns that only travel together, the full study of one (symmetry, heat, growth law, what it came apart into), run-length encoding. Tests use the periods and displacements js-revca's tests give, hold the analysis against the grid, and replay figures of Morita's book (which pins down how his automata lie on the block grid) |
 | `…/census.rs` | counting by kind the spaceships a universe caught |
 | `…/search.rs` | the trials a rule is put through, the cheap ones first, and its report |
-| `…/families.rs` | the families of rules a search goes through: by symmetry, by what is conserved, at random |
+| `…/families.rs` | the families of rules a search goes through: the rules with some properties in common (symmetries, what patterns keep, the form of the table), enumerated by filling in the table under those constraints, or sampled when there are too many |
 | `crates/cas-core/examples/figures.rs` | draws the figures of the README |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |

@@ -131,7 +131,6 @@ drag Grid 20 20; wait 20
 expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
 expect_text StudyPieces 190 pieces: 189 spaceships (c/3 ↙ ×48, c/3 ↗ ×47, c/3 ↖ ×47, one more kind), one that grows
 shot analysis-8-gun
-click AnalysisClose; wait 3
 
 # Close puts the panel away; the key brings it back choosing, and puts it away again. The
 # button starts the choosing without closing anything; Escape ends it.

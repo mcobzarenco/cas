@@ -28,6 +28,7 @@
 //! | `paint X Y [on/off]`| set a cell directly                                            |
 //! | `place RLE X Y`     | put a run-length encoded pattern with its corner at (X, Y)     |
 //! | `fit`               | fit the view to the grid                                       |
+//! | `window W H`        | give the window another size, in logical pixels                |
 //! | `play`, `pause`     | transport                                                      |
 //! | `step N`            | advance N generations (negative goes backwards)                |
 //! | `rule RULE`         | switch rule: a preset name or a table of 16 states             |
@@ -46,6 +47,8 @@
 //! | `expect_population N` | fail unless the pattern has that many cells                  |
 //! | `expect_size W H`   | fail unless the grid is W cells wide and H high                |
 //! | `expect_checked NAME on/off` | fail unless the checkbox named NAME shows that state   |
+//! | `expect_shown NAME on/off` | fail unless the node named NAME is on display (or is not:  |
+//! |                     | a closed panel and all that is in it are not)                  |
 //! | `expect_text NAME TEXT` | fail unless the node named NAME reads TEXT (a button, by  |
 //! |                     | its caption)                                                   |
 //! | `expect_caught SHIPS KINDS` | fail unless the catcher has that many spaceships, of that many kinds |
@@ -60,7 +63,8 @@
 //!
 //! A run must not depend on what the person at the machine happens to do, so real input is
 //! discarded while a script runs (and `main` makes the window transparent to the pointer).
-//! A command that names a missing UI node or a cell outside the grid fails the run.
+//! A command that names a missing UI node or a cell outside the grid fails the run, and so
+//! does a pointer command on a node that is not on display.
 
 use std::{collections::VecDeque, path::PathBuf};
 
@@ -127,6 +131,8 @@ pub enum Command {
     Blob(Option<f32>),
     Clear,
     Fit,
+    /// The window's new size, in logical pixels.
+    Window(u32, u32),
     ExpectGeneration(i64),
     ExpectCell { x: usize, y: usize, alive: bool },
     ExpectRule(BlockRule),
@@ -136,6 +142,7 @@ pub enum Command {
     ExpectSize(usize, usize),
     ExpectPlaying(bool),
     ExpectChecked { name: String, checked: bool },
+    ExpectShown { name: String, shown: bool },
     ExpectText { name: String, text: String },
     ExpectCaught { ships: u64, kinds: usize },
     ExpectClipboard(String),
@@ -242,6 +249,7 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
             "cloud" => Command::Cloud(args.first().map(|s| parse(s)).transpose()?),
             "clear" => Command::Clear,
             "fit" => Command::Fit,
+            "window" => Command::Window(parse(arg(0, "a width")?)?, parse(arg(1, "a height")?)?),
             "expect_gen" => Command::ExpectGeneration(parse(arg(0, "a generation")?)?),
             "expect_cell" => Command::ExpectCell {
                 x: parse(arg(0, "x")?)?,
@@ -257,6 +265,10 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
             "expect_checked" => Command::ExpectChecked {
                 name: arg(0, "a UI node name")?.to_string(),
                 checked: parse_bool(arg(1, "on/off")?)?,
+            },
+            "expect_shown" => Command::ExpectShown {
+                name: arg(0, "a UI node name")?.to_string(),
+                shown: parse_bool(arg(1, "on/off")?)?,
             },
             "expect_text" => Command::ExpectText {
                 name: arg(0, "a UI node name")?.to_string(),
@@ -600,6 +612,7 @@ fn drive(
     mut rng: ResMut<Rng>,
     mut clipboard: ResMut<Clipboard>,
     catcher: Res<Catcher>,
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
     input.discard_real();
@@ -634,11 +647,16 @@ fn drive(
             .find(|(_, n, ..)| n.as_str() == name)
             .ok_or_else(|| format!("no UI node named {name:?}"))
     };
-    // Centre of a named UI node in logical window coordinates.
+    // A node takes up room unless it, or what it is in, is not displayed.
+    let shown = |computed: &ComputedNode| computed.size.min_element() > 0.0;
+    // Centre of a named UI node in logical window coordinates. A node that is not on display
+    // has none: the pointer has nothing to do there.
     let locate = |name: &str| {
-        node(name).map(|(_, _, computed, transform, ..)| {
-            transform.translation * computed.inverse_scale_factor
-        })
+        let (_, _, computed, transform, ..) = node(name)?;
+        if !shown(computed) {
+            return Err(format!("the UI node named {name:?} is not on display"));
+        }
+        Ok(transform.translation * computed.inverse_scale_factor)
     };
     let expect = |holds: bool, complaint: String| if holds { Ok(()) } else { Err(complaint) };
     use ButtonState::{Pressed, Released};
@@ -763,6 +781,11 @@ fn drive(
             }
             Command::Clear => universe.clear(),
             Command::Fit => view.fit = true,
+            Command::Window(width, height) => {
+                for mut window in &mut windows {
+                    window.resolution.set(width as f32, height as f32);
+                }
+            }
             Command::ExpectGeneration(expected) => expect(
                 universe.generation == expected,
                 format!("expected generation {expected}, found {}", universe.generation),
@@ -804,6 +827,10 @@ fn drive(
             Command::ExpectChecked { name, checked } => {
                 let (_, _, _, _, found, _) = node(&name)?;
                 expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
+            }
+            Command::ExpectShown { name, shown: expected } => {
+                let (_, _, computed, ..) = node(&name)?;
+                expect(shown(computed) == expected, format!("expected {name} to be on display: {expected}"))?;
             }
             Command::ExpectText { name, text } => {
                 // A node without text of its own, such as a button, reads as its caption.
@@ -955,6 +982,11 @@ mod tests {
         assert_eq!(parse_script("film ship 1").unwrap()[1], Command::Step(1));
         assert!(parse_script("film ship").is_err());
         assert!(parse_script("place 2x 3 4").is_err());
+        assert_eq!(
+            parse_script("window 1280 720; expect_shown Catcher off").unwrap(),
+            vec![Command::Window(1280, 720), Command::ExpectShown { name: "Catcher".into(), shown: false }]
+        );
+        assert!(parse_script("window 1280").is_err());
         assert!(parse_script("expect_size 64").is_err());
         assert!(parse_script("expect_text").is_err());
     }

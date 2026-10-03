@@ -247,7 +247,7 @@ pub fn describe(rule: &BlockRule) -> String {
     // Morita's number, for the rules that have one.
     let number = rule.espca().map(|number| format!(", ESPCA-{number}")).unwrap_or_default();
     format!(
-        "A custom rule{number}. Symmetry: {}. Dead and alive: {}. Cell count: {}. Backwards: {}. \
+        "A custom rule{number}. Symmetry: {}. Dead and alive: {}. Cell count: {}. Time reversal: {}. \
          Vacuum: {}.",
         symmetry(rule),
         states(rule),
@@ -541,7 +541,7 @@ fn findings() -> impl Scene {
             }
             Children [
                 finding("CELL COUNT", Finding::CellCount, flow_picture()),
-                finding("BACKWARDS", Finding::Reversed, formula(Finding::ReversedFormula, palette::LIGHT_GRAY_1)),
+                finding("TIME REVERSAL", Finding::Reversed, formula(Finding::ReversedFormula, palette::LIGHT_GRAY_1)),
             ]
         ),
         (
@@ -1318,12 +1318,12 @@ mod tests {
         assert_eq!(
             describe(&BlockRule::identity()),
             "A custom rule, ESPCA-08cadf. Symmetry: all rotations and mirrors. Dead and alive: \
-             interchangeable. Cell count: conserved. Backwards: the same rule. Vacuum: stable."
+             interchangeable. Cell count: conserved. Time reversal: the same rule. Vacuum: stable."
         );
         assert_eq!(
             describe(&lopsided()),
             "A custom rule. Symmetry: none. Dead and alive: not interchangeable. Cell count: not \
-             conserved. Backwards: the same rule. Vacuum: stable."
+             conserved. Time reversal: the same rule. Vacuum: stable."
         );
     }
 

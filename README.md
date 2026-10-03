@@ -326,7 +326,7 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
     corner of the block says. The diagram shows where the blocks go by their number of cells,
     before across and after upwards: a rule that conserves cells lights the diagonal. For a rule
     that keeps a weighted count it shows the four weights in a block instead.
-  * *Backwards*: how the rule run backwards relates to the rule: the same (an equals sign), its
+  * *Time reversal*: how the rule run backwards relates to the rule: the same (an equals sign), its
     mirror image (the two triangles of a mirror), with the two states exchanged (the half-filled
     circle), both, or none of it (the sign for unequal).
   * *Blocks*: how many of the sixteen blocks the rule changes, lit in a small copy of the cases

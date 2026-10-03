@@ -64,7 +64,7 @@ const WORLD_SIDES: (usize, usize) = (32, 256);
 /// How far a pattern is followed, whatever it is: for so many generations; or until it has so
 /// many times the cells it set out with, or is so many times as wide, which for a small
 /// pattern is so many cells and so wide at least.
-const GENERATIONS: u32 = 8192;
+const GENERATIONS: u32 = 16 * 8192;
 const MOST_CELLS: (usize, usize) = (4, 1024);
 const WIDEST: (i32, i32) = (2, 512);
 /// A study is made on another thread, and most are done before the next frame. One that is

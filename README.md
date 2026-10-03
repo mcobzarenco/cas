@@ -416,7 +416,7 @@ the catcher does with what reaches the edge, and the *Analysis* panel says what 
 * For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
   blocks, and its run-length encoded text.
 
-Every pattern is followed as far: for 8192 generations, unless it is back in its shape before,
+Every pattern is followed as far: for 131 072 generations, unless it is back in its shape before,
 or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small
 one: wider than 512 cells). The study is made in the background, so a large pattern, or one that
 is slow to make up its mind, holds nothing up: the panel then says how far the study has got,

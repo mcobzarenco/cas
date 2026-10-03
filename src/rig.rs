@@ -86,6 +86,7 @@ use bevy::{
     picking::PickingSystems,
     prelude::*,
     render::view::screenshot::{Screenshot, save_to_disk},
+    text::EditableText,
     ui::{Checked, UiGlobalTransform},
     window::{CursorMoved, PrimaryWindow, WindowEvent},
 };
@@ -388,7 +389,7 @@ fn parse_bool(s: &str) -> Result<bool, String> {
 }
 
 /// Keys that produce a character, with the character they produce (unshifted).
-const CHARACTER_KEYS: [(char, KeyCode); 43] = [
+const CHARACTER_KEYS: [(char, KeyCode); 44] = [
     ('a', KeyCode::KeyA),
     ('b', KeyCode::KeyB),
     ('c', KeyCode::KeyC),
@@ -431,6 +432,8 @@ const CHARACTER_KEYS: [(char, KeyCode); 43] = [
     ('.', KeyCode::Period),
     ('=', KeyCode::Equal),
     ('-', KeyCode::Minus),
+    // The end of a row in a pattern's text; on the key of the 4, where many keyboards have it.
+    ('$', KeyCode::Digit4),
     (' ', KeyCode::Space),
 ];
 
@@ -638,17 +641,21 @@ impl Input<'_, '_> {
     }
 }
 
-/// What a node of the interface reads as: its own text with the spans that carry it on, or,
-/// for a node without text of its own, the texts in it.
+/// What a node of the interface reads as: its own text with the spans that carry it on, what
+/// is in it if it is a text field, or, for a node without text of its own, the texts in it.
 #[derive(SystemParam)]
 struct Reading<'w, 's> {
     children: Query<'w, 's, &'static Children>,
     texts: Query<'w, 's, &'static Text>,
     spans: Query<'w, 's, &'static TextSpan>,
+    fields: Query<'w, 's, &'static EditableText>,
 }
 
 impl Reading<'_, '_> {
     fn of(&self, entity: Entity) -> String {
+        if let Ok(field) = self.fields.get(entity) {
+            return field.value().to_string();
+        }
         // A text reads on through the spans that carry it on in another face or colour.
         let text = |entity: Entity| {
             let text = self.texts.get(entity).ok()?;

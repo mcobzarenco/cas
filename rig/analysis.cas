@@ -1,4 +1,5 @@
-# Analysing a pattern: chosen with a band on the grid, or sent over from the spaceship list.
+# Analysing a pattern: chosen with a band on the grid, sent over from the spaceship list, or
+# typed or pasted as text.
 # Expects the default start-up (single rotation, 256×256).
 wait 25; clear
 
@@ -114,8 +115,7 @@ click AnalysisPlace; wait 3; click Grid 0 0; wait 3; expect_population 4
 key Escape; wait 3; expect_rule critters
 
 # Four patterns at once fly apart: what they came to is told piece by piece, and the small
-# world's border is open, so that what leaves it is counted. A long text is cut short on the
-# panel, and copied whole.
+# world's border is open, so that what leaves it is counted.
 rule single-rotation; clear
 place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
 click Analyse; wait 3; drag Grid -100 -100; wait 20
@@ -128,7 +128,7 @@ expect_text PieceSort1 1 still life
 click AnalysisPause; wait 3; click AnalysisRestart; wait 10
 expect_text SmallStatus generation 0, no spaceship has left it, 17 cells in it now
 click AnalysisPause; wait 3
-expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o…
+expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
 shot analysis-7-pieces
 # A click on the line lists them kind by kind instead: the spaceships as the spaceship list
 # shows them (period, cells, how many; then speed and way), and what stays where it is
@@ -169,6 +169,25 @@ expect_text StudyPieces 3 that never meet
 expect_text PieceSort0 3 oscillators periods 4, 16, 36
 expect_text StudyText o9b2o9b2o$20bo
 shot analysis-8-many
+
+# The text of a pattern can come from elsewhere: pasted into its field, it is studied under
+# the rule of the grid. Here it is the four patterns copied above, under another rule.
+rule critters; wait 2
+click StudyText; wait 3; key Ctrl+a; key Ctrl+v; wait 10
+until expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
+expect_text SubjectRule Critters
+# Typed, a text is studied as soon as it spells a pattern. What does not spell one is said,
+# and Escape leaves the field with the text of the pattern on display, and the choosing on.
+rule single-rotation; wait 2
+key Ctrl+a; type 3o$o$bo; wait 10
+until expect_text StudyWhat Spaceship
+expect_text StudySpeed c/15 diagonal ↘
+type x; wait 5
+expect_text AnalysisNote 'x' does not belong in a run-length encoded pattern.
+shot analysis-8-typed
+key Escape; wait 5
+expect_text StudyText 3o$o$bo
+expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
 
 # Close puts the panel away; the key brings it back choosing, and puts it away again. The
 # button starts the choosing without closing anything; Escape ends it.

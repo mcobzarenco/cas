@@ -1,10 +1,10 @@
 //! Analysing a pattern: a panel that runs a pattern of the grid on its own and says what it
 //! does.
 //!
-//! A pattern is chosen by dragging a band around it on the grid (after **Analyse**), or sent
-//! over from the spaceship list. It is followed on the unbounded plane until it repeats or
-//! gets out of hand ([`Analyser::study`]), and shown living in a small world of its own, a
-//! torus just big enough for it.
+//! A pattern is chosen by dragging a band around it on the grid (after **Analyse**), sent
+//! over from the spaceship list, or typed or pasted as text into the panel. It is followed on
+//! the unbounded plane until it repeats or gets out of hand ([`Analyser::study`]), and shown
+//! living in a small world of its own, a torus just big enough for it.
 
 use std::sync::Arc;
 
@@ -12,17 +12,18 @@ use bevy::{
     clipboard::Clipboard,
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar},
+        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput},
         cursor::EntityCursor,
         palette,
         theme::{ThemeTextColor, ThemedText},
         tokens,
     },
+    input_focus::InputFocus,
     picking::hover::Hovered,
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
-    text::{FontSource, FontSourceTemplate, FontWeight},
+    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
     window::SystemCursorIcon,
 };
@@ -31,17 +32,18 @@ use cas_core::{
     census::Census,
     pattern::{
         Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, Watch,
-        to_rle,
+        from_rle, to_rle,
     },
     rules::BlockRule,
     universe::Universe,
 };
 
 use crate::{
+    actions::KeyboardOwner,
     catcher::{CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, heading as column_title, mono, number, picture},
     icons,
     sim::{Settings, SimSystems},
-    ui::{Aspect, caption, group_digits, panel_title, side_panel},
+    ui::{Aspect, caption, field_frame, group_digits, panel_title, side_panel},
     view::{Framing, GridMaterial, GridParams, Stamp, cell_image, edge_of, upload},
 };
 
@@ -73,8 +75,10 @@ const SHOWS_AFTER: f32 = 0.15;
 /// The small world's clock makes up for no more than so many seconds of a frame that took
 /// long: a window that was out of sight for an hour does not run an hour of generations.
 const LONGEST_FRAME: f32 = 0.25;
-/// So many characters of the pattern's text are shown; Copy copies all of it.
-const TEXT_SHOWN: usize = 36;
+/// So many characters of the pattern's text are put in its field, and so many in the note of
+/// what was copied; Copy copies all of it.
+const TEXT_SHOWN: usize = 16_384;
+const NOTE_SHOWN: usize = 36;
 /// The size of what the findings say, the width of their names, and the gap after those.
 const VALUE_SIZE: f32 = 12.0;
 const NAME_COLUMN: f32 = 66.0;
@@ -100,6 +104,10 @@ pub struct Analysis {
     /// The pieces are listed under their line, kind by kind and with their pictures. Folded
     /// away, a line to each sort of piece says what there is.
     listing: bool,
+    /// The text of the pattern's field as it was last acted on, and what is wrong with it if
+    /// it does not spell a pattern.
+    typed: String,
+    mistyped: Option<String>,
     /// What the last button did.
     note: Option<String>,
 }
@@ -316,8 +324,12 @@ enum Finding {
     Size,
     Symmetry,
     Pieces,
-    Text,
 }
+
+/// The field with the pattern as text: what is on display, or what is typed or pasted there
+/// to be studied.
+#[derive(Component, Default, Clone)]
+struct PatternText;
 
 /// The line under the small world's caption: its generation, and what has left it.
 #[derive(Component, Default, Clone)]
@@ -400,10 +412,20 @@ impl Plugin for AnalysisPlugin {
         app.init_resource::<Analysis>()
             .init_resource::<SmallAssets>()
             .add_observer(attach_material)
+            .add_observer(text_in_mono)
             .add_systems(Update, call_off.in_set(SimSystems::Input))
             .add_systems(
                 Update,
-                (take_study, run_small_world, draw_small_world, sync_panel, list_pieces, show_status, label_pause)
+                (
+                    take_study,
+                    run_small_world,
+                    draw_small_world,
+                    sync_text,
+                    sync_panel,
+                    list_pieces,
+                    show_status,
+                    label_pause,
+                )
                     .chain()
                     .in_set(SimSystems::Present),
             );
@@ -412,6 +434,17 @@ impl Plugin for AnalysisPlugin {
 
 fn attach_material(add: On<Add, SmallView>, assets: Res<SmallAssets>, mut commands: Commands) {
     commands.entity(add.entity).insert(MaterialNode(assets.material.clone()));
+}
+
+/// A pattern's text is set in the fixed-width face, as text to copy is. The text input's own
+/// scene already sets a `TextFont`, which a second one in ours would duplicate, so it is
+/// replaced here.
+fn text_in_mono(add: On<Add, PatternText>, assets: Res<AssetServer>, mut commands: Commands) {
+    commands.entity(add.entity).insert(TextFont {
+        font: FontSource::Handle(assets.load(fonts::MONO)),
+        font_size: FontSize::Px(VALUE_SIZE),
+        ..default()
+    });
 }
 
 pub fn analysis_panel() -> impl Scene {
@@ -467,7 +500,7 @@ pub fn analysis_panel() -> impl Scene {
                         (
                             // What the panel is for, until there is a pattern in it.
                             #AnalysisIntro
-                            caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, or send a spaceship over from the list.")
+                            caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, send a spaceship over from the list, or type or paste a pattern's text here.")
                             template_value(During::Nothing)
                         ),
                         (
@@ -571,7 +604,28 @@ pub fn analysis_panel() -> impl Scene {
                                     }
                                     PiecesList
                                 ),
-                                line("TEXT", Finding::Text),
+                            ]
+                        ),
+                        (
+                            // The pattern as text: to read, and to type or paste another into.
+                            Node {
+                                flex_direction: FlexDirection::Row,
+                                align_items: AlignItems::Center,
+                                column_gap: px(NAME_GAP),
+                                flex_shrink: 0.0,
+                            }
+                            Children [
+                                (column_title("TEXT") Node { width: px(NAME_COLUMN), flex_shrink: 0.0 }),
+                                (
+                                    field_frame()
+                                    Node { flex_basis: px(0), min_width: px(0) }
+                                    Children [(
+                                        #StudyText
+                                        @FeathersTextInput {}
+                                        PatternText
+                                        on(text_edited)
+                                    )]
+                                ),
                             ]
                         ),
                         (
@@ -627,7 +681,6 @@ pub fn analysis_panel() -> impl Scene {
 /// One finding: its name and, next to it, what was found.
 fn line(label: &'static str, finding: Finding) -> impl Scene {
     let name = Name::new(format!("Study{finding:?}"));
-    let font = face(finding);
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -654,7 +707,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
             (
                 Text("—")
                 TextFont {
-                    font: FontSourceTemplate::Handle(font),
+                    font: FontSourceTemplate::Handle(fonts::REGULAR),
                     font_size: FontSize::Px(VALUE_SIZE),
                     weight: FontWeight::NORMAL,
                 }
@@ -926,9 +979,80 @@ fn copy_subject(_: On<Activate>, mut analysis: ResMut<Analysis>, mut clipboard: 
         return;
     };
     analysis.note = Some(match clipboard.set_text(rle.as_str()) {
-        Ok(()) => format!("Copied {rle}"),
+        Ok(()) => format!("Copied {}", head(&rle, NOTE_SHOWN)),
         Err(error) => format!("The clipboard is not available ({error:?})."),
     });
+}
+
+/// Typing or pasting in the text field studies the pattern the text spells, as soon as it
+/// spells one, under the rule of the grid. The text is the one Copy gives: the pattern from a
+/// corner of the blocks the next step rewrites, at the start of the vacuum's cycle.
+fn text_edited(
+    _: On<TextEditChange>,
+    field: Single<(Entity, &EditableText), With<PatternText>>,
+    focus: Res<InputFocus>,
+    universe: Res<Universe>,
+    mut analysis: ResMut<Analysis>,
+) {
+    let (entity, text) = *field;
+    // The field is also rewritten for every pattern studied; only the user's edits count.
+    if focus.get() != Some(entity) {
+        return;
+    }
+    // Text from elsewhere may have been broken into lines.
+    let typed: String = text.value().to_string().split_whitespace().collect();
+    // Moving the caret reports an edit as well, so most of the time nothing is new.
+    if typed == analysis.bypass_change_detection().typed {
+        return;
+    }
+    analysis.typed = typed;
+    match from_rle(&analysis.typed) {
+        // An emptied field is on its way to another pattern.
+        Ok(cells) if cells.is_empty() => analysis.mistyped = None,
+        Ok(cells) => {
+            analysis.mistyped = None;
+            analysis.study(cells, 0, &universe);
+        }
+        Err(error) => analysis.mistyped = Some(format!("{error}.")),
+    }
+}
+
+/// Puts the text of the pattern on display in its field, unless the user is typing there: for
+/// a new pattern, and when the field is left with something else in it.
+fn sync_text(
+    mut analysis: ResMut<Analysis>,
+    focus: Res<InputFocus>,
+    mut field: Single<(Entity, &mut EditableText), With<PatternText>>,
+    mut shown: Local<Option<u64>>,
+) {
+    let (entity, text) = &mut *field;
+    if focus.get() == Some(*entity) {
+        return;
+    }
+    let number = analysis.subject.as_ref().map(|subject| subject.number);
+    if *shown == number && !focus.is_changed() {
+        return;
+    }
+    *shown = number;
+    let wanted = analysis.subject.as_ref().map_or(String::new(), |subject| head(&subject.rle, TEXT_SHOWN));
+    if text.value().to_string() != wanted {
+        text.queue_edit(TextEdit::SelectAll);
+        text.queue_edit(TextEdit::Insert(wanted.as_str().into()));
+    }
+    // A long text shows from its beginning: the field keeps its caret in sight.
+    text.queue_edit(TextEdit::TextStart(false));
+    if analysis.typed != wanted || analysis.mistyped.is_some() {
+        analysis.typed = wanted;
+        analysis.mistyped = None;
+    }
+}
+
+/// So much of a text as there is room for, and a mark where the rest was left out.
+fn head(text: &str, most: usize) -> String {
+    match text.char_indices().nth(most) {
+        Some((end, _)) => format!("{}…", &text[..end]),
+        None => text.to_string(),
+    }
 }
 
 /// Far enough: the study on its way is told to stop, and what it knows by then is the study.
@@ -952,9 +1076,9 @@ fn take_study(mut analysis: ResMut<Analysis>) {
     }
 }
 
-/// Escape calls the choosing off.
-fn call_off(keys: Res<ButtonInput<KeyCode>>, mut analysis: ResMut<Analysis>) {
-    if keys.just_pressed(KeyCode::Escape) && (analysis.selecting || analysis.band.is_some()) {
+/// Escape calls the choosing off, unless it is pressed to leave a text field.
+fn call_off(keys: Res<ButtonInput<KeyCode>>, typing: KeyboardOwner, mut analysis: ResMut<Analysis>) {
+    if keys.just_pressed(KeyCode::Escape) && !typing.is_some() && (analysis.selecting || analysis.band.is_some()) {
         analysis.stop_choosing();
     }
 }
@@ -1055,7 +1179,8 @@ fn sync_panel(
         selecting: analysis.selecting,
         // A stamp from the list is the list's business.
         holding: stamp.is_held() && stamp.kind.is_none(),
-        note: analysis.note.clone(),
+        // What is wrong with the text being typed comes before what a button did.
+        note: analysis.mistyped.clone().or(analysis.note.clone()),
     };
     if shown.as_ref() == Some(&now) {
         return;
@@ -1071,14 +1196,14 @@ fn sync_panel(
         let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
         // A line with nothing to say is not there.
         show(row.parent(), content != "—");
-        // The line is set in its own face, and the arrows in it in the one that has them
-        // all: what comes after the first run of text goes into spans of its own.
+        // The arrows in a line are set in the face that has them all: what comes after the
+        // first run of text goes into spans of its own.
         let mut runs = runs(&content);
         let first = if runs.first().is_some_and(|(_, arrows)| !arrows) { runs.remove(0).0 } else { String::new() };
         text.set_if_neq(Text(first));
         commands.entity(line).despawn_related::<Children>();
         for (run, arrows) in runs {
-            let font = FontSource::Handle(assets.load(if arrows { fonts::MONO } else { face(*finding) }));
+            let font = FontSource::Handle(assets.load(if arrows { fonts::MONO } else { fonts::REGULAR }));
             let font = TextFont { font, font_size: FontSize::Px(VALUE_SIZE), ..default() };
             commands.entity(line).with_child((TextSpan::new(run), font, *color));
         }
@@ -1115,7 +1240,7 @@ fn sync_panel(
         (false, true, _) => "Place picks the pattern up, to be put down on the grid where you click.",
     };
     let (line, text) = &mut *note;
-    let said = analysis.note.clone().unwrap_or(what_next.to_string());
+    let said = now.note.clone().unwrap_or(what_next.to_string());
     show(*line, !said.is_empty());
     text.set_if_neq(Text(said));
     let hint_text = if analysis.selecting { "drag over it · Escape cancels" } else { "on the grid, or from the list" };
@@ -1248,16 +1373,7 @@ fn found(finding: Finding, subject: &Subject) -> String {
             (None, _, 0) => "—".to_string(),
             (None, _, total) => format!("{} pieces", count(total)),
         },
-        Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
-            Some((end, _)) => format!("{}…", &subject.rle[..end]),
-            None => subject.rle.clone(),
-        },
     }
-}
-
-/// The face a finding is set in: the text of a pattern in the mono one, as text to copy is.
-fn face(finding: Finding) -> &'static str {
-    if finding == Finding::Text { fonts::MONO } else { fonts::REGULAR }
 }
 
 /// A line taken apart into what is text and what is arrows, in order. The face of the panel

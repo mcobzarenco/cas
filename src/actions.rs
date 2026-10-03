@@ -155,7 +155,10 @@ impl Plugin for ActionsPlugin {
             .add_observer(on_activate)
             .add_observer(on_toggle)
             .add_systems(Startup, listen_for_keys)
-            .add_systems(Update, (repeat_steps.in_set(SimSystems::Input), release_focus));
+            // The focus is let go of once the input has been dealt with: an Escape that
+            // leaves a text field is that field's, and whoever else listens for Escape can
+            // still see so.
+            .add_systems(Update, (repeat_steps.in_set(SimSystems::Input), release_focus.after(SimSystems::Input)));
     }
 }
 

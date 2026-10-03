@@ -11,7 +11,7 @@ use bevy::{
         constants::fonts,
         controls::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
-            FeathersMenuPopup, FeathersScrollbar,
+            FeathersMenuPopup, FeathersScrollbar, FeathersTextInputContainer,
         },
         cursor::EntityCursor,
         dark_theme::create_dark_theme,
@@ -636,6 +636,19 @@ pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
             ),
             { body },
         ]
+    }
+}
+
+/// The frame of a text field: a well in its card, which shows while there is nothing in the
+/// field, with the text a little way in from its edges.
+pub(crate) fn field_frame() -> impl Scene {
+    bsn! {
+        @FeathersTextInputContainer
+        ThemeBackgroundColor(tokens::WINDOW_BG)
+        Node {
+            border: UiRect::ZERO,
+            padding: UiRect::horizontal(px(6)),
+        }
     }
 }
 

@@ -546,7 +546,8 @@ impl Canvas<'_, '_> {
             return;
         };
         let last = IVec2::new(self.universe.width as i32 - 1, self.universe.height as i32 - 1);
-        let (min, max) = (a.min(b).clamp(IVec2::ZERO, last), a.max(b).clamp(IVec2::ZERO, last));
+        // The part of the band that lies on the grid: none of it, for a band drawn beside it.
+        let (min, max) = (a.min(b).max(IVec2::ZERO), a.max(b).min(last));
         let offset = self.universe.partition_offset() as i32;
         let corner = |v: i32| v - ((v - offset) & 1);
         let (x0, y0) = (corner(min.x), corner(min.y));

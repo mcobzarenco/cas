@@ -34,6 +34,12 @@ shot analysis-3-spaceship
 drag Grid -200 -200; wait 10
 expect_text AnalysisNote No live cells in there.
 expect_text StudyWhat Spaceship
+# Nor does a band drawn beside the grid hold anything: here above it, over a cell of the top
+# row.
+paint 128 0
+move Grid -30 -440; press left; move Grid 30 -380; wait 2; release left; wait 10
+expect_text AnalysisNote No live cells in there.
+paint 128 0 off
 
 # Escape while the band is being drawn calls it off, and what is left of the drag paints
 # nothing: the ship's four cells are all there is. The button brings the choosing back.

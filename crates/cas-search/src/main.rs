@@ -101,11 +101,11 @@ fn column(name: &str) -> usize {
 /// tried is left empty.
 fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
     let percent = |share: f32| format!("{:.1}", 100.0 * share);
-    let cells = match (rule.population(), rule.conserved_weights()) {
-        (Population::Conserved, _) => "conserved".to_string(),
-        (Population::ConservedRelativeToVacuum, _) => "conserved relative to the vacuum".to_string(),
-        (Population::NotConserved, Some(weights)) => format!("conserved by weight {}", weights.map(|weight| weight.to_string()).concat()),
-        (Population::NotConserved, None) => "not conserved".to_string(),
+    let cells = match rule.population() {
+        Population::Conserved => "conserved".to_string(),
+        Population::ConservedRelativeToVacuum => "conserved relative to the vacuum".to_string(),
+        Population::Weighted(weights) => format!("conserved by weight {}", Population::weights_text(&weights)),
+        Population::NotConserved => "not conserved".to_string(),
     };
     let multiple = |cells: Option<f32>| cells.map(|cells| format!("{cells:.2}")).unwrap_or_default();
     let left = |count: u64| report.remaining.map(|_| count.to_string()).unwrap_or_default();

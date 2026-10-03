@@ -139,6 +139,8 @@ enum Finding {
     States,
     StatesFormula,
     CellCount,
+    /// The weight of one corner of a block, for a rule that keeps a weighted count.
+    Weight(u8),
     /// How the rule run backwards relates to the rule, in words and as a formula.
     Reversed,
     ReversedFormula,
@@ -166,6 +168,10 @@ enum Part {
     Axis(usize),
     /// The vacuum's tile in one generation of its cycle.
     VacuumTile(usize),
+    /// The flow of cell counts, shown unless the rule keeps a weighted count; then the block
+    /// of weights is.
+    Flow,
+    Weights,
 }
 
 // `bsn!` builds a component from its default.
@@ -234,11 +240,12 @@ fn states(rule: &BlockRule) -> &'static str {
     if rule.is_complement_symmetric() { "interchangeable" } else { "not interchangeable" }
 }
 
-fn population(rule: &BlockRule) -> &'static str {
+fn population(rule: &BlockRule) -> String {
     match rule.population() {
-        Population::Conserved => "conserved",
-        Population::ConservedRelativeToVacuum => "conserved relative to the vacuum",
-        Population::NotConserved => "not conserved",
+        Population::Conserved => "conserved".to_string(),
+        Population::ConservedRelativeToVacuum => "conserved relative to the vacuum".to_string(),
+        Population::Weighted(weights) => format!("conserved by weight {}", Population::weights_text(&weights)),
+        Population::NotConserved => "not conserved".to_string(),
     }
 }
 
@@ -658,7 +665,61 @@ fn flow_picture() -> impl SceneList {
             }
         })
         .collect();
-    bsn_list![{ squares }]
+    // The weights of the four corners, written in a block: the top row, then the bottom.
+    let weights: Vec<_> = (0..4u8)
+        .map(|corner| {
+            let finding = Finding::Weight(corner);
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(3.0 + 21.0 * (corner & 1) as f32),
+                    top: px(3.0 + 21.0 * (corner >> 1) as f32),
+                    width: px(20),
+                    height: px(20),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border_radius: px(2),
+                }
+                BackgroundColor(palette::GRAY_2)
+                Children [(
+                    Text("")
+                    TextFont {
+                        font: FontSourceTemplate::Handle(fonts::MONO),
+                        font_size: FontSize::Px(13.0),
+                        weight: FontWeight::NORMAL,
+                    }
+                    TextColor(ALIVE)
+                    template_value(finding)
+                )]
+            }
+        })
+        .collect();
+    let (flow, weighed) = (Part::Flow, Part::Weights);
+    bsn_list![
+        (
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                top: px(0),
+                width: px(GLYPH),
+                height: px(GLYPH),
+            }
+            template_value(flow)
+            Children [ { squares } ]
+        ),
+        (
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                top: px(0),
+                width: px(GLYPH),
+                height: px(GLYPH),
+                display: Display::None,
+            }
+            template_value(weighed)
+            Children [ { weights } ]
+        ),
+    ]
 }
 
 /// The vacuum in one generation of its cycle, as a small block.
@@ -744,10 +805,16 @@ fn sync_findings(
             }
         };
     }
+    let weights = match rule.population() {
+        Population::Weighted(weights) => Some(weights),
+        _ => None,
+    };
     for (part, mut node) in &mut parts {
         let shown = match *part {
             Part::Axis(element) => symmetries[element],
             Part::VacuumTile(generation) => generation < vacuum.len(),
+            Part::Flow => weights.is_none(),
+            Part::Weights => weights.is_some(),
         };
         node.display = if shown { Display::Flex } else { Display::None };
     }
@@ -758,7 +825,8 @@ fn sync_findings(
             Finding::States => states(rule).to_string(),
             Finding::StatesFormula if rule.is_complement_symmetric() => "■↔□".to_string(),
             Finding::StatesFormula => "■≠□".to_string(),
-            Finding::CellCount => population(rule).to_string(),
+            Finding::CellCount => population(rule),
+            Finding::Weight(corner) => weights.map_or(String::new(), |weights| weights[*corner as usize].to_string()),
             Finding::Reversed => reversed(rule).to_string(),
             Finding::ReversedFormula => reversed_formula(rule).to_string(),
             Finding::Vacuum => vacuum_words(rule),

@@ -326,7 +326,19 @@ pub enum Population {
     /// The cells themselves are not conserved, but the cells that differ from the vacuum are,
     /// as in Critters.
     ConservedRelativeToVacuum,
+    /// Not the number of cells but a weighted number of them is conserved (relative to the
+    /// vacuum): a cell weighs according to its corner of the block about to be rewritten,
+    /// top-left, top-right, bottom-left, bottom-right. Cells are made and unmade, a heavy one
+    /// for light ones, yet only within the ratio of the weights ([`BlockRule::conserved_weights`]).
+    Weighted([u8; 4]),
     NotConserved,
+}
+
+impl Population {
+    /// The weights of the four corners, as a block is written: the top row, then the bottom.
+    pub fn weights_text(weights: &[u8; 4]) -> String {
+        format!("{}·{}/{}·{}", weights[0], weights[1], weights[2], weights[3])
+    }
 }
 
 /// The rotations and mirrors of the square under which a rule looks the same: transforming a
@@ -521,6 +533,8 @@ impl BlockRule {
             Population::Conserved
         } else if self.relative_to_vacuum().iter().all(conserves) {
             Population::ConservedRelativeToVacuum
+        } else if let Some(weights) = self.conserved_weights() {
+            Population::Weighted(weights)
         } else {
             Population::NotConserved
         }

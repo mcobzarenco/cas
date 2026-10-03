@@ -106,7 +106,7 @@ pub fn weighted() -> Vec<BlockRule> {
         }
         debug_assert!(tables.iter().all(|table| keeps_weight(table, &weights)));
         let found = tables.into_iter().map(|table| BlockRule::new(table).expect("a permutation"));
-        rules.extend(found.filter(|rule| rule.population() == Population::NotConserved));
+        rules.extend(found.filter(|rule| matches!(rule.population(), Population::Weighted(_))));
     }
     rules
 }
@@ -190,8 +190,9 @@ mod tests {
         let weighted = distinct(tables);
         assert_eq!(weighted.len(), 13_746);
         for rule in weighted.iter().step_by(97) {
-            assert_eq!(rule.population(), Population::NotConserved, "{rule}");
-            let weights = rule.conserved_weights().unwrap_or_else(|| panic!("{rule} keeps no weight"));
+            let Population::Weighted(weights) = rule.population() else {
+                panic!("{rule} keeps no weight");
+            };
             assert!(weights.contains(&1) && weights != [1; 4], "{rule}: {weights:?}");
         }
         // One of them: the bottom-right cell of a block counts double. Alone it comes apart

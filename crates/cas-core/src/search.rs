@@ -362,7 +362,7 @@ fn blob_of(rule: &BlockRule) -> Universe {
 /// began with.
 fn closed(rule: &BlockRule, generations: i64) -> f32 {
     // Under a rule that keeps the number of cells there is nothing to find out.
-    if rule.population() != Population::NotConserved {
+    if matches!(rule.population(), Population::Conserved | Population::ConservedRelativeToVacuum) {
         return 1.0;
     }
     let mut universe = blob_of(rule);

@@ -312,8 +312,10 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
     rotations but no mirrors, like Single Rotation, shows as a pinwheel: it has a handedness.
   * *Dead and alive*: whether exchanging the two states turns every run into another run.
   * *Cell count*: whether a pattern keeps its number of cells (possibly only relative to the
-    vacuum, as in Critters). The diagram shows where the blocks go by their number of cells,
-    before across and after upwards: a rule that conserves cells lights the diagonal.
+    vacuum, as in Critters), or a weighted number of them, each cell counting for as many as its
+    corner of the block says. The diagram shows where the blocks go by their number of cells,
+    before across and after upwards: a rule that conserves cells lights the diagonal. For a rule
+    that keeps a weighted count it shows the four weights in a block instead.
   * *Backwards*: how the rule run backwards relates to the rule: the same (=), its mirror image
     (◧◨), with the two states exchanged (■□), both, or none of it (≠).
   * *Vacuum*: the empty world through the generations of its cycle.
@@ -442,9 +444,9 @@ The trials, and the columns they fill:
 Sixty seeds come first. If a tenth of them grow, no more are followed; if all that grow spread
 over the plane, the rule is put through nothing more; and a blob that has spread is not left to
 evaporate. Those columns stay empty. `cells` says what the rule does to the number of cells:
-`conserved`, `conserved relative to the vacuum`, `conserved by weight 1112` (a cell counts for as
-many as its corner of the block says, here the bottom-right one for two: cells are made and
-unmade, but within bounds) or `not conserved`.
+`conserved`, `conserved relative to the vacuum`, `conserved by weight 1·1/1·2` (a cell counts
+for as many as its corner of the block says, top row then bottom row, here the bottom-right one
+for two: cells are made and unmade, but within bounds) or `not conserved`.
 
 From the trials a rule gets its `character`:
 

@@ -14,7 +14,7 @@ use bevy::{
     clipboard::Clipboard,
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput, FeathersTextInputContainer},
+        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput},
         cursor::EntityCursor,
         palette,
         theme::ThemedText,
@@ -37,7 +37,7 @@ use crate::{
     icons,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},
-    ui::{Aspect, caption, panel_title, section, side_panel},
+    ui::{Aspect, caption, field_frame, panel_title, section, side_panel},
     view::{ALIVE, DEAD},
 };
 
@@ -440,7 +440,7 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
             findings(),
             section("RULE STRING", bsn_list![
                 (
-                    @FeathersTextInputContainer
+                    field_frame()
                     Children [(
                         #RuleString
                         @FeathersTextInput {
@@ -455,7 +455,7 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                         flex_direction: FlexDirection::Row,
                         align_items: AlignItems::Baseline,
                         column_gap: px(8),
-                        padding: UiRect { left: px(5) },
+                        padding: UiRect { left: px(6) },
                     }
                     Children [
                         (#RuleEspca mono("", 12.0, palette::LIGHT_GRAY_1) template_value(Finding::Espca)),

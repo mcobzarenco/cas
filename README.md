@@ -466,7 +466,8 @@ The trials, and the columns they fill:
   and the `longest`.
 * **Growth**: a seed that grows spreads over the plane like a fire, or grows along lines as a gun
   does. `growth` is the power of time its cells go with, 2 or 1; of the first seeds that grow,
-  the slowest, so that a rule with guns counts for its guns.
+  the slowest, so that a rule with guns counts for its guns. A seed that seems to grow along
+  lines is followed four times as long before it is believed: some spread late.
 * **Spaceships**: the kinds of spaceship slower than light, among the seeds, among what a seed
   that grows along lines sends out, and among what leaves the blob.
 * **Damage**: one cell of a random soup is flipped; the share in percent that differs, a hundred

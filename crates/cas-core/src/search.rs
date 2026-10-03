@@ -38,10 +38,12 @@ const SEED_EXTENT: i32 = 160;
 /// So many seeds are looked at first. If a tenth of them grow, no more are followed.
 const FIRST_LOOK: usize = 60;
 /// How seeds grow is taken from the first few that do, each followed for so many generations
-/// on a grid wide enough that nothing gets around it in that time.
+/// on a grid wide enough that nothing gets around it in that time. One that seems to grow
+/// along lines is followed again for so many more: a slow starter looks like a gun at first,
+/// and spreads over the plane later.
 const GROWERS: usize = 6;
 const GROWTH_GENERATIONS: i64 = 128;
-const GROWTH_GRID: usize = 288;
+const LATER_GENERATIONS: i64 = 512;
 /// Cells that go with a higher power of time than this are spreading over the plane.
 const SPREADING: f32 = 1.5;
 /// The grid of the soup and of the blob.
@@ -325,14 +327,23 @@ fn plant(universe: &mut Universe, seed: &[Cell]) {
     }
 }
 
-/// The power of time that the cells of a growing seed go with, from their number half way
-/// and at the end of a while.
+/// The power of time that the cells of a growing seed go with. That it spreads over the
+/// plane shows soon; that it does not is only believed after a longer look.
 fn growth(rule: &BlockRule, seed: &[Cell]) -> f32 {
-    let mut universe = Universe::new(GROWTH_GRID, GROWTH_GRID, rule.clone());
+    let soon = growth_over(rule, seed, GROWTH_GENERATIONS);
+    if soon >= SPREADING { soon } else { growth_over(rule, seed, LATER_GENERATIONS) }
+}
+
+/// The power of time that the cells of a seed go with over so many generations, from their
+/// number half way and at the end.
+fn growth_over(rule: &BlockRule, seed: &[Cell], generations: i64) -> f32 {
+    // Nothing gets further than a cell a generation: no way round a grid twice as wide.
+    let side = 2 * generations as usize + 32;
+    let mut universe = Universe::new(side, side, rule.clone());
     plant(&mut universe, seed);
-    universe.step_by(GROWTH_GENERATIONS / 2);
+    universe.step_by(generations / 2);
     let half_way = universe.population().max(1) as f32;
-    universe.step_by(GROWTH_GENERATIONS / 2);
+    universe.step_by(generations / 2);
     (universe.population().max(1) as f32 / half_way).log2()
 }
 
@@ -461,6 +472,18 @@ mod tests {
             assert!(report.growing >= 0.5 && (0.8..1.2).contains(&report.growth), "{rule}: {report:?}");
             assert!(report.spaceships >= 1 && report.blob.is_some(), "{rule}: {report:?}");
         }
+    }
+
+    #[test]
+    fn a_slow_starter_is_no_gun() {
+        // The seeds of ESPCA-0c8adf grow slowly at first: one of them by the power 0.7 of time
+        // between generations 64 and 128, as a gun would. By generation 600 every one of
+        // them goes with the square of time, and has for a while.
+        let slow = rule("0,3,10,1,5,4,6,7,12,9,2,11,8,13,14,15");
+        assert_eq!(slow.espca().as_deref(), Some("0c8adf"));
+        let report = measure(&slow, &glance());
+        assert!(report.growing >= 0.5 && report.growth >= SPREADING, "{report:?}");
+        assert_eq!(report.character(), Character::Growing, "{report:?}");
     }
 
     #[test]

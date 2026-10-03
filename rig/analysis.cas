@@ -11,7 +11,8 @@ shot analysis-1-choosing
 
 # A band around the lightest ship, which sits just below and right of the middle of the grid,
 # where a drag from the centre of the view begins. The world is at generation 0. The band is
-# drawn while the button is down; the study is made when it comes up.
+# drawn while the button is down; the study is made when it comes up, on another thread, so
+# what it says is waited for.
 place $2o2$2o 130 130
 move Grid 0 0; press left; move Grid 60 60; wait 3
 shot analysis-2-band
@@ -19,7 +20,7 @@ release left; wait 20
 # The choosing stays on for the next pattern.
 expect_text SelectHint drag over it · Escape cancels
 expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
-expect_text StudyWhat Spaceship
+until expect_text StudyWhat Spaceship
 expect_text StudyPeriod 12 generations, moving (2, 0)
 expect_text StudySpeed c/6 orthogonal →
 expect_text StudyCells 4
@@ -53,7 +54,7 @@ click Analyse; wait 3
 # into account: it is the same ship.
 step 1; wait 2
 drag Grid 60 60; wait 20
-expect_text StudyWhat Spaceship
+until expect_text StudyWhat Spaceship
 expect_text StudySpeed c/6 orthogonal →
 
 # The small world runs on its own clock; Pause holds it, and Restart takes it back to the
@@ -69,7 +70,7 @@ expect_text AnalysisPause Pause
 # oscillator: it turns about, a cell at a time, where the other partition cuts it in four.)
 clear; place 2o$2o 100 101
 drag Grid -120 -120; wait 20
-expect_text StudyWhat Still life
+until expect_text StudyWhat Still life
 expect_text StudyPeriod 1 generation
 expect_text StudySpeed —
 expect_text StudyCells 4
@@ -94,7 +95,7 @@ expect_text AnalysisNote Place picks the pattern up, to be put down on the grid 
 clear; place $2o2$2o 240 120
 click Catching; wait 3; step 120; wait 10; expect_caught 1 1
 click AnalyseKind0; wait 20
-expect_text StudyWhat Spaceship
+until expect_text StudyWhat Spaceship
 # The click went to the button alone: the row did not pick the pattern up.
 expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
 expect_text StudyText b2o2$b2o
@@ -115,7 +116,7 @@ key Escape; wait 3; expect_rule critters
 rule single-rotation; clear
 place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
 click Analyse; wait 3; drag Grid -100 -100; wait 20
-expect_text StudyWhat Flies apart: 513 cells across after 2882 generations
+until expect_text StudyWhat Flies apart: 513 cells across after 2 882 generations
 expect_text StudyPieces 4 pieces: 3 spaceships (c/15 ↘, c/6 →, c/184 ↘), a still life
 click AnalysisPause; wait 3; click AnalysisRestart; wait 10
 expect_text SmallStatus generation 0, no spaceship has left it, 17 cells in it now
@@ -128,7 +129,7 @@ click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2
 # (The choosing is still on from the last band.)
 rule four-way-gun; wait 2; clear; paint 128 128
 drag Grid 20 20; wait 20
-expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
+until expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
 expect_text StudyPieces 190 pieces: 189 spaceships (c/3 ↙ ×48, c/3 ↗ ×47, c/3 ↖ ×47, one more kind), one that grows
 shot analysis-8-gun
 
@@ -144,6 +145,32 @@ expect_text AnalysisNote Place picks the pattern up, to be put down on the grid 
 expect_text SelectHint on the grid, or from the list
 click Analyse; wait 3
 expect_text SelectHint drag over it · Escape cancels
+
+# A wide pattern is followed as far as a small one: two lone cells seven hundred cells apart
+# are two oscillators, however far that is. (Two side panels leave the grid a third of a
+# pixel to the cell.)
+rule single-rotation; click GridSize; wait 4; click GridSize:1024; wait 6
+clear; paint 150 512; paint 850 512
+move Grid -130 -20; press left; move Grid 130 20; wait 2; release left
+until expect_text StudyWhat Oscillator
+expect_text StudyPieces 2 that never meet
+expect_text StudySize 701×1
+
+# A study that takes long shows how far it has got, and does not hold up the frames: a
+# thousand cells each way of soup would be followed for hours. Stop takes what is known by
+# then, and the pattern is on display as any other.
+soup
+move Grid -150 -150; press left; move Grid 150 150; wait 2; release left
+until expect_shown AnalysisStop on
+expect_shown AnalysisPause off
+expect_text StudyWhat Being followed on its own…
+expect_text AnalysisNote Stop takes what is known by then for the study. A drag over another pattern studies that one instead.
+wait 20; shot analysis-10-on-its-way
+click AnalysisStop
+until expect_shown AnalysisStop off
+expect_shown AnalysisPause on
+expect_text StudyPeriod —
+shot analysis-11-stopped
 click Analyse; wait 3
 expect_text SelectHint on the grid, or from the list
 quit

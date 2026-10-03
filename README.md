@@ -402,11 +402,17 @@ the catcher does with what reaches the edge, and the *Analysis* panel says what 
   its mirror image half way through its period); how many cells change from one generation to the
   next, and how many never do.
 * Or a pattern that **grows**, along lines as a gun does or over the plane, that **flies apart**,
-  or that had not repeated after as many generations as were spent on it. What it had become by
+  or that had not repeated when the study ended. What it had become by
   then is taken apart into the pieces that go their own ways, and each is followed alone: so many
   spaceships of such kinds, oscillators, still lifes, one that keeps growing.
 * For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
   blocks, and its run-length encoded text.
+
+Every pattern is followed as far: for 8192 generations, unless it is back in its shape before,
+or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small
+one: wider than 512 cells). The study is made in the background, so a large pattern, or one that
+is slow to make up its mind, holds nothing up: the panel then says how far the study has got,
+and **Stop** takes what is known by then.
 
 The panel shows the pattern living in a small world of its own, a torus just big enough for it,
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it

@@ -6,6 +6,8 @@
 //! gets out of hand ([`Analyser::study`]), and shown living in a small world of its own, a
 //! torus just big enough for it.
 
+use std::sync::Arc;
+
 use bevy::{
     clipboard::Clipboard,
     feathers::{
@@ -14,21 +16,26 @@ use bevy::{
         theme::{ThemeTextColor, ThemedText},
         tokens,
     },
+    platform::time::Instant,
     prelude::*,
+    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{FontSource, FontSourceTemplate, FontWeight},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
 };
 
 use cas_core::{
     census::Census,
-    pattern::{Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, to_rle},
+    pattern::{
+        Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, Watch,
+        to_rle,
+    },
     rules::BlockRule,
     universe::Universe,
 };
 
 use crate::{
     sim::{Settings, SimSystems},
-    ui::{Aspect, caption, panel_title, side_panel},
+    ui::{Aspect, caption, group_digits, panel_title, side_panel},
     view::{Framing, GridMaterial, GridParams, Stamp, cell_image, edge_of, upload},
 };
 
@@ -48,13 +55,18 @@ const KINDS_NAMED: usize = 3;
 /// in any case wide enough for the pattern as it set out.
 const ROOM: i32 = 3;
 const WORLD_SIDES: (usize, usize) = (32, 256);
-/// How far a pattern is followed: so many generations times cells, a large pattern for fewer
-/// generations so that the study takes no time, within these bounds; and until it has so
-/// many cells or is so wide.
-const WORK: u64 = 2_000_000;
-const GENERATIONS: (u32, u32) = (256, 8192);
-const MOST_CELLS: usize = 1024;
-const WIDEST: i32 = 512;
+/// How far a pattern is followed, whatever it is: for so many generations; or until it has so
+/// many times the cells it set out with, or is so many times as wide, which for a small
+/// pattern is so many cells and so wide at least.
+const GENERATIONS: u32 = 8192;
+const MOST_CELLS: (usize, usize) = (4, 1024);
+const WIDEST: (i32, i32) = (2, 512);
+/// A study is made on another thread, and most are done before the next frame. One that is
+/// still on its way after so many seconds shows in the panel, with how far it has got.
+const SHOWS_AFTER: f32 = 0.15;
+/// The small world's clock makes up for no more than so many seconds of a frame that took
+/// long: a window that was out of sight for an hour does not run an hour of generations.
+const LONGEST_FRAME: f32 = 0.25;
 /// So many characters of the pattern's text are shown; Copy copies all of it.
 const TEXT_SHOWN: usize = 36;
 
@@ -66,6 +78,8 @@ pub struct Analysis {
     /// The band, from the cell pressed to the cell under the pointer.
     pub band: Option<(IVec2, IVec2)>,
     subject: Option<Subject>,
+    /// The study that is on its way, on another thread.
+    studying: Option<Studying>,
     /// How many patterns were studied: numbers the subjects, which tells a new one from the
     /// one before.
     studied: u64,
@@ -92,7 +106,53 @@ struct Subject {
     rle: String,
 }
 
+/// A study on its way: how many cells are being followed and under which rule, since when,
+/// the watch it is seen through and stopped by, and the task that will have the subject.
+struct Studying {
+    cells: usize,
+    rule: BlockRule,
+    began: Instant,
+    watch: Arc<Watch>,
+    task: Task<Option<Subject>>,
+}
+
 impl Subject {
+    /// Studies a pattern and gives it a small world to live in: the work of a study, done
+    /// where this is called. None for no cells at all.
+    fn of(number: u64, cells: &[Cell], phase: usize, rule: BlockRule, watch: Arc<Watch>) -> Option<Self> {
+        let (width, height) = bounding_box(cells);
+        let mut analyser = Analyser::new(&rule);
+        analyser.max_generations = GENERATIONS;
+        analyser.max_cells = (MOST_CELLS.0 * cells.len()).max(MOST_CELLS.1);
+        analyser.max_extent = (WIDEST.0 * width.max(height)).max(WIDEST.1);
+        analyser.watch = Some(watch);
+        let study = analyser.study(cells, phase)?;
+        let pace = match &study.motion {
+            Some(motion) => (motion.period as f32 / PERIOD_SECONDS).clamp(PACE.0, PACE.1),
+            None => OPEN_PACE,
+        };
+        let mut world = small_world(&study, &rule);
+        // A pattern that repeats is left to go round its torus. One that does not would fill
+        // it: what it sends out leaves through an open border instead, and is counted.
+        let census = (study.motion.is_none()).then(|| {
+            world.open_border = true;
+            world.catching = true;
+            Census::with(Analyser::new(&rule))
+        });
+        Some(Self {
+            number,
+            forms: analyser.forms(&study.start),
+            world,
+            rle: to_rle(&study.start),
+            rule,
+            clock: 0.0,
+            pace,
+            paused: false,
+            census,
+            study,
+        })
+    }
+
     /// The small world as it was when the study began: the pattern as it set out, at
     /// generation 0, and nothing caught yet.
     fn restart(&mut self) {
@@ -150,46 +210,40 @@ impl Analysis {
 
     /// Studies a pattern, given relative to a corner of the blocks the next step rewrites, as
     /// a pattern caught at the edge is, with the vacuum `phase` generations into its cycle.
+    /// The study is made on another thread, and its pattern is on display when it is done
+    /// ([`take_study`]): a large pattern, or one that takes long to make up its mind, does
+    /// not hold up the frames.
     pub fn study(&mut self, cells: Vec<Cell>, phase: usize, universe: &Universe) {
         // Choosing stays on, for the next pattern.
         self.band = None;
         self.open = true;
-        let rule = universe.rule();
-        let mut analyser = Analyser::new(rule);
-        analyser.max_cells = MOST_CELLS.max(4 * cells.len());
-        analyser.max_extent = WIDEST;
-        let generations = WORK / cells.len().max(1) as u64;
-        analyser.max_generations = generations.clamp(GENERATIONS.0 as u64, GENERATIONS.1 as u64) as u32;
-        let Some(study) = analyser.study(&cells, phase) else {
+        // A study still on its way is not waited for: it is told to stop, and let go of.
+        if let Some(studying) = self.studying.take() {
+            studying.watch.stop();
+        }
+        if cells.is_empty() {
             self.note = Some("No live cells in there.".to_string());
             return;
-        };
-        let pace = match &study.motion {
-            Some(motion) => (motion.period as f32 / PERIOD_SECONDS).clamp(PACE.0, PACE.1),
-            None => OPEN_PACE,
-        };
-        let mut world = small_world(&study, rule);
-        // A pattern that repeats is left to go round its torus. One that does not would fill
-        // it: what it sends out leaves through an open border instead, and is counted.
-        let census = (study.motion.is_none()).then(|| {
-            world.open_border = true;
-            world.catching = true;
-            Census::with(Analyser::new(rule))
-        });
-        self.studied += 1;
-        self.subject = Some(Subject {
-            number: self.studied,
-            forms: analyser.forms(&study.start),
-            world,
-            rle: to_rle(&study.start),
-            rule: rule.clone(),
-            clock: 0.0,
-            pace,
-            paused: false,
-            census,
-            study,
-        });
+        }
         self.note = None;
+        self.studied += 1;
+        let (number, size) = (self.studied, cells.len());
+        let (rule, watch) = (universe.rule().clone(), Arc::new(Watch::default()));
+        let task = AsyncComputeTaskPool::get().spawn({
+            let (rule, watch) = (rule.clone(), watch.clone());
+            async move { Subject::of(number, &cells, phase, rule, watch) }
+        });
+        self.studying = Some(Studying { cells: size, rule, began: Instant::now(), watch, task });
+    }
+
+    /// The study on its way, once it has been so for long enough to show.
+    fn busy(&self) -> Option<&Studying> {
+        self.studying.as_ref().filter(|studying| studying.began.elapsed().as_secs_f32() >= SHOWS_AFTER)
+    }
+
+    /// The pattern on display: the one last studied, unless a study on its way shows instead.
+    fn shown(&self) -> Option<&Subject> {
+        self.subject.as_ref().filter(|_| self.busy().is_none())
     }
 }
 
@@ -260,6 +314,15 @@ struct PauseLabel;
 #[derive(Component, Default, Clone)]
 struct Note;
 
+/// When a control of the small world is there: while a pattern is at rest in it, or while a
+/// study is on its way.
+#[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
+enum During {
+    #[default]
+    Rest,
+    Study,
+}
+
 /// The caption next to the Analyse button of the pattern card: what to do next.
 #[derive(Component, Default, Clone)]
 pub struct SelectHint;
@@ -297,7 +360,7 @@ impl Plugin for AnalysisPlugin {
             .add_systems(Update, call_off.in_set(SimSystems::Input))
             .add_systems(
                 Update,
-                (run_small_world, draw_small_world, sync_panel, show_status, label_pause)
+                (take_study, run_small_world, draw_small_world, sync_panel, show_status, label_pause)
                     .chain()
                     .in_set(SimSystems::Present),
             );
@@ -389,6 +452,7 @@ pub fn analysis_panel() -> impl Scene {
                                         @caption: bsn! { Text("Pause") ThemedText PauseLabel }
                                     }
                                     Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                                    template_value(During::Rest)
                                     on(pause_world)
                                 ),
                                 (
@@ -397,7 +461,23 @@ pub fn analysis_panel() -> impl Scene {
                                         @caption: bsn! { Text("Restart") ThemedText }
                                     }
                                     Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                                    template_value(During::Rest)
                                     on(restart_world)
+                                ),
+                                (
+                                    // While a study is on its way: far enough.
+                                    #AnalysisStop
+                                    @FeathersButton {
+                                        @caption: bsn! { Text("Stop") ThemedText }
+                                    }
+                                    Node {
+                                        display: Display::None,
+                                        flex_shrink: 0.0,
+                                        min_height: px(22),
+                                        padding: UiRect::axes(px(8), px(0)),
+                                    }
+                                    template_value(During::Study)
+                                    on(stop_study)
                                 ),
                             ]
                         ),
@@ -532,7 +612,7 @@ fn place_subject(
     mut analysis: ResMut<Analysis>,
     mut stamp: ResMut<Stamp>,
 ) {
-    if let Some(subject) = &analysis.subject {
+    if let Some(subject) = analysis.shown() {
         let forms = if universe.rule() == &subject.rule {
             subject.forms.clone()
         } else {
@@ -560,13 +640,34 @@ fn restart_world(_: On<Activate>, mut analysis: ResMut<Analysis>) {
 }
 
 fn copy_subject(_: On<Activate>, mut analysis: ResMut<Analysis>, mut clipboard: ResMut<Clipboard>) {
-    let Some(rle) = analysis.subject.as_ref().map(|subject| subject.rle.clone()) else {
+    let Some(rle) = analysis.shown().map(|subject| subject.rle.clone()) else {
         return;
     };
     analysis.note = Some(match clipboard.set_text(rle.as_str()) {
         Ok(()) => format!("Copied {rle}"),
         Err(error) => format!("The clipboard is not available ({error:?})."),
     });
+}
+
+/// Far enough: the study on its way is told to stop, and what it knows by then is the study.
+fn stop_study(_: On<Activate>, analysis: Res<Analysis>) {
+    if let Some(studying) = &analysis.studying {
+        studying.watch.stop();
+    }
+}
+
+/// Takes the study that is done: its pattern is the one on display from now on.
+fn take_study(mut analysis: ResMut<Analysis>) {
+    // Looking is no change: only a study that is done is.
+    let studying = analysis.bypass_change_detection().studying.as_mut();
+    let Some(subject) = studying.and_then(|studying| check_ready(&mut studying.task)) else {
+        return;
+    };
+    analysis.studying = None;
+    match subject {
+        Some(subject) => analysis.subject = Some(subject),
+        None => analysis.note = Some("No live cells in there.".to_string()),
+    }
 }
 
 /// Escape calls the choosing off.
@@ -579,13 +680,13 @@ fn call_off(keys: Res<ButtonInput<KeyCode>>, mut analysis: ResMut<Analysis>) {
 /// The small world runs at its own pace while the panel is open. Nobody watches the resource
 /// for this, so the change goes unannounced.
 fn run_small_world(time: Res<Time<Real>>, mut analysis: ResMut<Analysis>) {
-    if !analysis.open {
+    if !analysis.open || analysis.busy().is_some() {
         return;
     }
     if let Some(subject) = analysis.bypass_change_detection().subject.as_mut()
         && !subject.paused
     {
-        subject.clock += time.delta_secs() * subject.pace;
+        subject.clock += time.delta_secs().min(LONGEST_FRAME) * subject.pace;
         let steps = subject.clock.floor();
         if steps >= 1.0 {
             subject.world.step_by(steps as i64);
@@ -611,7 +712,7 @@ fn draw_small_world(
     if !analysis.open {
         return;
     }
-    let world = analysis.subject.as_ref().map_or(&assets.empty, |subject| &subject.world);
+    let world = analysis.shown().map_or(&assets.empty, |subject| &subject.world);
     let size = node.size * node.inverse_scale_factor;
     if size.min_element() < 1.0 {
         return;
@@ -628,6 +729,8 @@ fn draw_small_world(
 #[derive(PartialEq)]
 struct Shown {
     subject: Option<u64>,
+    /// The study on its way that shows instead, by its number.
+    busy: Option<u64>,
     selecting: bool,
     /// The subject is picked up, to be put down on the grid.
     holding: bool,
@@ -638,7 +741,8 @@ struct Shown {
 fn sync_panel(
     analysis: Res<Analysis>,
     stamp: Res<Stamp>,
-    mut panel: Single<&mut Node, With<AnalysisPanel>>,
+    mut panel: Single<&mut Node, (With<AnalysisPanel>, Without<During>)>,
+    mut controls: Query<(&During, &mut Node), Without<AnalysisPanel>>,
     mut findings: Query<(&Finding, &mut Text, &mut TextFont)>,
     assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
@@ -652,8 +756,10 @@ fn sync_panel(
     if panel.display != display {
         panel.display = display;
     }
+    let busy = analysis.busy();
     let now = Shown {
         subject: analysis.subject.as_ref().map(|subject| subject.number),
+        busy: busy.map(|_| analysis.studied),
         selecting: analysis.selecting,
         // A stamp from the list is the list's business.
         holding: stamp.is_held() && stamp.kind.is_none(),
@@ -664,23 +770,43 @@ fn sync_panel(
     }
     let now = shown.insert(now);
 
-    let subject = analysis.subject.as_ref();
+    // The controls of the small world, or the one that stops a study on its way.
+    for (during, mut node) in &mut controls {
+        let display = if (*during == During::Study) == busy.is_some() { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    let subject = analysis.shown();
     for (finding, mut text, mut font) in &mut findings {
-        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
+        let content = match (subject, busy, finding) {
+            (Some(subject), ..) => found(*finding, subject),
+            (None, Some(_), Finding::What) => "Being followed on its own…".to_string(),
+            _ => "—".to_string(),
+        };
         let face = if in_mono(*finding, &content) { fonts::MONO } else { fonts::REGULAR };
         if text.set_if_neq(Text(content)) {
             font.font = FontSource::Handle(assets.load(face));
         }
     }
     for mut text in &mut captions {
-        let content = subject.map_or(String::new(), |subject| {
-            let (width, height) = (subject.world.width, subject.world.height);
-            format!("{width}×{height} cells, {} generations a second", subject.pace.round())
-        });
+        let content = match (subject, busy) {
+            (Some(subject), _) => {
+                let (width, height) = (subject.world.width, subject.world.height);
+                format!("{width}×{height} cells, {} generations a second", subject.pace.round())
+            }
+            (None, Some(studying)) => {
+                let cells = if studying.cells == 1 { "cell" } else { "cells" };
+                format!("{} {cells}, for {} at most", count(studying.cells), generations(GENERATIONS))
+            }
+            _ => String::new(),
+        };
         text.set_if_neq(Text(content));
     }
-    rule_name.set_if_neq(Text(subject.map_or("", |subject| subject.rule.name()).to_string()));
+    let rule = subject.map(|subject| &subject.rule).or(busy.map(|studying| &studying.rule));
+    rule_name.set_if_neq(Text(rule.map_or("", |rule| rule.name()).to_string()));
     let what_next = match (analysis.selecting, subject.is_some(), now.holding) {
+        _ if busy.is_some() => "Stop takes what is known by then for the study. A drag over another pattern studies that one instead.",
         (_, _, true) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
         (true, false, _) => "Drag over the pattern on the grid. Escape calls it off.",
         (true, true, _) => "Drag over another pattern, or Place picks this one up to be put down on the grid where you click.",
@@ -700,13 +826,27 @@ fn show_status(analysis: Res<Analysis>, mut status: Single<&mut Text, With<Small
     if !analysis.open {
         return;
     }
-    let said = analysis.subject.as_ref().map_or(String::new(), |subject| {
-        let generation = format!("generation {}", subject.world.generation);
-        match left_so_far(subject) {
-            Some(left) => format!("{generation}, {left}"),
-            None => generation,
+    let said = match (analysis.busy(), analysis.shown()) {
+        // A study on its way: how far it has got.
+        (Some(studying), _) => {
+            let generation = format!("generation {}", group_digits(studying.watch.generation() as i64));
+            if studying.watch.stopped() {
+                format!("{generation}, stopping")
+            } else if studying.watch.taking_apart() {
+                format!("{generation}, and what it became is being taken apart")
+            } else {
+                generation
+            }
         }
-    });
+        (None, Some(subject)) => {
+            let generation = format!("generation {}", subject.world.generation);
+            match left_so_far(subject) {
+                Some(left) => format!("{generation}, {left}"),
+                None => generation,
+            }
+        }
+        (None, None) => String::new(),
+    };
     status.set_if_neq(Text(said));
 }
 
@@ -730,9 +870,9 @@ fn found(finding: Finding, subject: &Subject) -> String {
             // it flies apart grows.
             (_, _, Fate::Grows | Fate::Scatters) if study.growth.is_some_and(|growth| growth >= GROWING) => {
                 let how = if study.growth >= Some(SPREADING) { "over the plane" } else { "along lines, as a gun does" };
-                format!("Grows {how}: {} cells after {}", study.cells.1, generations(study.generations))
+                format!("Grows {how}: {} cells after {}", count(study.cells.1), generations(study.generations))
             }
-            (_, _, Fate::Grows) => format!("Grows: {} cells after {}", study.cells.1, generations(study.generations)),
+            (_, _, Fate::Grows) => format!("Grows: {} cells after {}", count(study.cells.1), generations(study.generations)),
             (_, _, Fate::Scatters) => format!(
                 "Flies apart: {} cells across after {}",
                 study.extent.0.max(study.extent.1),
@@ -762,8 +902,8 @@ fn found(finding: Finding, subject: &Subject) -> String {
             _ => "—".to_string(),
         },
         Finding::Cells => match study.cells {
-            (fewest, most) if fewest == most => fewest.to_string(),
-            (fewest, most) => format!("{fewest} to {most}"),
+            (fewest, most) if fewest == most => count(fewest),
+            (fewest, most) => format!("{} to {}", count(fewest), count(most)),
         },
         Finding::Changes => match study.fate {
             _ if study.still => "none".to_string(),
@@ -814,7 +954,12 @@ fn in_mono(finding: Finding, text: &str) -> bool {
 }
 
 fn generations(n: u32) -> String {
-    format!("{n} generation{}", if n == 1 { "" } else { "s" })
+    format!("{} generation{}", group_digits(n as i64), if n == 1 { "" } else { "s" })
+}
+
+/// A number of cells, as it is written everywhere in the panel.
+fn count(cells: usize) -> String {
+    group_digits(cells as i64)
 }
 
 fn turned(turn: Turn) -> &'static str {
@@ -950,7 +1095,7 @@ fn left_so_far(subject: &Subject) -> Option<String> {
     if others > 0 {
         said.push_str(&format!(", {} that were none", others));
     }
-    Some(format!("{said}, {} cells in it now", subject.world.population()))
+    Some(format!("{said}, {} cells in it now", count(subject.world.population())))
 }
 
 /// Which way a displacement points.

@@ -9,7 +9,13 @@
 //! whatever phase and orientation it was found in. It also tells a single pattern from several
 //! that merely travel together.
 
-use std::cmp::Reverse;
+use std::{
+    cmp::Reverse,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU32, Ordering},
+    },
+};
 
 use crate::rules::{
     BlockRule, anti_transpose, flip, mirror, rotate_180, rotate_ccw, rotate_cw, transpose,
@@ -201,7 +207,39 @@ const ORIENTATIONS: [Orientation; 8] = [
     Orientation { cell: |(x, y)| (1 - y, 1 - x), block: anti_transpose },
 ];
 
+/// A study on its way, as whoever waits for it on another thread sees it: how far it has got,
+/// and a way to say that this is far enough.
+#[derive(Debug, Default)]
+pub struct Watch {
+    generation: AtomicU32,
+    apart: AtomicBool,
+    stopped: AtomicBool,
+}
+
+impl Watch {
+    /// For how many generations the pattern has been followed so far.
+    pub fn generation(&self) -> u32 {
+        self.generation.load(Ordering::Relaxed)
+    }
+
+    /// Whether the pattern has been followed as far as it will be, and what it became is now
+    /// being taken apart into its pieces.
+    pub fn taking_apart(&self) -> bool {
+        self.apart.load(Ordering::Relaxed)
+    }
+
+    /// Far enough: the pattern is followed no further, and what is known by now is the study.
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Relaxed);
+    }
+
+    pub fn stopped(&self) -> bool {
+        self.stopped.load(Ordering::Relaxed)
+    }
+}
+
 /// Recognises patterns of one rule.
+#[derive(Clone)]
 pub struct Analyser {
     /// The rule relative to its vacuum: the tables it goes through, one for each generation
     /// until they repeat. That can be sooner than the vacuum does: a rule that is its own
@@ -216,6 +254,8 @@ pub struct Analyser {
     pub max_generations: u32,
     pub max_cells: usize,
     pub max_extent: i32,
+    /// Where a study says how far it has got, and is told to stop, if anyone is watching.
+    pub watch: Option<Arc<Watch>>,
 }
 
 impl Analyser {
@@ -235,7 +275,13 @@ impl Analyser {
             max_generations: 8192,
             max_cells: 256,
             max_extent: 256,
+            watch: None,
         }
+    }
+
+    /// Has whoever is watching said to stop?
+    fn stopped(&self) -> bool {
+        self.watch.as_ref().is_some_and(|watch| watch.stopped())
     }
 
     /// Runs the pattern alone until it repeats. `phase` says where the vacuum was in its cycle
@@ -323,8 +369,10 @@ impl Analyser {
                 last.extend_from_slice(pattern);
             },
         );
+        // The pattern came back: it is gone through once more for the form to file it under,
+        // which is not for anyone to watch or to stop.
         let motion = match fate {
-            Fate::Returns { .. } => self.analyse(cells, phase),
+            Fate::Returns { .. } => Analyser { watch: None, ..self.clone() }.analyse(cells, phase),
             _ => None,
         };
         let parts = match fate {
@@ -339,7 +387,12 @@ impl Analyser {
         let (pieces, more_pieces) = match fate {
             Fate::Returns { .. } => (Vec::new(), 0),
             _ if growth.is_some_and(|growth| growth >= SPREADING) => (Vec::new(), 0),
-            _ => self.pieces(&last),
+            _ => {
+                if let Some(watch) = &self.watch {
+                    watch.apart.store(true, Ordering::Relaxed);
+                }
+                self.pieces(&last)
+            }
         };
         Some(Study {
             fate,
@@ -397,6 +450,10 @@ impl Analyser {
         // Whole cycles of the tables, so that the pieces are at the start of one.
         let window = PIECE_WINDOW.next_multiple_of(self.tables.len() as u32) as usize;
         for table in self.tables.iter().cycle().take(window) {
+            // Told to stop, there is no telling the pieces apart: none are given.
+            if self.stopped() {
+                return (Vec::new(), 0);
+            }
             advance_groups(&mut pattern, table.table(), &mut groups);
         }
         let mut all: Vec<(usize, Vec<Cell>)> = Vec::new();
@@ -414,11 +471,12 @@ impl Analyser {
             max_generations: PIECE_GENERATIONS,
             max_cells: 0,
             max_extent: PIECE_EXTENT,
+            watch: None,
         };
         let mut work = PIECE_WORK;
         let mut pieces = Vec::new();
         for (_, piece) in &all {
-            if work == 0 {
+            if work == 0 || self.stopped() {
                 break;
             }
             let kind = if piece.len() > PIECE_CELLS {
@@ -506,6 +564,12 @@ impl Analyser {
                 return Fate::Scatters;
             } else if generation >= self.max_generations {
                 return Fate::Undecided;
+            }
+            if let Some(watch) = &self.watch {
+                watch.generation.store(generation, Ordering::Relaxed);
+                if watch.stopped() {
+                    return Fate::Undecided;
+                }
             }
         }
     }
@@ -1027,6 +1091,26 @@ mod tests {
         assert!(disk.growth.is_some_and(|growth| growth >= SPREADING), "{:?}", disk.growth);
         assert!(disk.pieces.is_empty());
         assert_eq!(analyser.study(&[], 0), None);
+    }
+
+    #[test]
+    fn a_study_can_be_watched_and_stopped() {
+        // The slow diagonal ship of Single rotation takes 368 generations to come back.
+        let mut analyser = Analyser::new(&rule("single-rotation"));
+        let watch = Arc::new(Watch::default());
+        analyser.watch = Some(watch.clone());
+        let ship = from_rle("o$o2$o$o").unwrap();
+        let study = analyser.study(&ship, 0).unwrap();
+        assert_eq!(study.fate, Fate::Returns { period: 368, displacement: (2, 2) });
+        assert_eq!(study.motion.as_ref().map(|motion| motion.period), Some(368));
+        assert_eq!(watch.generation(), 367, "the last generation before it was back");
+        assert!(!watch.taking_apart() && !watch.stopped());
+        // Told to stop before it begins, the study is over after one generation, undecided,
+        // and nothing is taken apart.
+        watch.stop();
+        let study = analyser.study(&ship, 0).unwrap();
+        assert_eq!((study.fate, study.generations), (Fate::Undecided, 1));
+        assert!(study.motion.is_none() && study.pieces.is_empty());
     }
 
     #[test]

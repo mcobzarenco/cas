@@ -270,7 +270,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
-| choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list | left-drag |
+| choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list; or its text, typed or pasted into the panel | left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
@@ -405,22 +405,31 @@ the catcher does with what reaches the edge, and the *Analysis* panel says what 
   one, and its speed; whether it is one of its own turns or mirrors sooner than that (a glider is
   its mirror image half way through its period); how many cells change from one generation to the
   next, and how many never do.
+* An oscillator that is **many**: several patterns that never meet, each back where it was after
+  a period of its own, are back together when all of them are at once, after the least common
+  multiple of their periods. What a blob of Single rotation leaves behind inside an open border
+  is like that: a field of small oscillators with periods from 2 to a few hundred, which is back
+  after tens of billions of generations. Nothing is followed that far. The pattern is known by
+  its pieces instead: each is followed alone through its own period, and pieces that come by no
+  block in common on the way can never meet (those that do are followed together).
 * Or a pattern that **grows**, along lines as a gun does or over the plane, that **flies apart**,
   or that had not repeated when the study ended. What it had become by then is taken apart into
-  the pieces that go their own ways, and each is followed alone: so many spaceships of such
-  kinds, oscillators, still lifes, one that keeps growing. The pieces are listed under their
-  line of the findings: the spaceships as the spaceship list shows them, each kind with the ways
-  it flies, and under them what stays where it is, the oscillators and the still lifes. A click
-  on the line folds the list away into a line of text, and opens it again. A pattern that comes
-  back as several that never meet has its parts listed the same way.
+  the pieces that go their own ways, and each is followed alone.
+* What its **pieces** are, for a pattern that came apart or is several that never meet: under
+  their line of the findings there is a line to each sort, with how many spaceships there are
+  and of which kinds, how many oscillators and of which periods, how many still lifes, and what
+  else became of pieces. A click on the line lists them kind by kind instead: the spaceships as
+  the spaceship list shows them, each kind with the ways it flies, and under them what stays
+  where it is, the oscillators and the still lifes. Another click folds the list away again.
 * For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
   blocks, and its run-length encoded text.
 
 Every pattern is followed as far: for 131 072 generations, unless it is back in its shape before,
 or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small
-one: wider than 512 cells). The study is made in the background, so a large pattern, or one that
-is slow to make up its mind, holds nothing up: the panel then says how far the study has got,
-and **Stop** takes what is known by then.
+one: wider than 512 cells); one that is known by its pieces, until the slowest of them is back.
+The study is made in the background, so a large pattern, or one that is slow to make up its
+mind, holds nothing up: the panel then says how far the study has got, and **Stop** takes what
+is known by then.
 
 The panel shows the pattern living in a small world of its own, a torus just big enough for it,
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it
@@ -430,6 +439,12 @@ what leaves through it is caught and counted, as on the grid: a gun's output, ki
 magnifying glass in a row of the spaceship list sends that kind over. The study is a record: it stays when the rule
 changes, under the rule named next to the title, and **Place** then puts the same cells down under
 the rule now set.
+
+The text is in a field, and a pattern can come from there too: type or paste a text into it,
+and the pattern it spells is studied under the rule of the grid, as soon as it spells one. It is
+the text **Copy** gives: `b` for a dead cell, `o` for a live one, `$` for the end of a row, a
+count before any of them, written from a corner of the blocks the next step rewrites. `Escape`
+leaves the field.
 
 Choosing stays on after a study, so the next drag studies the next pattern, and **Analyse** is
 outlined for as long as it is on; `Escape`, **Analyse** again, or picking a pattern up ends it,

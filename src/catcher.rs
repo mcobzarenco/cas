@@ -27,7 +27,7 @@ use bevy::{
 
 use cas_core::{
     census::{Census, Kind},
-    pattern::{Analyser, Cell, Heading, to_rle},
+    pattern::{Analyser, Cell, Heading, WAYS, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
 };
@@ -56,11 +56,15 @@ const QUEUE: usize = 4096;
 /// Column widths of the list, shared by its header and its rows; the speed takes the rest,
 /// which must be room enough for the likes of `2c/184 ↘`, or the row would widen the panel.
 pub(crate) const PICTURE: (f32, f32) = (64.0, 44.0);
-pub(crate) const PERIOD_COLUMN: f32 = 44.0;
-pub(crate) const CELLS_COLUMN: f32 = 34.0;
-pub(crate) const CAUGHT_COLUMN: f32 = 54.0;
+pub(crate) const PERIOD_COLUMN: f32 = 40.0;
+pub(crate) const CELLS_COLUMN: f32 = 30.0;
+pub(crate) const CAUGHT_COLUMN: f32 = 48.0;
 const ANALYSE_COLUMN: f32 = 24.0;
-pub(crate) const COLUMN_GAP: f32 = 8.0;
+pub(crate) const COLUMN_GAP: f32 = 6.0;
+/// The side of the dial that shows which ways the ships of a kind fly.
+const DIAL: f32 = 30.0;
+/// How bright a way of the dial is that the fewest ships took, against the one most took.
+const FAINTEST: f32 = 0.45;
 
 #[derive(Resource, Default)]
 pub struct Catcher {
@@ -138,6 +142,14 @@ struct Share(usize);
 /// The small button of a row that sends its kind to the analysis panel.
 #[derive(Component, Default, Clone, Copy)]
 struct AnalyseKind(usize);
+
+/// An arrow of a dial: the way it points, as one of the eight [`WAYS`], and which kind of the
+/// list it belongs to, if it is the list's: those are kept in step with what is caught.
+#[derive(Component, Default, Clone, Copy)]
+pub(crate) struct Flown {
+    kind: Option<usize>,
+    way: usize,
+}
 
 /// The line under the list.
 #[derive(Component, Default, Clone)]
@@ -365,15 +377,12 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
     let (caught, share) = (Figure::Caught(index), Share(index));
     let (analyse, analyse_name) = (AnalyseKind(index), Name::new(format!("AnalyseKind{index}")));
     let bar = Aspect::Pattern.color();
-    let (travelled, period) = motion.speed();
-    // Which way it flies, by the signs of its displacement.
-    const ARROWS: [[&str; 3]; 3] = [["↖", "↑", "↗"], ["←", "", "→"], ["↙", "↓", "↘"]];
-    let (dx, dy) = motion.displacement;
-    let arrow = ARROWS[(dy.signum() + 1) as usize][(dx.signum() + 1) as usize];
-    let speed = match (travelled, period) {
-        (1, 1) => format!("c {arrow}"),
-        (1, _) => format!("c/{period} {arrow}"),
-        _ => format!("{travelled}c/{period} {arrow}"),
+    // The picture is of the form the kind is filed under, which flies right or down; the ways
+    // its ships were going when they were caught are on the dial.
+    let speed = match motion.speed() {
+        (1, 1) => "c".to_string(),
+        (1, period) => format!("c/{period}"),
+        (travelled, period) => format!("{travelled}c/{period}"),
     };
     let heading = match motion.heading() {
         Heading::Orthogonal => "orthogonal",
@@ -424,6 +433,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                             caption(heading),
                         ]
                     ),
+                    dial(&kind.ways, Some(index)),
                     number(motion.period.to_string(), PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(motion.canonical.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     (
@@ -468,6 +478,65 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
             ),
         ]
     }
+}
+
+/// The ways the spaceships of a kind go, as a dial: the eight ways there are, lit where some
+/// went, and the brighter the more of them did. A kind goes the ways the rule's own turns and
+/// mirrors take it. `ways` counts the ships by the way they went, clockwise from straight up;
+/// `kind` is the kind's place in the spaceship list, whose dials follow what is caught. With
+/// no ship at all there is no dial.
+pub(crate) fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene {
+    let step = DIAL / 3.0;
+    let arrows: Vec<_> = WAYS
+        .iter()
+        .enumerate()
+        .map(|(way, &(dx, dy))| {
+            let color = glow(ways, way);
+            let turned = UiTransform::from_rotation(Rot2::degrees(45.0 * way as f32));
+            let flown = Flown { kind, way };
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(step * (1 + dx) as f32),
+                    top: px(step * (1 + dy) as f32),
+                    width: px(step),
+                    height: px(step),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                }
+                template_value(Pickable::IGNORE)
+                Children [(
+                    icons::icon(icons::WAY, step, color)
+                    template_value(turned)
+                    template_value(flown)
+                    template_value(Pickable::IGNORE)
+                )]
+            }
+        })
+        .collect();
+    let (side, shown) = if ways.iter().all(|&ships| ships == 0) { (0.0, Display::None) } else { (DIAL, Display::Flex) };
+    bsn! {
+        Node {
+            display: shown,
+            width: px(side),
+            height: px(side),
+            flex_shrink: 0.0,
+        }
+        template_value(Pickable::IGNORE)
+        Children [ { arrows } ]
+    }
+}
+
+/// The colour of a way on a dial: dark where no ship went, and from there the brighter the
+/// more ships went that way, up to the way most of them took.
+fn glow(ways: &[u64; 8], way: usize) -> Color {
+    let most = ways.iter().copied().max().unwrap_or(0);
+    if ways[way] == 0 {
+        return palette::GRAY_3;
+    }
+    let share = ways[way] as f32 / most as f32;
+    let (dark, lit) = (palette::GRAY_3.to_srgba(), Aspect::Pattern.color().to_srgba());
+    dark.mix(&lit, FAINTEST + (1.0 - FAINTEST) * share).into()
 }
 
 /// A figure set to the right of its column.
@@ -668,6 +737,7 @@ fn sync_list(
     rows: Query<(Entity, &KindRow)>,
     mut figures: Query<(&Figure, &mut Text), Without<Note>>,
     mut shares: Query<(&Share, &mut Node)>,
+    mut arrows: Query<(&Flown, &mut TextColor)>,
     mut note: Single<&mut Text, With<Note>>,
     mut shown: Local<Option<Shown>>,
     mut wait: Local<f32>,
@@ -717,6 +787,12 @@ fn sync_list(
         let width = percent(100.0 * kinds.get(kind).map_or(0.0, |kind| share_of(kind, ships)));
         if bar.width != width {
             bar.width = width;
+        }
+    }
+    // The dials of the list: a way lights up when the first ship of its kind goes it.
+    for (flown, mut color) in &mut arrows {
+        if let Some(kind) = flown.kind.and_then(|kind| kinds.get(kind)) {
+            color.set_if_neq(TextColor(glow(&kind.ways, flown.way)));
         }
     }
     note.set_if_neq(Text(catcher.note.clone().unwrap_or(hint.to_string())));

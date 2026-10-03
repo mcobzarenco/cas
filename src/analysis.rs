@@ -32,7 +32,7 @@ use cas_core::{
     census::Census,
     pattern::{
         Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, Watch,
-        from_rle, to_rle,
+        from_rle, to_rle, way,
     },
     rules::BlockRule,
     universe::Universe,
@@ -40,7 +40,9 @@ use cas_core::{
 
 use crate::{
     actions::KeyboardOwner,
-    catcher::{CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, heading as column_title, mono, number, picture},
+    catcher::{
+        CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture,
+    },
     icons,
     sim::{Settings, SimSystems},
     ui::{
@@ -93,10 +95,6 @@ const SORT_COLUMNS: (f32, f32) = (24.0, 62.0);
 /// The findings are in tiles, two to a row: a tile is so wide at least, and takes a row to
 /// itself when it has much to say.
 const TILE: f32 = 170.0;
-/// The side of the dial that shows which ways the ships of a kind fly.
-const DIAL: f32 = 30.0;
-/// The eight ways there are on the grid, clockwise from straight up; `y` points down.
-const WAYS: [(i32, i32); 8] = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)];
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -915,8 +913,9 @@ fn pieces_heading(title: &'static str, period: bool) -> impl Scene {
 }
 
 /// One kind of piece, as the spaceship list shows a kind of spaceship: its picture, how it
-/// moves or how large it is, the ways its ships fly, its period, its cells, how many of it
-/// there are, and as a bar their share of the `of` pieces of its section.
+/// moves or how large it is, the dial of the ways its ships fly, its period, its cells, how
+/// many of it there are, and as a bar their share of the `of` pieces of its section. The
+/// picture of a kind is the form it is filed under, whichever way its pieces lie.
 fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
     let name = Name::new(format!("Piece{index}"));
     let share = percent(100.0 * kind.count as f32 / of.max(1) as f32);
@@ -955,7 +954,7 @@ fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
                         }
                         Children [ { about } ]
                     ),
-                    dial(&kind.ways),
+                    dial(&kind.ways, None),
                     number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(kind.cells.to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     number(group_digits(kind.count as i64), CAUGHT_COLUMN, palette::WHITE),
@@ -977,44 +976,6 @@ fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
                 )]
             ),
         ]
-    }
-}
-
-/// The ways the pieces of a kind go, as a dial: the eight ways there are, lit where some of
-/// them went. The picture of a kind is the one it is filed under, whichever way its pieces
-/// fly; what stays where it is has no dial.
-fn dial(ways: &[(i32, i32)]) -> impl Scene {
-    let step = DIAL / 3.0;
-    let arrows: Vec<_> = WAYS
-        .iter()
-        .enumerate()
-        .map(|(eighths, &(dx, dy))| {
-            let color = if ways.contains(&(dx, dy)) { Aspect::Pattern.color() } else { palette::GRAY_3 };
-            let turned = UiTransform::from_rotation(Rot2::degrees(45.0 * eighths as f32));
-            bsn! {
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(step * (1 + dx) as f32),
-                    top: px(step * (1 + dy) as f32),
-                    width: px(step),
-                    height: px(step),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                }
-                Children [( icons::icon(icons::WAY, step, color) template_value(turned) )]
-            }
-        })
-        .collect();
-    let (side, shown) = if ways.is_empty() { (0.0, Display::None) } else { (DIAL, Display::Flex) };
-    bsn! {
-        Node {
-            display: shown,
-            width: px(side),
-            height: px(side),
-            flex_shrink: 0.0,
-        }
-        template_value(Pickable::IGNORE)
-        Children [ { arrows } ]
     }
 }
 
@@ -1531,7 +1492,10 @@ fn draw(finding: Finding, subject: &Subject, commands: &mut Commands) -> Vec<Ent
             let travels = study.motion.as_ref().is_some_and(|motion| motion.heading() != Heading::Still);
             let (glyph, turned) = match study.fate {
                 _ if study.still => (icons::STILL, 0.0),
-                Fate::Returns { displacement: (dx, dy), .. } if travels => (icons::SHIP, 45.0 * eighths(dx, dy) as f32),
+                // Its nose is up as it comes, and it is turned an eighth at a time.
+                Fate::Returns { displacement: (dx, dy), .. } if travels => {
+                    (icons::SHIP, 45.0 * way(dx, dy).unwrap_or(0) as f32)
+                }
                 _ if study.period.is_some() => (icons::OSCILLATES, 0.0),
                 Fate::Grows => (icons::GROWS, 0.0),
                 Fate::Scatters if study.growth.is_some_and(|growth| growth >= GROWING) => (icons::GROWS, 0.0),
@@ -1605,11 +1569,6 @@ fn draw(finding: Finding, subject: &Subject, commands: &mut Commands) -> Vec<Ent
         }
         Finding::Pieces => Vec::new(),
     }
-}
-
-/// How many eighths of a turn, clockwise from straight up, the way of a displacement is.
-fn eighths(dx: i32, dy: i32) -> usize {
-    WAYS.iter().position(|&way| way == (dx.signum(), dy.signum())).unwrap_or(0)
 }
 
 /// A line taken apart into what is text and what is arrows, in order. The face of the panel
@@ -1750,13 +1709,13 @@ fn others(pieces: &[Piece], more: usize) -> Vec<(usize, &'static str, &'static s
 }
 
 /// A kind of piece as the list shows it: the form it is filed under; how it moves, or how
-/// large it is; a word more; the ways its ships were seen to fly, clockwise from straight up;
+/// large it is; a word more; how many of its ships fly each way, clockwise from straight up;
 /// its period, unless it keeps still; its cells; and how many pieces are of the kind.
 struct Listed {
     form: Vec<Cell>,
     title: String,
     note: &'static str,
-    ways: Vec<(i32, i32)>,
+    ways: [u64; 8],
     period: Option<u32>,
     cells: usize,
     count: usize,
@@ -1774,7 +1733,7 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
         let (sort, title, note, period, way) = match piece.kind {
             PieceKind::Spaceship { period, displacement: (dx, dy) } => {
                 let motion = Motion { period, displacement: (dx, dy), canonical: Vec::new() };
-                (0, speed(&motion), heading(&motion), Some(period), Some((dx.signum(), dy.signum())))
+                (0, speed(&motion), heading(&motion), Some(period), way(dx, dy))
             }
             PieceKind::Oscillator { period } => (1, size(), "", Some(period), None),
             PieceKind::StillLife => (2, size(), "", None, None),
@@ -1785,20 +1744,17 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
             Some(known) => known,
             None => {
                 let form = piece.form.clone();
-                kinds.push(Listed { form, title, note, ways: Vec::new(), period, cells: piece.cells, count: 0 });
+                kinds.push(Listed { form, title, note, ways: [0; 8], period, cells: piece.cells, count: 0 });
                 kinds.len() - 1
             }
         };
         kinds[known].count += 1;
-        if let Some(way) = way.filter(|way| !kinds[known].ways.contains(way)) {
-            kinds[known].ways.push(way);
+        if let Some(way) = way {
+            kinds[known].ways[way] += 1;
         }
     }
     for kinds in &mut sorted {
         kinds.sort_by_key(|kind| std::cmp::Reverse(kind.count));
-        for kind in kinds {
-            kind.ways.sort_by_key(|&(dx, dy)| eighths(dx, dy));
-        }
     }
     sorted
 }
@@ -1959,14 +1915,14 @@ mod tests {
             Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
         ];
         let [ships, oscillators, still] = listed(&apart);
-        // One kind of ship, flying two ways, which come clockwise from straight up; what goes
-        // round, by its size; and what keeps still, which has no period.
+        // One kind of ship, two of them flying right and one left; what goes round, by its
+        // size; and what keeps still, which has no period.
         let said = |kind: &Listed| (kind.title.clone(), kind.note, kind.period, kind.cells, kind.count);
         assert_eq!(ships.iter().map(said).collect::<Vec<_>>(), [("c/6".to_string(), "orthogonal", Some(12), 4, 3)]);
-        assert_eq!(ships[0].ways, [(1, 0), (-1, 0)]);
+        assert_eq!(ships[0].ways, [0, 0, 2, 0, 0, 0, 1, 0]);
         assert_eq!(oscillators.iter().map(said).collect::<Vec<_>>(), [("1×1".to_string(), "", Some(4), 1, 2)]);
         assert_eq!(still.iter().map(said).collect::<Vec<_>>(), [("2×2".to_string(), "", None, 4, 1)]);
-        assert!(oscillators[0].ways.is_empty() && still[0].ways.is_empty());
+        assert_eq!((oscillators[0].ways, still[0].ways), ([0; 8], [0; 8]));
         assert_eq!(
             others(&apart, 2),
             [(1, "one that grows", "that grow"), (2, "one more not followed", "more not followed")]
@@ -1983,13 +1939,6 @@ mod tests {
                 sort(2, "more not followed", ""),
             ]
         );
-    }
-
-    #[test]
-    fn a_way_is_so_many_eighths_of_a_turn() {
-        // Up is none, and round it goes with the clock: right a quarter, down a half.
-        assert_eq!([eighths(0, -3), eighths(2, -2), eighths(5, 0), eighths(1, 1)], [0, 1, 2, 3]);
-        assert_eq!([eighths(0, 4), eighths(-1, 1), eighths(-7, 0), eighths(-2, -2)], [4, 5, 6, 7]);
     }
 
     #[test]

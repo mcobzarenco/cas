@@ -273,7 +273,12 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
-its next value. The overlays fade out as you zoom out (they would only be noise once cells are a
+its next value. In a window too low for the panel its cards scroll, and the wheel is then for
+that, wherever the pointer is; a menu scrolls where the window ends. The side panels (the rule
+editor, the spaceship list, the analysis) leave the grid a share of the window: when there is no
+room for another, the one opened longest ago is put away.
+
+The overlays fade out as you zoom out (they would only be noise once cells are a
 few pixels wide), so leaving them on is harmless. The block outline depends only on the generation
 (even: blocks aligned with the origin, odd: shifted by one cell diagonally). Stepping forward
 rewrites the outlined blocks and then the outline moves on; stepping back restores the previous

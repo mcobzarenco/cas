@@ -11,7 +11,7 @@ use bevy::{
         constants::fonts,
         controls::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider,
-            FeathersMenuItem, FeathersMenuPopup,
+            FeathersMenuItem, FeathersMenuPopup, FeathersScrollbar,
         },
         cursor::EntityCursor,
         dark_theme::create_dark_theme,
@@ -22,12 +22,12 @@ use bevy::{
     picking::hover::Hovered,
     prelude::*,
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
-    ui::Checked,
+    ui::{Checked, UiGlobalTransform},
     ui_widgets::{
-        Activate, ActivateOnPress, Checkbox, Slider, SliderDragState, SliderOrientation,
-        SliderThumb, SliderValue, TrackClick, ValueChange,
+        Activate, ActivateOnPress, Checkbox, ControlOrientation, ScrollArea, Scrollbar, Slider,
+        SliderDragState, SliderOrientation, SliderThumb, SliderValue, TrackClick, ValueChange,
     },
-    window::SystemCursorIcon,
+    window::{PrimaryWindow, SystemCursorIcon},
 };
 
 use cas_core::{
@@ -37,14 +37,17 @@ use cas_core::{
 
 use crate::{
     actions::{Action, Does, Toggle},
-    analysis::{ChoosingMark, SelectHint, analysis_panel},
-    catcher::catcher_panel,
-    editor::{RuleEditor, describe, editor_panel},
+    analysis::{ANALYSIS_WIDTH, Analysis, ChoosingMark, SelectHint, analysis_panel},
+    catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
+    editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
 };
 
 pub const PANEL_WIDTH: f32 = 300.0;
+/// The grid is left this much of the window's width at least: side panels that would take
+/// more are put away, the one opened longest ago first.
+const GRID_ROOM: f32 = 320.0;
 
 /// What cards are made of. They lie on the window's background, a shade darker than they are.
 pub(crate) const CARD: Color = palette::GRAY_1;
@@ -245,6 +248,10 @@ struct ToggleBox;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct ToggleTick;
 
+/// The cards of the control panel, which scroll in a window too low for them.
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct PanelBody;
+
 /// The preset (an index into [`PRESETS`]) a rule-menu item selects.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct RuleChoice(usize);
@@ -256,6 +263,7 @@ impl Plugin for UiPlugin {
         app.add_plugins(FeathersPlugins)
             .insert_resource(UiTheme(theme()))
             .add_systems(Startup, spawn_ui)
+            .add_systems(Update, make_room.in_set(SimSystems::Input))
             .add_systems(
                 Update,
                 (
@@ -263,6 +271,8 @@ impl Plugin for UiPlugin {
                         .chain(),
                     (sync_sliders.run_if(options_changed), style_sliders).chain(),
                     update_status,
+                    show_scrollbars,
+                    fit_menus,
                 )
                     .in_set(SimSystems::Present),
             );
@@ -336,12 +346,130 @@ fn panel() -> impl Scene {
         }
         Children [
             header(),
-            rule_card(),
-            world_card(),
-            time_card(),
-            view_card(),
-            pattern_card(),
+            (
+                // The frame holds the scrollbar, in the gutter beside the cards; the cards
+                // scroll when the window is too low for them all.
+                Node {
+                    flex_grow: 1.0,
+                    min_height: px(0),
+                    flex_direction: FlexDirection::Column,
+                }
+                Children [
+                    (
+                        #PanelBody
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(GUTTER),
+                            overflow: Overflow::scroll_y(),
+                        }
+                        ScrollArea
+                        PanelBody
+                        Children [
+                            rule_card(),
+                            world_card(),
+                            time_card(),
+                            view_card(),
+                            pattern_card(),
+                        ]
+                    ),
+                    (
+                        @FeathersScrollbar {
+                            @target: #PanelBody,
+                            @orientation: {ControlOrientation::Vertical}
+                        }
+                        Node {
+                            display: Display::None,
+                            position_type: PositionType::Absolute,
+                            right: px(-6),
+                            top: px(0),
+                            bottom: px(0),
+                            width: px(4),
+                        }
+                    ),
+                ]
+            ),
         ]
+    }
+}
+
+/// A scrollbar is there while there is something to scroll: what it scrolls is higher than
+/// the room it has.
+fn show_scrollbars(areas: Query<&ComputedNode>, mut bars: Query<(&Scrollbar, &mut Node)>) {
+    for (bar, mut node) in &mut bars {
+        let Ok(area) = areas.get(bar.target) else {
+            continue;
+        };
+        let scrolls = area.content_size().y > area.size().y + 0.5;
+        let display = if scrolls { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+    }
+}
+
+/// A menu reaches down as far as the window does, and scrolls beyond that: it hangs under
+/// its button, which may be anywhere in a window of any height.
+fn fit_menus(
+    window: Single<&Window, With<PrimaryWindow>>,
+    menus: Query<(&ComputedNode, &UiGlobalTransform)>,
+    mut popups: Query<(&mut Node, &ChildOf), With<FeathersMenuPopup>>,
+) {
+    /// The room between the button and its menu, and between the menu and the window's edge.
+    const MARGINS: f32 = 12.0;
+    for (mut popup, menu) in &mut popups {
+        let Ok((node, transform)) = menus.get(menu.parent()) else {
+            continue;
+        };
+        let bottom = (transform.translation.y + 0.5 * node.size.y) * node.inverse_scale_factor;
+        let room = px((window.height() - bottom - MARGINS).max(4.0 * MARGINS));
+        if popup.max_height != room {
+            popup.max_height = room;
+        }
+    }
+}
+
+/// The side panels by name.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side {
+    Editor,
+    Spaceships,
+    Analysis,
+}
+
+/// Keeps room for the grid: when the side panels that are open would leave it less than
+/// [`GRID_ROOM`], the ones opened longest ago are put away, down to the last one opened. In
+/// a narrow window that is one panel at a time.
+fn make_room(
+    window: Single<&Window, With<PrimaryWindow>>,
+    mut editor: ResMut<RuleEditor>,
+    mut catcher: ResMut<Catcher>,
+    mut analysis: ResMut<Analysis>,
+    mut open: Local<Vec<Side>>,
+) {
+    // The panels that are open, in the order they were opened.
+    for (side, is_open) in [
+        (Side::Editor, editor.is_open()),
+        (Side::Spaceships, catcher.is_open()),
+        (Side::Analysis, analysis.is_open()),
+    ] {
+        match (is_open, open.contains(&side)) {
+            (true, false) => open.push(side),
+            (false, true) => open.retain(|other| *other != side),
+            _ => {}
+        }
+    }
+    let width = |side: &Side| match side {
+        Side::Editor => EDITOR_WIDTH,
+        Side::Spaceships => CATCHER_WIDTH,
+        Side::Analysis => ANALYSIS_WIDTH,
+    };
+    let room = window.width() - PANEL_WIDTH - GRID_ROOM;
+    while open.len() > 1 && open.iter().map(width).sum::<f32>() > room {
+        match open.remove(0) {
+            Side::Editor => editor.close(),
+            Side::Spaceships => catcher.close(),
+            Side::Analysis => analysis.close(),
+        }
     }
 }
 
@@ -773,22 +901,26 @@ fn rule_card() -> impl Scene {
                             Node { flex_grow: 1.0 }
                         ),
                         (
+                            // Its height is the window's business: see `fit_menus`.
                             @FeathersMenuPopup
+                            Node { overflow: Overflow::scroll_y() }
+                            ScrollArea
                             Children [
                                 menu_heading("FROM THE COLLECTIONS"),
                                 { collections },
-                                @FeathersMenuDivider,
+                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
                                 menu_heading("FROM MORITA'S BOOK"),
                                 { morita },
-                                @FeathersMenuDivider,
+                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
                                 menu_heading("FOUND BY SEARCH"),
                                 { found },
-                                @FeathersMenuDivider,
+                                (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
                                 (
                                     #RuleItemCustom
                                     @FeathersMenuItem {
                                         @caption: bsn! { Text("Custom…") ThemedText }
                                     }
+                                    Node { flex_shrink: 0.0 }
                                     on(|_: On<Activate>,
                                         mut editor: ResMut<RuleEditor>,
                                         mut universe: ResMut<Universe>| {
@@ -814,6 +946,7 @@ fn menu_heading(text: &'static str) -> impl Scene {
     bsn! {
         Node {
             padding: UiRect { left: px(8), right: px(8), top: px(5), bottom: px(2) },
+            flex_shrink: 0.0,
         }
         Children [(
             Text(text)
@@ -837,6 +970,7 @@ fn rule_item(index: usize) -> impl Scene {
         @FeathersMenuItem {
             @caption: bsn! { Text(label) ThemedText }
         }
+        Node { flex_shrink: 0.0 }
         template_value(name)
         template_value(choice)
         on(|activate: On<Activate>, choices: Query<&RuleChoice>, mut universe: ResMut<Universe>| {
@@ -870,6 +1004,8 @@ fn world_card() -> impl Scene {
                         ),
                         (
                             @FeathersMenuPopup
+                            Node { overflow: Overflow::scroll_y() }
+                            ScrollArea
                             Children [ { sizes } ]
                         ),
                     ]
@@ -889,6 +1025,7 @@ fn size_item(side: usize) -> impl Scene {
         @FeathersMenuItem {
             @caption: bsn! { Text(label) ThemedText }
         }
+        Node { flex_shrink: 0.0 }
         template_value(name)
         template_value(does)
     }
@@ -1071,10 +1208,12 @@ fn slider_changed(
         .insert(SliderValue(control.position_of(value)));
 }
 
-/// The wheel steps a slider to its next value.
+/// The wheel steps a slider to its next value; unless the panel has to scroll, and then the
+/// wheel is for that, wherever the pointer happens to be.
 fn slider_scrolled(
     mut scroll: On<Pointer<Scroll>>,
     controls: Query<&Control>,
+    panel: Single<&ComputedNode, With<PanelBody>>,
     mut playback: ResMut<Playback>,
     mut settings: ResMut<Settings>,
     mut residue: Local<f32>,
@@ -1082,6 +1221,9 @@ fn slider_scrolled(
     let Ok(&control) = controls.get(scroll.entity) else {
         return;
     };
+    if panel.content_size().y > panel.size().y + 0.5 {
+        return;
+    }
     scroll.propagate(false);
     // Touchpads scroll in small amounts; collect them into whole notches.
     *residue += wheel_notches(&scroll);

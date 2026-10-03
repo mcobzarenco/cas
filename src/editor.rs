@@ -100,6 +100,16 @@ impl RuleEditor {
         self.selected = None;
     }
 
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub fn close(&mut self) {
+        if self.open {
+            self.toggle();
+        }
+    }
+
     /// Opens the editor on the last hand-made rule (or on the current rule if there is none yet).
     pub fn open_custom(&mut self, universe: &mut Universe) {
         if let Some(rule) = &self.custom {
@@ -112,14 +122,6 @@ impl RuleEditor {
 /// The panel.
 #[derive(Component, Default, Clone)]
 struct EditorPanel;
-
-/// What is in the panel under its title, which scrolls when the window is too low for it, and
-/// the scrollbar it then gets.
-#[derive(Component, Default, Clone)]
-struct EditorBody;
-
-#[derive(Component, Default, Clone)]
-struct EditorScrollbar;
 
 /// One case; the value is the block before the step.
 #[derive(Component, Default, Clone, Copy)]
@@ -230,7 +232,6 @@ impl Plugin for EditorPlugin {
                             .or_eager(outcome_hovered),
                     ),
                     sync_rule_string,
-                    show_scrollbar,
                 )
                     .chain()
                     .in_set(SimSystems::Present),
@@ -367,7 +368,6 @@ pub fn editor_panel() -> impl Scene {
                             overflow: Overflow::scroll_y(),
                         }
                         ScrollArea
-                        EditorBody
                         Children [
                             { editor_body(orbits) },
                         ]
@@ -377,7 +377,6 @@ pub fn editor_panel() -> impl Scene {
                             @target: #EditorBody,
                             @orientation: {ControlOrientation::Vertical}
                         }
-                        EditorScrollbar
                         Node {
                             display: Display::None,
                             position_type: PositionType::Absolute,
@@ -1254,18 +1253,6 @@ fn sync_editor(
         line.display = display;
     }
     text.set_if_neq(Text(message.unwrap_or_default()));
-}
-
-/// The panel's scrollbar is there while there is something to scroll.
-fn show_scrollbar(
-    body: Single<&ComputedNode, With<EditorBody>>,
-    mut scrollbar: Single<&mut Node, With<EditorScrollbar>>,
-) {
-    let scrolls = body.content_size().y > body.size().y + 0.5;
-    let display = if scrolls { Display::Flex } else { Display::None };
-    if scrollbar.display != display {
-        scrollbar.display = display;
-    }
 }
 
 /// Shows the rule in the text field, unless the user is typing in it: on a rule change, and

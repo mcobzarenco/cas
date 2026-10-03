@@ -1,0 +1,38 @@
+# The layout: how the side panels make room for the grid, and what scrolls in a low window.
+# Expects the default start-up, in the default window of 1440×900.
+wait 25
+expect_shown Spaceships on
+
+# The grid keeps a share of the window. Two side panels leave it that, three do not: the one
+# opened longest ago is put away.
+key e; wait 4; key s; wait 4
+expect_shown RuleEditor on; expect_shown Catcher on
+key a; wait 6
+expect_shown RuleEditor off; expect_shown Catcher on; expect_shown Analysis on
+shot layout-1-two-panels
+key e; wait 6
+expect_shown Catcher off; expect_shown Analysis on; expect_shown RuleEditor on
+key e; wait 3; key a; wait 3
+expect_shown RuleEditor off; expect_shown Analysis off
+
+# A narrow and low window: one side panel at a time.
+window 1280 720; wait 12
+key s; wait 4; key e; wait 6
+expect_shown Catcher off; expect_shown RuleEditor on
+key e; wait 4
+shot layout-2-low
+# The cards of the control panel scroll there, with the wheel wherever the pointer is: over a
+# slider it would step the slider, had the panel all its room.
+scroll Speed -12; wait 6; expect_speed 30
+shot layout-3-scrolled
+click Spaceships; wait 6; expect_shown Catcher on
+key s; wait 4
+
+# The rule menu reaches down to the edge of the window and scrolls on from there.
+scroll PanelBody 12; wait 6
+click RuleMenu; wait 6
+scroll RuleItem:critters -30; wait 6
+shot layout-4-menu
+click RuleItem:diagonal-traffic; wait 6; expect_rule diagonal-traffic
+window 1440 900; wait 12
+quit

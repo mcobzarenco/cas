@@ -83,6 +83,14 @@ impl Catcher {
         self.open = !self.open;
     }
 
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub fn close(&mut self) {
+        self.open = false;
+    }
+
     /// Spaceships caught under `rule`, and how many kinds they are.
     pub fn totals(&self, rule: &BlockRule) -> (u64, usize) {
         self.hauls
@@ -132,10 +140,6 @@ struct Share(usize);
 /// The small button of a row that sends its kind to the analysis panel.
 #[derive(Component, Default, Clone, Copy)]
 struct AnalyseKind(usize);
-
-/// The list's scrollbar, shown only while there is something to scroll.
-#[derive(Component, Default, Clone)]
-struct KindScrollbar;
 
 /// The line under the list.
 #[derive(Component, Default, Clone)]
@@ -265,7 +269,6 @@ pub fn catcher_panel() -> impl Scene {
                             @target: #KindList,
                             @orientation: {ControlOrientation::Vertical}
                         }
-                        KindScrollbar
                         Node {
                             display: Display::None,
                             position_type: PositionType::Absolute,
@@ -648,20 +651,11 @@ fn light_rows(
     }
 }
 
-/// Shows or hides the panel, and its scrollbar while there is something to scroll.
-fn show_panel(
-    catcher: Res<Catcher>,
-    mut panel: Single<&mut Node, With<CatcherPanel>>,
-    list: Single<&ComputedNode, With<KindList>>,
-    mut scrollbar: Single<&mut Node, (With<KindScrollbar>, Without<CatcherPanel>)>,
-) {
-    let display = |shown: bool| if shown { Display::Flex } else { Display::None };
-    if panel.display != display(catcher.open) {
-        panel.display = display(catcher.open);
-    }
-    let scrolls = list.content_size().y > list.size().y + 0.5;
-    if scrollbar.display != display(scrolls) {
-        scrollbar.display = display(scrolls);
+/// Shows or hides the panel.
+fn show_panel(catcher: Res<Catcher>, mut panel: Single<&mut Node, With<CatcherPanel>>) {
+    let display = if catcher.open { Display::Flex } else { Display::None };
+    if panel.display != display {
+        panel.display = display;
     }
 }
 

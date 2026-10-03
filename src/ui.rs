@@ -37,7 +37,7 @@ use cas_core::{
 
 use crate::{
     actions::{Action, Does, Toggle},
-    analysis::{SelectHint, analysis_panel},
+    analysis::{ChoosingMark, SelectHint, analysis_panel},
     catcher::catcher_panel,
     editor::{RuleEditor, describe, editor_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -1018,8 +1018,11 @@ fn pattern_card() -> impl Scene {
             }
             Children [
                 (
+                    // Outlined in the pattern's colour while a pattern is being chosen.
                     action_button_hinted("Analyse", "Analyse", Action::Analyse, Action::Analysis)
-                    Node { flex_grow: 0.0 }
+                    Node { flex_grow: 0.0, border: px(1) }
+                    BorderColor::all(Color::NONE)
+                    ChoosingMark
                 ),
                 (
                     #SelectHint

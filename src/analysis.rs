@@ -258,6 +258,11 @@ struct Note;
 #[derive(Component, Default, Clone)]
 pub struct SelectHint;
 
+/// The Analyse button of the pattern card, which is outlined while a pattern is being chosen:
+/// a drag on the grid then draws a band, and does not paint.
+#[derive(Component, Default, Clone)]
+pub struct ChoosingMark;
+
 /// The texture and the material the small world is drawn with, and an empty world to draw
 /// while there is no pattern.
 #[derive(Resource)]
@@ -598,6 +603,7 @@ fn sync_panel(
     mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
+    mut mark: Single<&mut BorderColor, With<ChoosingMark>>,
     mut shown: Local<Option<Shown>>,
 ) {
     let display = if analysis.open { Display::Flex } else { Display::None };
@@ -642,6 +648,8 @@ fn sync_panel(
     note.set_if_neq(Text(analysis.note.clone().unwrap_or(what_next.to_string())));
     let hint_text = if analysis.selecting { "drag over it · Escape cancels" } else { "on the grid, or from the list" };
     hint.set_if_neq(Text(hint_text.to_string()));
+    let outline = if analysis.selecting { Aspect::Pattern.color() } else { Color::NONE };
+    mark.set_if_neq(BorderColor::all(outline));
 }
 
 /// The line under the small world: where it has got to, and what has left it. It changes as

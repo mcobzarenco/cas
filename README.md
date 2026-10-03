@@ -412,8 +412,10 @@ magnifying glass in a row of the spaceship list sends that kind over. The study 
 changes, under the rule named next to the title, and **Place** then puts the same cells down under
 the rule now set.
 
-Choosing stays on after a study, so the next drag studies the next pattern; `Escape`, **Analyse**
-again, or picking a pattern up ends it, and left-drag paints again. `a` puts the panel away, as
+Choosing stays on after a study, so the next drag studies the next pattern, and **Analyse** is
+outlined for as long as it is on; `Escape`, **Analyse** again, or picking a pattern up ends it,
+and left-drag paints again. Called off in the middle of a drag, the band is gone and the rest of
+the drag does nothing. `a` puts the panel away, as
 `e` and `s` do theirs, and brings it back choosing.
 
 <p align="center">

@@ -35,6 +35,14 @@ drag Grid -200 -200; wait 10
 expect_text AnalysisNote No live cells in there.
 expect_text StudyWhat Spaceship
 
+# Escape while the band is being drawn calls it off, and what is left of the drag paints
+# nothing: the ship's four cells are all there is. The button brings the choosing back.
+move Grid 0 0; press left; move Grid 40 40; wait 2; key Escape; wait 2
+move Grid 90 20; wait 2; release left; wait 3
+expect_population 4
+expect_text SelectHint on the grid, or from the list
+click Analyse; wait 3
+
 # A band drawn a generation later catches the ship between its blocks, which the study takes
 # into account: it is the same ship.
 step 1; wait 2

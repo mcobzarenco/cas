@@ -130,6 +130,10 @@ impl ViewState {
 /// The paint stroke in progress.
 #[derive(Resource, Default)]
 struct Stroke {
+    /// A stroke is being drawn: a press on the grid began it, and the button is still down.
+    /// A drag paints only then: one that began as a band, or with a stamp, stays what it was
+    /// when the band is called off or the stamp let go of on the way.
+    active: bool,
     /// Shift was down when the stroke began: it erases.
     erase: bool,
     /// What the stroke draws, decided by the first cell it touches.
@@ -527,6 +531,14 @@ struct Canvas<'w, 's> {
 }
 
 impl Canvas<'_, '_> {
+    /// The left button came up: the stroke is over, and a band is closed.
+    fn end_gesture(&mut self) {
+        if self.stroke.active {
+            self.stroke.active = false;
+        }
+        self.finish_selection();
+    }
+
     /// Hands the live cells inside the band over for analysis, relative to a corner of the
     /// blocks the next step rewrites, as a pattern caught at the edge would be.
     fn finish_selection(&mut self) {
@@ -601,6 +613,7 @@ fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canv
         canvas.stroke.panned = false;
         return;
     }
+    canvas.stroke.active = false;
     if canvas.analysis.selecting {
         if let Some(cell) = canvas.cell_under(press.entity, press.pointer_location.position) {
             canvas.analysis.band = Some((cell, cell));
@@ -613,6 +626,7 @@ fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canv
         return;
     }
     *canvas.stroke = Stroke {
+        active: true,
         erase: keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
         ..default()
     };
@@ -626,7 +640,7 @@ fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
             if let Some(cell) = canvas.cell_under(drag.entity, drag.pointer_location.position) {
                 canvas.analysis.band = Some((from, cell));
             }
-        } else if !canvas.stamp.is_held() {
+        } else if canvas.stroke.active {
             canvas.stroke_to(drag.entity, drag.pointer_location.position);
         }
     } else {
@@ -637,16 +651,17 @@ fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
     }
 }
 
-/// Letting go of the left button closes the band, wherever the pointer is by then.
+/// Letting go of the left button ends the stroke and closes the band, wherever the pointer is
+/// by then.
 fn on_release(release: On<Pointer<Release>>, mut canvas: Canvas) {
     if release.button == PointerButton::Primary {
-        canvas.finish_selection();
+        canvas.end_gesture();
     }
 }
 
 fn on_drag_end(end: On<Pointer<DragEnd>>, mut canvas: Canvas) {
     if end.button == PointerButton::Primary {
-        canvas.finish_selection();
+        canvas.end_gesture();
     }
 }
 

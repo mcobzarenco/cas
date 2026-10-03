@@ -208,6 +208,15 @@ fn gcd(a: u32, b: u32) -> u32 {
     if b == 0 { a } else { gcd(b, a % b) }
 }
 
+/// The eight ways there are to go on the grid, clockwise from straight up; `y` points down.
+pub const WAYS: [(i32, i32); 8] = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)];
+
+/// Which of the [`WAYS`] a displacement goes, as near as they tell: how many eighths of a turn
+/// it is, clockwise from straight up. None for no displacement at all.
+pub fn way(dx: i32, dy: i32) -> Option<usize> {
+    WAYS.iter().position(|&way| way == (dx.signum(), dy.signum()))
+}
+
 /// A rotation or mirror of the plane that maps the block grid onto itself, and what it does
 /// to a single block.
 #[derive(Clone, Copy)]
@@ -327,6 +336,13 @@ impl Analyser {
     /// the one travelling furthest right, then furthest down, then with the smallest bounding
     /// box, then first in reading order of its cells.
     pub fn analyse(&self, cells: &[Cell], phase: usize) -> Option<Motion> {
+        self.analyse_as_found(cells, phase).map(|(motion, _)| motion)
+    }
+
+    /// As [`Analyser::analyse`], and besides how far the pattern moves in a period as it
+    /// lies: the form it is filed under travels right or down, whichever way the pattern
+    /// was going when it was found.
+    pub fn analyse_as_found(&self, cells: &[Cell], phase: usize) -> Option<(Motion, (i32, i32))> {
         // Nothing at all is no pattern, and what does not come back has no form to be filed
         // under: that is found out first, since most of what is asked about does not.
         if cells.is_empty() {
@@ -356,7 +372,7 @@ impl Analyser {
         let (canonical, displacement) = seen.min_by(|(a, a_moved), (b, b_moved)| {
             Reverse(a_moved).cmp(&Reverse(b_moved)).then_with(|| in_order(a, b))
         })?;
-        Some(Motion { period, displacement, canonical })
+        Some((Motion { period, displacement, canonical }, moved))
     }
 
     /// What becomes of the pattern, without working out its canonical form: the quick way to
@@ -1105,6 +1121,22 @@ mod tests {
         }
         assert_eq!(analyse("single-rotation", "$2o2$2o").speed(), (1, 6));
         assert_eq!(analyse("single-rotation", "o$o2$o$o").speed(), (1, 184));
+    }
+
+    #[test]
+    fn a_way_is_so_many_eighths_of_a_turn() {
+        // Up is none, and round it goes with the clock: right a quarter, down a half.
+        assert_eq!([way(0, -3), way(2, -2), way(5, 0), way(1, 1)], [Some(0), Some(1), Some(2), Some(3)]);
+        assert_eq!([way(0, 4), way(-1, 1), way(-7, 0), way(-2, -2)], [Some(4), Some(5), Some(6), Some(7)]);
+        assert_eq!(way(0, 0), None);
+        // A pattern is filed flying right or down, and found flying whichever way it was.
+        let analyser = Analyser::new(&rule("single-rotation"));
+        let ship = from_rle("$2o2$2o").unwrap();
+        for (orientation, flying) in [(0, (2, 0)), (1, (0, 2)), (2, (-2, 0)), (3, (0, -2))] {
+            let (turned, _) = reorient(&ship, (0, 0), &ORIENTATIONS[orientation]);
+            let (motion, moved) = analyser.analyse_as_found(&turned, 0).unwrap();
+            assert_eq!((motion.displacement, moved), ((2, 0), flying), "turned {orientation} quarters");
+        }
     }
 
     #[test]

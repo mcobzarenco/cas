@@ -25,6 +25,8 @@
 //! | `press KEY`, `release KEY` | hold a key down across other commands, e.g. `Shift`; or |
 //! |                     | a mouse button (`left`, `right`, `middle`) where the pointer is |
 //! | `type TEXT`         | type text into whatever has keyboard focus                     |
+//! | `clipboard TEXT`    | put text on the clipboard, as copying it elsewhere would: with |
+//! |                     | `key Ctrl+v` a long text goes into a field in one go           |
 //! | `paint X Y [on/off]`| set a cell directly                                            |
 //! | `place RLE X Y`     | put a run-length encoded pattern with its corner at (X, Y)     |
 //! | `fit`               | fit the view to the grid                                       |
@@ -190,6 +192,8 @@ pub enum Command {
         kinds: usize,
     },
     ExpectClipboard(String),
+    /// Text put on the clipboard, as copying it somewhere else would.
+    Clipboard(String),
     /// An expectation that is waited for: tried again at every frame, for so many frames.
     Until {
         expectation: Box<Command>,
@@ -347,6 +351,7 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 kinds: parse(arg(1, "a number of kinds")?)?,
             },
             "expect_clipboard" => Command::ExpectClipboard(rest("some text")?),
+            "clipboard" => Command::Clipboard(rest("some text")?),
             "quit" => Command::Quit,
             other => return Err(format!("unknown command `{other}` in {line:?}")),
         };
@@ -895,6 +900,10 @@ fn drive(
                     format!("expected {ships} spaceships of {kinds} kinds, found {found:?}"),
                 )?;
             }
+            Command::Clipboard(text) => {
+                let copied = clipboard.set_text(text.as_str());
+                copied.map_err(|error| format!("the clipboard is not available ({error:?})"))?;
+            }
             Command::ExpectClipboard(expected) => {
                 let found = clipboard.fetch_text().poll_result();
                 expect(
@@ -933,7 +942,8 @@ mod tests {
         let script = parse_script(
             "wait 30; shot start\n click PlayPause; key Space; key [; step -3; rule critters; soup; soup 0.5; paint 3 4 off; quit\n\
              click Speed -40 0; drag Grid 30 -20 right; scroll Grid 3; expect_cell 1 2 on; fit\n\
-             key Ctrl+a; type 0,2 x; rule 15,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0; expect_rule Tron; expect_clipboard a b",
+             key Ctrl+a; type 0,2 x; rule 15,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0; expect_rule Tron; expect_clipboard a b\n\
+             clipboard 2o$b o",
         )
         .unwrap();
         assert_eq!(
@@ -960,6 +970,7 @@ mod tests {
                 Command::Rule("tron".parse().unwrap()),
                 Command::ExpectRule("tron".parse().unwrap()),
                 Command::ExpectClipboard("a b".into()),
+                Command::Clipboard("2o$b o".into()),
             ]
         );
     }

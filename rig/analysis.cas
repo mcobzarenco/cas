@@ -176,9 +176,22 @@ rule critters; wait 2
 click StudyText; wait 3; key Ctrl+a; key Ctrl+v; wait 10
 until expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
 expect_text SubjectRule Critters
+# A long text goes in at once the same way, from wherever it was copied. This one is what a
+# blob of Single rotation left behind inside an open border after two million generations:
+# a field of 271 small oscillators and still lifes, which is back after tens of billions.
+rule single-rotation; wait 2
+clipboard 41bo2$31bo4$36bo6$59bo$44bo5$48bo8bo5$67bo2$59bo6bo2$87bo$62bobo$54bo22bo$72bo29bo2$85bo22bo$61bo$14bo$35bo47b3o$63b2o4bo11bo25bo$36bo$19bo2$46bo$23bo28bo$69bo$27bo5bo3bo12bo$97bo$14bo40bo32bo8bo$52bo20bo$18bo23bo44bo$5bo$102bo$21bo64bo14bo5bo$50bo$51b2o5bo23bo15bo$5bo17bo5bo20b3o33bo5bo$6bo21bobo18bobo$49b2o11b2o$22bo39b2o50bo$11bo3bo3bo28bo31b2o18bo4bo$37bo50bo7bo8bo$24bo15b2o74bo$5bo18bo15b2o16bo40bo9bo$62bo$12bo48bo15b2o$bo25bo31bo17b2o41bo$63bo13bo6bo$49bo6b2o5bo2b2o8bo7bo5b2o$2bo8bo44b3o7b2o8bo13b2o$57b2o18bobo$6bo2bo22bo44b2o21bo$o11bo50bo15b3o35bo$11bo7bobo27b2o10bo18b2o21bo21bo$6bo28bo8bo4b2o49bo$24bo73bo$o17bo12bo81bo$43b2o15bo15bo27bo$40bo2b2o74bo$2bo8bo$36bo77bo$33bo67bo$34bobo4bo45bo$2bo55bo$7bo10bo28bo$28bo22b2o33bo20bo9bo$20bo30b2o3bo2bo44bo11bo$7bo12bo12bo9bo27bo18bo$o21bo3bo4bo48b2o25b2o7bo$21bo58b2o$78b2o16bo3bo$32bo28bo12bo3b2obo41bo$32b2o42bo18bo$32b2o31b4o20bo31bo$65bo2bo28bo14bo$65b3o17bo17bo$90bo$11bo65bo$60b2o31bo$16bo30b2o11bobo13bo$9bo4bo11bo2bo31b2o10bo38bo$18bo52bo$65bo15bo$6bo64b2o$41bo29b2o7bo22bo$99bo$11bo21bo50bo29bo2$53bo45bo28bo$18bo37bo18bo29bo$50bo40bo8bo8bo$54bo22bo13bo$48bo53bo$28bo3bo$38bo26bo4bo36bo$94bo$32bo$25bo22bo34b2o12bo$83b2o25bo$79bo4bo13bo18bo2b2o2$21bo16bo2bo3bo17bo2bo18bo3bo$57bo$19bo37bo26bo18bo9bo$47bo24bo$17bo43bo15bo26bo$22bo13bo37bo32bo2bo$28bo20bo8bo$42bo37b2o18bo11bo$109bo$97bo$21bo73bo$28bo17bo26bo$37bo25bo39bo$56bo$78bo4bo$28bobo14b2o$61bo$60bo34bo$53bo2$107bo$32bo65bo$92bo4bo$99bo2$66bo4bo2$29bo5bo$38bo9bo$45bo25bo$51bo$27bo$40bo$72bo2$23bo3bo
+key Ctrl+a; key Ctrl+v; wait 10
+until expect_text StudyWhat Oscillator
+expect_text StudyPeriod 69 481 732 320 generations, when all its pieces are back at once
+expect_text StudyCells 415
+expect_text StudyChanges 592.2 cells a generation, 92 never change
+expect_text StudyPieces 271 that never meet
+expect_text PieceSort0 261 oscillators periods 4 ×215, 16 ×22, 8 ×8 and 11 more
+expect_text PieceSort1 10 still lifes
+shot analysis-8-pasted
 # Typed, a text is studied as soon as it spells a pattern. What does not spell one is said,
 # and Escape leaves the field with the text of the pattern on display, and the choosing on.
-rule single-rotation; wait 2
 key Ctrl+a; type 3o$o$bo; wait 10
 until expect_text StudyWhat Spaceship
 expect_text StudySpeed c/15 diagonal ↘

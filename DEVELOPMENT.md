@@ -38,6 +38,7 @@ for script in rig/*.cas; do cargo run --release -- --script-file $script || brea
 | `window W H` | give the window another size, in logical pixels |
 | `play`, `pause`, `step N`, `rule RULE` (preset or table), `speed N`, `stride N`, `vacuum on\|off`, `reverse on\|off`, `soup [DENSITY]`, `blob [DENSITY]`, `cloud [DENSITY]`, `clear` | direct state changes |
 | `expect_gen N`, `expect_cell X Y on\|off`, `expect_population N`, `expect_rule RULE`, `expect_speed N`, `expect_stride N`, `expect_playing on\|off`, `expect_size W H`, `expect_checked NAME on\|off`, `expect_shown NAME on\|off` (a closed panel and all that is in it are not on display), `expect_text NAME TEXT` (a button reads as its caption), `expect_caught SHIPS KINDS`, `expect_clipboard TEXT` | fail the run unless the state is as stated (cells and population are the pattern's, without the vacuum) |
+| `until EXPECTATION` | try the expectation at every frame until it holds, as in `until expect_text Note Done.`: for what is done on another thread, or by the clock. Fails if it never does |
 | `quit` | exit |
 
 Commands are separated by `;` or newlines, `#` starts a comment. Pointer and keyboard actions are

@@ -53,6 +53,9 @@
 //! |                     | its caption)                                                   |
 //! | `expect_caught SHIPS KINDS` | fail unless the catcher has that many spaceships, of that many kinds |
 //! | `expect_clipboard TEXT` | fail unless the clipboard holds TEXT                       |
+//! | `until EXPECTATION` | try the expectation at every frame until it holds, as in       |
+//! |                     | `until expect_text Note Done.`: for what is done on another    |
+//! |                     | thread, or by the clock. Fails if it never does                 |
 //! | `clear`, `quit`     |                                                                |
 //!
 //! Pointer and keyboard actions are injected as the messages `bevy_winit` would produce, so they
@@ -146,7 +149,33 @@ pub enum Command {
     ExpectText { name: String, text: String },
     ExpectCaught { ships: u64, kinds: usize },
     ExpectClipboard(String),
+    /// An expectation that is waited for: tried again at every frame, for so many frames.
+    Until { expectation: Box<Command>, frames: u32 },
     Quit,
+}
+
+/// For how many frames an expectation is waited for: a minute, at sixty frames a second.
+const UNTIL_FRAMES: u32 = 3600;
+
+impl Command {
+    fn is_expectation(&self) -> bool {
+        matches!(
+            self,
+            Command::ExpectGeneration(_)
+                | Command::ExpectCell { .. }
+                | Command::ExpectRule(_)
+                | Command::ExpectSpeed(_)
+                | Command::ExpectStride(_)
+                | Command::ExpectPopulation(_)
+                | Command::ExpectSize(..)
+                | Command::ExpectPlaying(_)
+                | Command::ExpectChecked { .. }
+                | Command::ExpectShown { .. }
+                | Command::ExpectText { .. }
+                | Command::ExpectCaught { .. }
+                | Command::ExpectClipboard(_)
+        )
+    }
 }
 
 pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
@@ -176,6 +205,17 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 Ok(args.join(" "))
             }
         };
+        // What is waited for is an expectation, written as it would be on its own.
+        if command == "until" {
+            let mut waited = parse_script(&rest("an expectation")?)?;
+            match (waited.pop(), waited.is_empty()) {
+                (Some(expectation), true) if expectation.is_expectation() => {
+                    commands.push(Command::Until { expectation: Box::new(expectation), frames: UNTIL_FRAMES });
+                }
+                _ => return Err(format!("`until` takes an expectation, found {line:?}")),
+            }
+            continue;
+        }
         // A film is its frames: a screenshot, then the step to the next one.
         if command == "film" {
             let name = arg(0, "a file name")?;
@@ -639,7 +679,17 @@ fn drive(
     let Some(command) = rig.script.pop_front() else {
         return;
     };
-    info!("rig: {command:?}");
+    // An expectation that is waited for is tried now, and again next frame if it fails.
+    let (command, waited) = match command {
+        Command::Until { expectation, frames } => (*expectation, Some(frames)),
+        command => (command, None),
+    };
+    match waited {
+        None => info!("rig: {command:?}"),
+        Some(UNTIL_FRAMES) => info!("rig: until {command:?}"),
+        Some(_) => {}
+    }
+    let again = waited.map(|_| command.clone());
 
     let node = |name: &str| {
         nodes
@@ -860,12 +910,22 @@ fn drive(
                     format!("expected clipboard {expected:?}, found {found:?}"),
                 )?;
             }
+            Command::Until { .. } => return Err("an expectation cannot be waited for twice over".into()),
             Command::Quit => {
                 app_exit.write(AppExit::Success);
             }
         }
         Ok(())
     })();
+    let outcome = match (outcome, waited, again) {
+        (Err(_), Some(frames), Some(expectation)) if frames > 0 => {
+            let expectation = Box::new(expectation);
+            rig.script.push_front(Command::Until { expectation, frames: frames - 1 });
+            Ok(())
+        }
+        (Err(complaint), Some(_), _) => Err(format!("{complaint}, however long it was waited for")),
+        (outcome, ..) => outcome,
+    };
     if let Err(complaint) = outcome {
         error!("rig: {complaint}");
         app_exit.write(AppExit::error());
@@ -987,6 +1047,15 @@ mod tests {
             vec![Command::Window(1280, 720), Command::ExpectShown { name: "Catcher".into(), shown: false }]
         );
         assert!(parse_script("window 1280").is_err());
+        // An expectation can be waited for; nothing else can.
+        assert_eq!(
+            parse_script("until expect_text Note Done.").unwrap(),
+            vec![Command::Until {
+                expectation: Box::new(Command::ExpectText { name: "Note".into(), text: "Done.".into() }),
+                frames: UNTIL_FRAMES,
+            }]
+        );
+        assert!(parse_script("until click Note").is_err() && parse_script("until").is_err());
         assert!(parse_script("expect_size 64").is_err());
         assert!(parse_script("expect_text").is_err());
     }

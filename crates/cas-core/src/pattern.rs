@@ -42,6 +42,29 @@ pub enum Fate {
     Undecided,
 }
 
+/// What there is to say about a pattern left alone: its fate, and what was seen on the way.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Study {
+    /// The pattern as it set out, settled and at the start of the tables' cycle: a pattern
+    /// found later in the cycle is taken there first.
+    pub start: Vec<Cell>,
+    pub fate: Fate,
+    /// How it moves, if it came back to its shape.
+    pub motion: Option<Motion>,
+    /// Whether every generation finds the same cells in the same places. (Its period is
+    /// still that of the tables, two at least where the vacuum flips.)
+    pub still: bool,
+    /// The fewest and the most cells it had while it was followed.
+    pub cells: (usize, usize),
+    /// The widest and the highest its bounding box got.
+    pub extent: (i32, i32),
+    /// How many patterns it is that never meet: one, for a pattern of a piece. Known only for
+    /// one that came back to its shape; 0 otherwise.
+    pub parts: usize,
+    /// For how many generations it was followed.
+    pub generations: u32,
+}
+
 /// The directions a pattern can travel in, as far as a square grid tells them apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Heading {
@@ -144,7 +167,7 @@ impl Analyser {
             return None;
         }
         let mut phases = Vec::new();
-        let fate = self.run(cells, phase, |form| phases.push(form.to_vec()));
+        let fate = self.run(cells, phase, |form| phases.push(form.to_vec()), |_, _, _| {});
         let Fate::Returns { period, displacement: moved } = fate else {
             return None;
         };
@@ -165,7 +188,54 @@ impl Analyser {
     /// What becomes of the pattern, without working out its canonical form: the quick way to
     /// tell what stays, what travels and what gets out of hand.
     pub fn fate(&self, cells: &[Cell], phase: usize) -> Fate {
-        self.run(cells, phase, |_| {})
+        self.run(cells, phase, |_| {}, |_, _, _| {})
+    }
+
+    /// Everything the analyser can say about the pattern. None for no cells at all.
+    pub fn study(&self, cells: &[Cell], phase: usize) -> Option<Study> {
+        if cells.is_empty() {
+            return None;
+        }
+        let mut start = Vec::new();
+        let (mut fewest, mut most) = (usize::MAX, 0);
+        let (mut widest, mut highest) = (0, 0);
+        let mut still = true;
+        let mut generations = 0;
+        let fate = self.run(cells, phase, |_| {}, |from, pattern, moved| {
+            if start.is_empty() {
+                start = from.to_vec();
+            }
+            generations += 1;
+            fewest = fewest.min(pattern.len());
+            most = most.max(pattern.len());
+            let (width, height) = extent(pattern);
+            widest = widest.max(width);
+            highest = highest.max(height);
+            // The frame moves with the blocks; the cells themselves must not have.
+            let in_place = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1));
+            still &= in_place.eq(from.iter().copied());
+        });
+        let motion = match fate {
+            Fate::Returns { .. } => self.analyse(cells, phase),
+            _ => None,
+        };
+        let parts = match fate {
+            Fate::Returns { period, .. } => self.parts(&start, 0, period).len(),
+            _ => 0,
+        };
+        Some(Study {
+            fate,
+            motion,
+            still,
+            cells: (fewest.min(start.len()), most.max(start.len())),
+            extent: {
+                let (width, height) = extent(&start);
+                (widest.max(width), highest.max(height))
+            },
+            parts,
+            generations,
+            start,
+        })
     }
 
     /// A pattern filed at the start of the tables' cycle, as it is at every generation of the
@@ -184,8 +254,15 @@ impl Analyser {
 
     /// Runs the pattern until it is back in its starting shape, as it lies, or until it is
     /// given up. Along the way `seen` gets its form every time the tables start over, the
-    /// first time included.
-    fn run(&self, cells: &[Cell], phase: usize, mut seen: impl FnMut(&[Cell])) -> Fate {
+    /// first time included, and `each` gets the form it set out with, the form after every
+    /// generation and how far that has moved from where it started.
+    fn run(
+        &self,
+        cells: &[Cell],
+        phase: usize,
+        mut seen: impl FnMut(&[Cell]),
+        mut each: impl FnMut(&[Cell], &[Cell], (i32, i32)),
+    ) -> Fate {
         let mut phase = phase % self.tables.len();
         let mut pattern = cells.to_vec();
         settle(&mut pattern);
@@ -202,6 +279,7 @@ impl Analyser {
             for table in &self.tables {
                 let (dx, dy) = advance(&mut pattern, table.table());
                 moved = (moved.0 + dx, moved.1 + dy);
+                each(&start, &pattern, moved);
             }
             generation += self.tables.len() as u32;
             let (width, height) = extent(&pattern);
@@ -592,6 +670,40 @@ mod tests {
         }
         // Critters is not its own complement: there the two generations differ.
         assert_eq!(Analyser::new(&rule("critters")).tables.len(), 2);
+    }
+
+    #[test]
+    fn a_study_says_what_a_pattern_does() {
+        let analyser = Analyser::new(&rule("single-rotation"));
+        // The lightest spaceship: of a piece, four cells throughout.
+        let ship = analyser.study(&from_rle("b2o2$b2o").unwrap(), 0).unwrap();
+        assert_eq!(ship.fate, Fate::Returns { period: 12, displacement: (2, 0) });
+        assert_eq!(ship.motion.as_ref().map(|m| m.speed()), Some((1, 6)));
+        assert!(!ship.still);
+        assert_eq!((ship.cells, ship.parts, ship.generations), ((4, 4), 1, 12));
+        assert_eq!(ship.start, from_rle("b2o2$b2o").unwrap());
+        // A lone cell goes round in four generations.
+        let cell = analyser.study(&[(0, 0)], 0).unwrap();
+        assert_eq!(cell.fate, Fate::Returns { period: 4, displacement: (0, 0) });
+        assert!(!cell.still && cell.extent == (1, 1));
+        // A block straddling the partitions never changes: a still life. (Cells are relative
+        // to a corner of the blocks the next step rewrites, so this one lies across two of
+        // them, and across two of the other partition's as well.)
+        let block = analyser.study(&[(0, 1), (1, 1), (0, 2), (1, 2)], 0).unwrap();
+        assert_eq!(block.fate, Fate::Returns { period: 2, displacement: (0, 0) });
+        assert!(block.still);
+        // Two ships side by side are two patterns.
+        let mut pair = from_rle("b2o2$b2o").unwrap();
+        pair.extend(from_rle("b2o2$b2o").unwrap().iter().map(|&(x, y)| (x, y + 6)));
+        assert_eq!(analyser.study(&pair, 0).unwrap().parts, 2);
+        // A pattern that grows is followed until it has too many cells.
+        let mut small = Analyser::new(&rule("espca-0925bf"));
+        small.max_cells = 50;
+        let disk = small.study(&[(0, 0)], 0).unwrap();
+        assert_eq!(disk.fate, Fate::Grows);
+        assert!(disk.cells.1 > 50 && disk.extent.0 > 4 && disk.generations > 4, "{disk:?}");
+        assert_eq!((disk.motion, disk.parts), (None, 0));
+        assert_eq!(analyser.study(&[], 0), None);
     }
 
     #[test]

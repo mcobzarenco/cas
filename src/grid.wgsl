@@ -29,6 +29,12 @@ struct GridParams {
     block_color: vec4<f32>,
     // The outline of the grid.
     edge_color: vec4<f32>,
+    // The band around a pattern being chosen: the cells it spans, its colour (the alpha is the
+    // outline's; 0 for no band) and the opacity of its fill.
+    band_min: vec2<i32>,
+    band_max: vec2<i32>,
+    band_color: vec4<f32>,
+    band_fill: f32,
     // A pattern about to be placed, shown as a ghost: its colour, where its origin is, how
     // many cells it has, and the cells, two to a vector.
     stamp_color: vec4<f32>,
@@ -120,6 +126,17 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let to_block_edge = abs(fract(b + 0.5) - 0.5) * 2.0 * params.scale;
     let block = stroke(min(to_block_edge.x, to_block_edge.y), params.line_width);
     color = mix(color, params.block_color.rgb, block * params.block_alpha * params.block_color.a);
+
+    // The band: a fill over the cells it spans and an outline along its edge.
+    if params.band_color.a > 0.0 {
+        let lo = vec2<f32>(params.band_min);
+        let hi = vec2<f32>(params.band_max) + 1.0;
+        let d = max(lo - c, c - hi) * params.scale;
+        let to_band = max(d.x, d.y);
+        let inside = clamp(0.5 - to_band, 0.0, 1.0);
+        color = mix(color, params.band_color.rgb, inside * params.band_fill);
+        color = mix(color, params.band_color.rgb, stroke(abs(to_band), params.line_width) * params.band_color.a);
+    }
 
     // Outside the grid: the background, darkened by a soft shadow hugging the grid.
     let shadow = 0.5 * exp(-max(outside, 0.0) / (14.0 * params.pixel_ratio));

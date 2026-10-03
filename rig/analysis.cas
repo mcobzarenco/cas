@@ -1,0 +1,81 @@
+# Analysing a pattern: chosen with a band on the grid, or sent over from the spaceship list.
+# Expects the default start-up (single rotation, 256×256).
+wait 25; clear
+
+# The key opens the panel and starts the choosing; the pattern card says so.
+key a; wait 20
+expect_text SelectHint drag over it · Escape cancels
+expect_text AnalysisNote Drag over the pattern on the grid. Escape calls it off.
+expect_text StudyWhat —
+shot analysis-1-choosing
+
+# A band around the lightest ship, which sits just below and right of the middle of the grid,
+# where a drag from the centre of the view begins. The world is at generation 0. The band is
+# drawn while the button is down; the study is made when it comes up.
+place $2o2$2o 130 130
+move Grid 0 0; press left; move Grid 60 60; wait 3
+shot analysis-2-band
+release left; wait 20
+expect_text SelectHint on the grid, or from the list
+expect_text StudyWhat Spaceship
+expect_text StudyPeriod 12 generations, moving (2, 0)
+expect_text StudySpeed c/6 orthogonal →
+expect_text StudyCells 4
+expect_text StudySize 2×3, up to 3×5
+expect_text StudyParts one piece
+expect_text StudyText $2o2$2o
+expect_text SmallCaption 42×32 cells of its own, 10 generations a second
+shot analysis-3-spaceship
+
+# A band with nothing in it says so.
+key a; wait 3; drag Grid -200 -200; wait 10
+expect_text AnalysisNote No live cells in there.
+expect_text StudyWhat Spaceship
+
+# A band drawn a generation later catches the ship between its blocks, which the study takes
+# into account: it is the same ship.
+step 1; wait 2
+key a; wait 3; drag Grid 60 60; wait 20
+expect_text StudyWhat Spaceship
+expect_text StudySpeed c/6 orthogonal →
+
+# A still life, as single rotation has them: a block lying across two blocks of either
+# partition, so that no cell is ever alone in one. (A block in line with the partition is an
+# oscillator: it turns about, a cell at a time, where the other partition cuts it in four.)
+clear; place 2o$2o 100 101
+key a; wait 3; drag Grid -120 -120; wait 20
+expect_text StudyWhat Still life
+expect_text StudyPeriod 1 generation
+expect_text StudySpeed —
+expect_text StudyCells 4
+shot analysis-4-still-life
+
+# Copy puts the pattern on the clipboard as text; Place picks it up to be put down on the
+# grid, with the stamp: here a second block, on the blocks of the current partition.
+click AnalysisCopy; wait 3; expect_clipboard $2o$2o
+expect_text AnalysisNote Copied $2o$2o
+click AnalysisPlace; wait 3
+expect_text AnalysisNote Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.
+click Grid 0 0; wait 3; expect_population 8
+key Escape; wait 3
+expect_text AnalysisNote Place picks the pattern up, to be put down on the grid where you click.
+
+# A spaceship from the list, by the small button of its row: it is studied as it was filed.
+# (Turning catching on opens the list.)
+clear; place $2o2$2o 240 120
+click Catching; wait 3; step 120; wait 10; expect_caught 1 1
+click AnalyseKind0; wait 20
+expect_text StudyWhat Spaceship
+# The click went to the button alone: the row did not pick the pattern up.
+expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
+expect_text StudyText b2o2$b2o
+expect_text StudySpeed c/6 orthogonal →
+shot analysis-5-from-the-list
+
+# Close puts the panel away; the key brings it back with the choosing on.
+click AnalysisClose; wait 5
+key a; wait 5
+expect_text AnalysisNote Drag over the pattern on the grid. Escape calls it off.
+key Escape; wait 3
+expect_text AnalysisNote Place picks the pattern up, to be put down on the grid where you click.
+quit

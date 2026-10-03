@@ -34,6 +34,7 @@ use cas_core::{
 
 use crate::{
     actions::Toggle,
+    analysis::Analysis,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
     view::{ALIVE, BLOCKS, DEAD, Stamp},
@@ -56,6 +57,7 @@ const PICTURE: (f32, f32) = (64.0, 44.0);
 const PERIOD_COLUMN: f32 = 48.0;
 const CELLS_COLUMN: f32 = 38.0;
 const CAUGHT_COLUMN: f32 = 58.0;
+const ANALYSE_COLUMN: f32 = 26.0;
 
 #[derive(Resource, Default)]
 pub struct Catcher {
@@ -123,6 +125,10 @@ enum Figure {
 /// The bar of a row: its kind's share of all the spaceships caught.
 #[derive(Component, Default, Clone, Copy)]
 struct Share(usize);
+
+/// The small button of a row that sends its kind to the analysis panel.
+#[derive(Component, Default, Clone, Copy)]
+struct AnalyseKind(usize);
 
 /// The list's scrollbar, shown only while there is something to scroll.
 #[derive(Component, Default, Clone)]
@@ -229,6 +235,7 @@ pub fn catcher_panel() -> impl Scene {
                     (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ heading("PERIOD") ]),
                     (Node { width: px(CELLS_COLUMN), justify_content: JustifyContent::End } Children [ heading("CELLS") ]),
                     (Node { width: px(CAUGHT_COLUMN), justify_content: JustifyContent::End } Children [ heading("CAUGHT") ]),
+                    (Node { width: px(ANALYSE_COLUMN) }),
                 ]
             ),
             (
@@ -355,6 +362,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
     let name = Name::new(format!("Kind{index}"));
     let row = KindRow(index);
     let (caught, share) = (Figure::Caught(index), Share(index));
+    let (analyse, analyse_name) = (AnalyseKind(index), Name::new(format!("AnalyseKind{index}")));
     let bar = Aspect::Pattern.color();
     let (travelled, period) = motion.speed();
     // Which way it flies, by the signs of its displacement.
@@ -416,6 +424,30 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                     (
                         number(group_digits(kind.count as i64), CAUGHT_COLUMN, palette::WHITE)
                         template_value(caught)
+                    ),
+                    (
+                        // Sends the kind to the analysis panel: a target, in the mono font that has it.
+                        @FeathersButton {
+                            @caption: bsn! {
+                                Text("◎")
+                                TextFont {
+                                    font: FontSourceTemplate::Handle(fonts::MONO),
+                                    font_size: FontSize::Px(14.0),
+                                    weight: FontWeight::NORMAL,
+                                }
+                                TextColor(palette::LIGHT_GRAY_1)
+                            }
+                        }
+                        Node {
+                            width: px(ANALYSE_COLUMN),
+                            min_width: px(ANALYSE_COLUMN),
+                            padding: px(0),
+                            justify_content: JustifyContent::Center,
+                            flex_shrink: 0.0,
+                        }
+                        template_value(analyse_name)
+                        template_value(analyse)
+                        on(analyse_kind)
                     ),
                 ]
             ),
@@ -561,8 +593,34 @@ fn pick_kind(
         stamp.let_go();
     } else {
         let forms = Analyser::new(universe.rule()).forms(&kind.motion.canonical);
-        stamp.pick_up(forms, universe.rule(), (haul, index));
+        stamp.pick_up(forms, universe.rule(), Some((haul, index)));
         catcher.note = None;
+    }
+}
+
+/// The row's small button sends its kind to the analysis panel. The click goes no further:
+/// the row would pick the kind up.
+fn analyse_kind(
+    mut click: On<Pointer<Click>>,
+    buttons: Query<&AnalyseKind>,
+    universe: Res<Universe>,
+    catcher: Res<Catcher>,
+    mut analysis: ResMut<Analysis>,
+) {
+    let Ok(&AnalyseKind(index)) = buttons.get(click.entity) else {
+        return;
+    };
+    click.propagate(false);
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    if let Some(kind) = catcher
+        .hauls
+        .get(universe.rule())
+        .and_then(|haul| haul.census.kinds().get(index))
+    {
+        // A kind is filed at the start of the vacuum's cycle.
+        analysis.study(kind.motion.canonical.clone(), 0, &universe);
     }
 }
 

@@ -37,6 +37,7 @@ use cas_core::{
 
 use crate::{
     actions::{Action, Does, Toggle},
+    analysis::{SelectHint, analysis_panel},
     catcher::catcher_panel,
     editor::{RuleEditor, describe, editor_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -316,6 +317,7 @@ fn root() -> impl Scene {
             panel(),
             editor_panel(),
             catcher_panel(),
+            analysis_panel(),
             grid_view(),
         ]
     }
@@ -990,6 +992,25 @@ fn pattern_card() -> impl Scene {
             ]
         ),
         caption("left-drag paints · with shift it erases"),
+        (
+            Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(8),
+            }
+            Children [
+                (
+                    action_button("Analyse", "Analyse", Action::Analyse)
+                    Node { flex_grow: 0.0 }
+                ),
+                (
+                    #SelectHint
+                    caption("on the grid, or from the list")
+                    SelectHint
+                    Node { flex_grow: 1.0, flex_basis: px(0) }
+                ),
+            ]
+        ),
         (
             Node {
                 flex_direction: FlexDirection::Row,

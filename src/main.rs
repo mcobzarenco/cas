@@ -5,6 +5,7 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 mod actions;
+mod analysis;
 mod catcher;
 mod editor;
 mod rig;
@@ -182,6 +183,7 @@ fn main() -> AppExit {
         ui::UiPlugin,
         editor::EditorPlugin,
         catcher::CatcherPlugin,
+        analysis::AnalysisPlugin,
     ));
     if let Some(script) = script {
         app.add_plugins(rig::RigPlugin {

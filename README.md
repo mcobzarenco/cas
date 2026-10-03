@@ -267,6 +267,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
+| analyse a pattern | **Analyse**, then a drag around it; or ◎ in a row of the spaceship list | `a`, then left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
@@ -353,6 +354,22 @@ instead (`b2o2$b2o`: `b` dead, `o` alive, `$` next row, written from a corner of
 next step rewrites). **Clear list** forgets what was caught under the current rule.
 
 What left or was caught is gone: stepping backwards does not bring it back.
+
+### Analysing a pattern
+
+**Analyse** (`a`) and a drag around some cells of the grid studies them on their own: the pattern
+is run on an unbounded plane until it is back in its starting shape, as the catcher does with what
+reaches the edge, and the *Analysis* panel says what it is: a still life, an oscillator or a
+spaceship with its period and speed, or a pattern that grows, flies apart or had not repeated after
+as many generations as were spent on it; how many cells and how much room it takes over its period;
+and whether it is one piece or several that never meet. The panel shows the pattern living in a
+small world of its own, a torus just big enough for it, and gives it as run-length encoded text.
+**Place** picks it up to be put down on the grid again; **Copy** copies the text. ◎ in a row of
+the spaceship list sends that kind over.
+
+<p align="center">
+  <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally, 5 cells, one piece.">
+</p>
 
 ## Searching for rules
 

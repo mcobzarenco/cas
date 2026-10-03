@@ -8,6 +8,7 @@
 #   ffmpeg -i shots/tour-spaceships.png -vf "crop=736:736:620:252,$P"  docs/spaceships.png
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:28,$P"   docs/cases.png
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:780,$P"  docs/properties.png
+#   ffmpeg -i shots/tour-analysis.png   -vf "crop=792:1300:600:0,$P"   docs/analysis.png
 #   ffmpeg -i shots/rule-NAME.png -vf "crop=1702:1702:889:49,scale=640:-1:flags=area,$P" docs/rule-NAME.png
 #   oxipng -o max --strip safe docs/*.png
 wait 25
@@ -24,7 +25,13 @@ fit; wait 4
 blob; key o; wait 2; key s; wait 3; key k; wait 2
 step 40000; wait 150
 shot tour-spaceships
-key s; wait 3; key k; wait 2; key o; wait 2
+
+# The shape of Conway's glider, which under Single rotation is a diagonal spaceship too,
+# chosen with a band and studied on its own.
+key s; wait 3; clear; place 3o$o$bo 130 130
+key a; wait 2; move Grid 0 0; press left; move Grid 40 40; wait 2; release left; wait 40
+shot tour-analysis
+click AnalysisClose; wait 3; key k; wait 2; key o; wait 2
 
 # The rule editor, on Critters.
 rule critters; blob; step 300; wait 2; key e; wait 8

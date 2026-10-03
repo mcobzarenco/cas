@@ -17,11 +17,12 @@ use bevy::{
 use cas_core::universe::{Rng, Universe};
 
 use crate::{
+    analysis::Analysis,
     catcher::Catcher,
     editor::RuleEditor,
     sim::{Playback, Settings, SimSystems},
     ui::{Aspect, Control},
-    view::{ViewState, WHEEL_ZOOM},
+    view::{Stamp, ViewState, WHEEL_ZOOM},
 };
 
 /// One thing the user can ask for. (`Default` only serves `bsn!`, which builds the [`Does`] of
@@ -49,6 +50,8 @@ pub enum Action {
     EditRule,
     /// Show or hide the list of the spaceships caught.
     Spaceships,
+    /// Choose a pattern on the grid to analyse, or stop choosing.
+    Analyse,
 }
 
 /// Put on a button or a checkbox: using it triggers the action.
@@ -91,7 +94,7 @@ impl Toggle {
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 23] = [
+const KEYS: [(&str, Action); 24] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -115,6 +118,7 @@ const KEYS: [(&str, Action); 23] = [
     ("k", Action::Flip(Toggle::Catching)),
     ("s", Action::Spaceships),
     ("e", Action::EditRule),
+    ("a", Action::Analyse),
 ];
 
 impl Action {
@@ -206,6 +210,8 @@ fn perform(
     mut rng: ResMut<Rng>,
     mut editor: ResMut<RuleEditor>,
     mut catcher: ResMut<Catcher>,
+    mut analysis: ResMut<Analysis>,
+    mut stamp: ResMut<Stamp>,
 ) {
     match *action {
         Action::PlayPause => playback.playing = !playback.playing,
@@ -245,6 +251,13 @@ fn perform(
         }
         Action::EditRule => editor.toggle(),
         Action::Spaceships => catcher.toggle(),
+        Action::Analyse => {
+            analysis.choose();
+            // A band is drawn with the left button, which a stamp would answer to.
+            if analysis.selecting {
+                stamp.let_go();
+            }
+        }
     }
 }
 

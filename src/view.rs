@@ -8,6 +8,9 @@
 //! Interaction goes through picking events on the grid node: the wheel zooms about the pointer,
 //! right- or middle-drag pans, left-drag paints. A pattern picked up from the spaceship list
 //! ([`Stamp`]) follows the pointer as a ghost, snapped to the blocks, and a click puts it down.
+//! While a pattern is being chosen for analysis, left-drag draws a band around it instead.
+//!
+//! The analysis panel draws its small world with the same material ([`GridParams::new`]).
 
 use bevy::{
     asset::{AssetEventSystems, RenderAssetUsages, embedded_asset},
@@ -24,6 +27,7 @@ use bevy::{
 use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
 
 use crate::{
+    analysis::Analysis,
     sim::{Settings, SimSystems},
     ui::Aspect,
 };
@@ -33,12 +37,14 @@ pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
 pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 /// The outline of the grid: the edge of the world, in the colour of the world; in that of the
 /// pattern while it catches cells.
-const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
+pub const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
 const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
 /// The blocks are what the rule rewrites.
 pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.22);
 /// A pattern about to be placed shows through at this opacity.
 const GHOST: f32 = 0.55;
+/// The band drawn around a pattern being chosen for analysis: its outline and its fill.
+const BAND: (Color, f32, f32) = (Aspect::Pattern.color(), 0.8, 0.02);
 /// So many cells of a stamp are shown as a ghost; a larger one is placed whole all the same.
 const GHOST_CELLS: usize = 64;
 
@@ -78,20 +84,9 @@ fn extent(universe: &Universe) -> Extent3d {
 
 impl FromWorld for GridAssets {
     fn from_world(world: &mut World) -> Self {
-        let universe = world.resource::<Universe>();
-        // One byte per cell, read with `textureLoad`, so no sampler and no filtering.
-        let image = Image::new_fill(
-            extent(universe),
-            TextureDimension::D2,
-            &[0],
-            TextureFormat::R8Uint,
-            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-        );
+        let image = cell_image(world.resource::<Universe>());
         let image = world.resource_mut::<Assets<Image>>().add(image);
-        let material = world.resource_mut::<Assets<GridMaterial>>().add(GridMaterial {
-            params: GridParams::default(),
-            cells: image.clone(),
-        });
+        let material = world.resource_mut::<Assets<GridMaterial>>().add(GridMaterial::new(image.clone()));
         Self { image, material }
     }
 }
@@ -153,17 +148,18 @@ pub struct Stamp {
     forms: Vec<Vec<Cell>>,
     /// The rule the pattern is a pattern of.
     rule: Option<BlockRule>,
-    /// Which spaceship it is: the number of the haul and the kind's place in it.
+    /// Which spaceship of the list it is, if it is one: the number of the haul and the kind's
+    /// place in it.
     pub kind: Option<(u64, usize)>,
     /// The cell under the pointer, while the pointer is over the grid.
     hover: Option<IVec2>,
 }
 
 impl Stamp {
-    pub fn pick_up(&mut self, forms: Vec<Vec<Cell>>, rule: &BlockRule, kind: (u64, usize)) {
+    pub fn pick_up(&mut self, forms: Vec<Vec<Cell>>, rule: &BlockRule, kind: Option<(u64, usize)>) {
         self.forms = forms;
         self.rule = Some(rule.clone());
-        self.kind = Some(kind);
+        self.kind = kind;
     }
 
     pub fn let_go(&mut self) {
@@ -212,6 +208,71 @@ pub struct GridMaterial {
     cells: Handle<Image>,
 }
 
+impl GridMaterial {
+    pub fn new(cells: Handle<Image>) -> Self {
+        Self {
+            params: GridParams::default(),
+            cells,
+        }
+    }
+
+    /// Sets the parameters, which re-prepares the bind group only if they changed.
+    pub fn set(materials: &mut Assets<GridMaterial>, handle: &Handle<GridMaterial>, params: GridParams) {
+        if let Some(mut material) = materials.get_mut(handle)
+            && material.params != params
+        {
+            material.params = params;
+        }
+    }
+}
+
+/// The texture of a universe's cells: one byte per cell, read with `textureLoad`, so no sampler
+/// and no filtering.
+pub fn cell_image(universe: &Universe) -> Image {
+    Image::new_fill(
+        extent(universe),
+        TextureDimension::D2,
+        &[0],
+        TextureFormat::R8Uint,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+/// The cell bytes are the texture: a plain copy, into a texture of another size when the grid
+/// has been resized.
+pub fn upload(universe: &Universe, image: &mut Image) {
+    match image.data.as_mut() {
+        Some(data) if image.texture_descriptor.size == extent(universe) => {
+            data.copy_from_slice(universe.cells());
+        }
+        _ => {
+            image.texture_descriptor.size = extent(universe);
+            image.data = Some(universe.cells().to_vec());
+        }
+    }
+}
+
+/// How a universe is looked at: the cell at the centre of the node, logical pixels per cell,
+/// and physical pixels per logical one.
+#[derive(Clone, Copy, Debug)]
+pub struct Framing {
+    pub center: Vec2,
+    pub zoom: f32,
+    pub pixel_ratio: f32,
+}
+
+impl Framing {
+    /// The whole universe in the middle of a node of this logical size.
+    pub fn fitted(universe: &Universe, size: Vec2, pixel_ratio: f32) -> Self {
+        let grid = Vec2::new(universe.width as f32, universe.height as f32);
+        Self {
+            center: 0.5 * grid,
+            zoom: FIT_MARGIN * (size / grid).min_element(),
+            pixel_ratio,
+        }
+    }
+}
+
 impl UiMaterial for GridMaterial {
     fn fragment_shader() -> ShaderRef {
         "embedded://cas/grid.wgsl".into()
@@ -220,7 +281,7 @@ impl UiMaterial for GridMaterial {
 
 /// Mirrors `GridParams` in `grid.wgsl`, field for field.
 #[derive(ShaderType, Debug, Clone, Copy, Default, PartialEq)]
-struct GridParams {
+pub struct GridParams {
     center: Vec2,
     grid_size: Vec2,
     scale: f32,
@@ -236,12 +297,66 @@ struct GridParams {
     grid_color: Vec4,
     block_color: Vec4,
     edge_color: Vec4,
+    /// The band around a pattern being chosen: the cells it spans, and its colour (its alpha is
+    /// that of the outline; 0 for no band).
+    band_min: IVec2,
+    band_max: IVec2,
+    band_color: Vec4,
+    band_fill: f32,
     /// The ghost of the stamp: its colour, where its origin is, how many cells it has, and
     /// the cells, two to a vector.
     stamp_color: Vec4,
     stamp_origin: IVec2,
     stamp_count: u32,
     stamp: [IVec4; GHOST_CELLS / 2],
+}
+
+impl GridParams {
+    /// The parameters that draw `universe` as framed, with the overlays the settings ask for.
+    /// The edge of the grid is drawn in `edge`; a stamp's ghost and a band are drawn if given.
+    pub fn new(
+        universe: &Universe,
+        framing: Framing,
+        settings: &Settings,
+        edge: (Color, f32),
+        stamp: Option<(IVec2, &[Cell])>,
+        band: Option<(IVec2, IVec2)>,
+    ) -> Self {
+        let (stamp_origin, stamp_cells) = stamp.unwrap_or((IVec2::ZERO, &[]));
+        let mut ghost = [IVec4::ZERO; GHOST_CELLS / 2];
+        for (i, &(x, y)) in stamp_cells.iter().take(GHOST_CELLS).enumerate() {
+            let slot = &mut ghost[i / 2];
+            *slot = if i % 2 == 0 { IVec4::new(x, y, slot.z, slot.w) } else { IVec4::new(slot.x, slot.y, x, y) };
+        }
+        let (band_min, band_max) = band.unwrap_or((IVec2::ZERO, IVec2::ZERO));
+        Self {
+            center: framing.center,
+            grid_size: Vec2::new(universe.width as f32, universe.height as f32),
+            scale: framing.zoom * framing.pixel_ratio,
+            pixel_ratio: framing.pixel_ratio,
+            line_width: (0.75 * framing.pixel_ratio).max(1.0),
+            // Outline this generation's partition: the blocks a forward step rewrites next.
+            block_offset: universe.partition_offset() as f32,
+            // The stored cells are the picture without the vacuum; unhidden, the shader adds it.
+            vacuum: if settings.hide_vacuum { 0 } else { universe.vacuum() as u32 },
+            grid_alpha: if settings.show_grid { fade(GRID_FADE, framing.zoom) } else { 0.0 },
+            block_alpha: if settings.show_blocks { fade(BLOCK_FADE, framing.zoom) } else { 0.0 },
+            alive: linear(ALIVE, 1.0),
+            dead: linear(DEAD, 1.0),
+            background: linear(BACKGROUND, 1.0),
+            grid_color: linear(Color::WHITE, 0.07),
+            block_color: linear(BLOCKS.0, BLOCKS.1),
+            edge_color: linear(edge.0, edge.1),
+            band_min,
+            band_max,
+            band_color: linear(BAND.0, if band.is_some() { BAND.1 } else { 0.0 }),
+            band_fill: BAND.2,
+            stamp_color: linear(ALIVE, GHOST),
+            stamp_origin,
+            stamp_count: stamp_cells.len().min(GHOST_CELLS) as u32,
+            stamp: ghost,
+        }
+    }
 }
 
 /// Needs the [`Universe`] to exist: the cell texture takes its size.
@@ -282,6 +397,8 @@ pub fn grid_view() -> impl Scene {
         EntityCursor::System(SystemCursorIcon::Crosshair)
         on(on_press)
         on(on_drag)
+        on(on_release)
+        on(on_drag_end)
         on(on_click)
         on(on_move)
         on(on_out)
@@ -295,28 +412,12 @@ fn attach_material(add: On<Add, GridView>, assets: Res<GridAssets>, mut commands
         .insert(MaterialNode(assets.material.clone()));
 }
 
-/// The cell bytes are the texture: a plain copy whenever the universe changed, into a texture
-/// of another size when the grid has been resized.
-fn upload_cells(
-    universe: Res<Universe>,
-    assets: Res<GridAssets>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if !universe.is_changed() {
-        return;
-    }
-    let Some(mut image) = images.get_mut(&assets.image) else {
-        return;
-    };
-    let image = &mut *image;
-    match image.data.as_mut() {
-        Some(data) if image.texture_descriptor.size == extent(&universe) => {
-            data.copy_from_slice(universe.cells());
-        }
-        _ => {
-            image.texture_descriptor.size = extent(&universe);
-            image.data = Some(universe.cells().to_vec());
-        }
+/// The texture follows the universe whenever it changed.
+fn upload_cells(universe: Res<Universe>, assets: Res<GridAssets>, mut images: ResMut<Assets<Image>>) {
+    if universe.is_changed()
+        && let Some(mut image) = images.get_mut(&assets.image)
+    {
+        upload(&universe, &mut image);
     }
 }
 
@@ -353,52 +454,23 @@ fn update_material(
     settings: Res<Settings>,
     universe: Res<Universe>,
     stamp: Res<Stamp>,
+    analysis: Res<Analysis>,
     assets: Res<GridAssets>,
     node: Single<&ComputedNode, With<GridView>>,
     mut materials: ResMut<Assets<GridMaterial>>,
 ) {
-    let pixel_ratio = 1.0 / node.inverse_scale_factor;
-    let (stamp_origin, stamp_cells) = stamp.placement(&universe).unwrap_or((IVec2::ZERO, &[]));
-    let mut ghost = [IVec4::ZERO; GHOST_CELLS / 2];
-    for (i, &(x, y)) in stamp_cells.iter().take(GHOST_CELLS).enumerate() {
-        let slot = &mut ghost[i / 2];
-        *slot = if i % 2 == 0 { IVec4::new(x, y, slot.z, slot.w) } else { IVec4::new(slot.x, slot.y, x, y) };
-    }
-    let params = GridParams {
+    let framing = Framing {
         center: view.center,
-        grid_size: Vec2::new(universe.width as f32, universe.height as f32),
-        scale: view.zoom * pixel_ratio,
-        pixel_ratio,
-        line_width: (0.75 * pixel_ratio).max(1.0),
-        // Outline this generation's partition: the blocks a forward step rewrites next.
-        block_offset: universe.partition_offset() as f32,
-        // The stored cells are the picture without the vacuum; unhidden, the shader adds it.
-        vacuum: if settings.hide_vacuum { 0 } else { universe.vacuum() as u32 },
-        grid_alpha: if settings.show_grid { fade(GRID_FADE, view.zoom) } else { 0.0 },
-        block_alpha: if settings.show_blocks { fade(BLOCK_FADE, view.zoom) } else { 0.0 },
-        alive: linear(ALIVE, 1.0),
-        dead: linear(DEAD, 1.0),
-        background: linear(BACKGROUND, 1.0),
-        grid_color: linear(Color::WHITE, 0.07),
-        block_color: linear(BLOCKS.0, BLOCKS.1),
-        edge_color: {
-            let (color, alpha) = if universe.catching { CATCHING_EDGE } else { EDGE };
-            linear(color, alpha)
-        },
-        stamp_color: linear(ALIVE, GHOST),
-        stamp_origin,
-        stamp_count: stamp_cells.len().min(GHOST_CELLS) as u32,
-        stamp: ghost,
+        zoom: view.zoom,
+        pixel_ratio: 1.0 / node.inverse_scale_factor,
     };
-    // Writing to the asset re-prepares its bind group; reading it does not.
-    if let Some(mut material) = materials.get_mut(&assets.material)
-        && material.params != params
-    {
-        material.params = params;
-    }
+    let edge = if universe.catching { CATCHING_EDGE } else { EDGE };
+    let band = analysis.band.map(|(a, b)| (a.min(b), a.max(b)));
+    let params = GridParams::new(&universe, framing, &settings, edge, stamp.placement(&universe), band);
+    GridMaterial::set(&mut materials, &assets.material, params);
 }
 
-fn linear(color: Color, alpha: f32) -> Vec4 {
+pub fn linear(color: Color, alpha: f32) -> Vec4 {
     color.to_linear().with_alpha(alpha).to_vec4()
 }
 
@@ -447,9 +519,33 @@ struct Canvas<'w, 's> {
     universe: ResMut<'w, Universe>,
     stroke: ResMut<'w, Stroke>,
     stamp: ResMut<'w, Stamp>,
+    analysis: ResMut<'w, Analysis>,
 }
 
 impl Canvas<'_, '_> {
+    /// Hands the live cells inside the band over for analysis, relative to a corner of the
+    /// blocks the next step rewrites, as a pattern caught at the edge would be.
+    fn finish_selection(&mut self) {
+        let Some((a, b)) = self.analysis.band.take() else {
+            return;
+        };
+        let last = IVec2::new(self.universe.width as i32 - 1, self.universe.height as i32 - 1);
+        let (min, max) = (a.min(b).clamp(IVec2::ZERO, last), a.max(b).clamp(IVec2::ZERO, last));
+        let offset = self.universe.partition_offset() as i32;
+        let corner = |v: i32| v - ((v - offset) & 1);
+        let (x0, y0) = (corner(min.x), corner(min.y));
+        let mut cells = Vec::new();
+        for y in min.y..=max.y {
+            for x in min.x..=max.x {
+                if self.universe.get(x as usize, y as usize) {
+                    cells.push((x - x0, y - y0));
+                }
+            }
+        }
+        let phase = self.universe.phase();
+        self.analysis.study(cells, phase, &self.universe);
+    }
+
     /// The cell under a pointer position (logical window coordinates) over the grid node.
     fn cell_under(&self, grid: Entity, pointer: Vec2) -> Option<IVec2> {
         let (node, transform) = self.nodes.get(grid).ok()?;
@@ -494,11 +590,17 @@ impl Canvas<'_, '_> {
     }
 }
 
-/// A left press puts the stamp down if one is held, and otherwise starts a stroke; shift
-/// makes the stroke an eraser.
+/// A left press starts a band if a pattern is being chosen, puts the stamp down if one is
+/// held, and otherwise starts a stroke; shift makes the stroke an eraser.
 fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canvas: Canvas) {
     if press.button != PointerButton::Primary {
         canvas.stroke.panned = false;
+        return;
+    }
+    if canvas.analysis.selecting {
+        if let Some(cell) = canvas.cell_under(press.entity, press.pointer_location.position) {
+            canvas.analysis.band = Some((cell, cell));
+        }
         return;
     }
     if canvas.stamp.is_held() {
@@ -513,10 +615,14 @@ fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canv
     canvas.stroke_to(press.entity, press.pointer_location.position);
 }
 
-/// Left-drag continues the stroke; right- or middle-drag pans.
+/// Left-drag stretches the band or continues the stroke; right- or middle-drag pans.
 fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
     if drag.button == PointerButton::Primary {
-        if !canvas.stamp.is_held() {
+        if let Some((from, _)) = canvas.analysis.band {
+            if let Some(cell) = canvas.cell_under(drag.entity, drag.pointer_location.position) {
+                canvas.analysis.band = Some((from, cell));
+            }
+        } else if !canvas.stamp.is_held() {
             canvas.stroke_to(drag.entity, drag.pointer_location.position);
         }
     } else {
@@ -524,6 +630,19 @@ fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
         canvas.view.center -= drag.delta / zoom;
         canvas.view.fit = false;
         canvas.stroke.panned = true;
+    }
+}
+
+/// Letting go of the left button closes the band, wherever the pointer is by then.
+fn on_release(release: On<Pointer<Release>>, mut canvas: Canvas) {
+    if release.button == PointerButton::Primary {
+        canvas.finish_selection();
+    }
+}
+
+fn on_drag_end(end: On<Pointer<DragEnd>>, mut canvas: Canvas) {
+    if end.button == PointerButton::Primary {
+        canvas.finish_selection();
     }
 }
 

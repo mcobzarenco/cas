@@ -10,8 +10,9 @@ cargo clippy --release --workspace --all-targets
 
 The app can drive itself from a tiny script (`--script`, or `--script-file`; screenshots go to
 `--shots`, `shots/` unless given), which is how the UI gets exercised and screenshotted during
-development. The scripts in `rig/` cover the panel, the rule menu and editor, the vacuum handling
-and the spaceship catcher; each exits with status 1 at the first expectation that fails:
+development. The scripts in `rig/` cover the panel, the rule menu and editor, the vacuum handling,
+the spaceship catcher and the analysis of a pattern; each exits with status 1 at the first
+expectation that fails:
 
 ```sh
 cargo run --release -- --script "wait 20; shot start; click PlayPause; wait 60; shot running; quit"
@@ -23,13 +24,13 @@ for script in rig/*.cas; do cargo run --release -- --script-file $script || brea
 | `wait N` | idle for N frames |
 | `shot NAME` | save `shots/NAME.png` (see `--shots`) and wait until it is written |
 | `film NAME FRAMES [N]` | FRAMES screenshots `NAME-000.png`, `NAME-001.png`, …, each followed by a step of N generations (1 unless given; negative goes backwards) |
-| `click NAME [DX DY]` | pointer move / press / release on the UI node named NAME, optionally offset from its centre in logical pixels. Nodes: `PlayPause`, `StepBack`, `StepForward`, `Reverse`, `HideVacuum`, `ShowGrid`, `ShowBlocks`, `FitView`, `Soup`, `Blob`, `Clear`, the sliders `Speed`, `Stride`, `Density`, `Grid`; the rule menu `RuleMenu` and its items `RuleItem:<preset id>`, `RuleItemCustom`; `EditRule`; in the editor `Out0` … `Out15` (the outcomes), `RuleIdentity`, `RuleInverse`, `RuleRandom`, `RuleString`, `RuleEspca` (Morita's number under it), `RuleCopy`, `RulePaste`, `EditorClose`; the size menu `GridSize` and its items `GridSize:<side>`; `OpenBorder`, `Catching`, `Spaceships`; in the spaceship list `CatcherCatching`, `Kind0` … (the kinds, in the order they were first caught), `CatcherForget`, `CatcherNote` (the line next to it), `CatcherClose` |
+| `click NAME [DX DY]` | pointer move / press / release on the UI node named NAME, optionally offset from its centre in logical pixels. Nodes: `PlayPause`, `StepBack`, `StepForward`, `Reverse`, `HideVacuum`, `ShowGrid`, `ShowBlocks`, `FitView`, `Soup`, `Blob`, `Clear`, the sliders `Speed`, `Stride`, `Density`, `Grid`; the rule menu `RuleMenu` and its items `RuleItem:<preset id>`, `RuleItemCustom`; `EditRule`; in the editor `Out0` … `Out15` (the outcomes), `RuleIdentity`, `RuleInverse`, `RuleRandom`, `RuleString`, `RuleEspca` (Morita's number under it), `RuleCopy`, `RulePaste`, `EditorClose`; the size menu `GridSize` and its items `GridSize:<side>`; `OpenBorder`, `Catching`, `Spaceships`; in the spaceship list `CatcherCatching`, `Kind0` … (the kinds, in the order they were first caught), `AnalyseKind0` … (their ◎ buttons), `CatcherForget`, `CatcherNote` (the line next to it), `CatcherClose`; `Analyse` and `SelectHint` (the line next to it); in the analysis panel `AnalysisView`, `SmallCaption` (the line under it), `StudyWhat`, `StudyPeriod`, `StudySpeed`, `StudyCells`, `StudySize`, `StudyParts`, `StudyText`, `AnalysisPlace`, `AnalysisCopy`, `AnalysisNote`, `AnalysisClose` |
 | `move NAME [DX DY]` | just move the pointer there |
 | `drag NAME DX DY [left\|right\|middle]` | press at the node's centre, move by (DX, DY), release: drags sliders, paints, pans |
 | `hold NAME FRAMES` | keep the left button down on the node for FRAMES frames |
 | `scroll NAME LINES` | turn the wheel over the node |
 | `key KEY` | press and release a key or chord: `Space`, `ArrowLeft`, `r`, `[`, `=`, `Ctrl+a`, ... |
-| `press KEY`, `release KEY` | hold a key across other commands: `press Shift; drag Grid 60 0; release Shift` |
+| `press KEY`, `release KEY` | hold a key across other commands: `press Shift; drag Grid 60 0; release Shift`; or a mouse button (`left`, `right`, `middle`) where the pointer last was: `move Grid 0 0; press left; move Grid 60 60; shot band; release left` |
 | `type TEXT` | type text into whatever has keyboard focus |
 | `paint X Y [on\|off]` | set a cell |
 | `place RLE X Y` | put a run-length encoded pattern with its corner at (X, Y) |
@@ -69,10 +70,11 @@ of Bevy; the app at the root and the search program are built on it.
 | `crates/cas-core/examples/figures.rs` | draws the figures of the README |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
-| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, shows the panel, and hands a kind to the stamp when its row is clicked |
+| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, shows the panel, and hands a kind to the stamp when its row is clicked, or to the analysis by the row's small button |
+| `src/analysis.rs` | the analysis panel: a pattern chosen with a band on the grid or sent from the list is studied by `cas_core::pattern::Analyser` and shown living in a small universe of its own, drawn with the grid's material |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
-| `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events, and the stamp: a pattern picked up from the spaceship list, shown as a ghost and put down with a click |
-| `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays, the ghost of the stamp |
+| `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material and its parameters (shared with the analysis panel's small view), painting and navigation via picking events, the band drawn around a pattern to analyse, and the stamp: a pattern picked up from the spaceship list or the analysis panel, shown as a ghost and put down with a click |
+| `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays, the band, the ghost of the stamp |
 | `src/ui.rs` | the control panel as cards, one per aspect, and the aspects' colours (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes); sliders and checkboxes on the headless widgets, widget↔state sync |
 | `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the properties with their diagrams, the rule string and clipboard |
 | `src/rig.rs`, `rig/*.cas` | the script-driven test rig and the scripts that exercise the app |

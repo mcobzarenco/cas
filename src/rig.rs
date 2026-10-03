@@ -22,7 +22,8 @@
 //! | `scroll NAME LINES` | turn the wheel over the node (positive is "up")                |
 //! | `key KEY`           | press and release a key or chord: `Space`, `ArrowLeft`, `r`,   |
 //! |                     | `[`, `Ctrl+a`, ...                                             |
-//! | `press KEY`, `release KEY` | hold a key down across other commands, e.g. `Shift`     |
+//! | `press KEY`, `release KEY` | hold a key down across other commands, e.g. `Shift`; or |
+//! |                     | a mouse button (`left`, `right`, `middle`) where the pointer is |
 //! | `type TEXT`         | type text into whatever has keyboard focus                     |
 //! | `paint X Y [on/off]`| set a cell directly                                            |
 //! | `place RLE X Y`     | put a run-length encoded pattern with its corner at (X, Y)     |
@@ -105,6 +106,9 @@ pub enum Command {
     Key(Vec<KeyCode>),
     Press(KeyCode),
     Release(KeyCode),
+    /// A mouse button, where the pointer was last put.
+    PressButton(MouseButton),
+    ReleaseButton(MouseButton),
     Type(String),
     Paint { x: usize, y: usize, alive: bool },
     Place { cells: Vec<Cell>, x: i32, y: i32 },
@@ -197,8 +201,14 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
                 lines: parse(arg(1, "a number of wheel notches")?)?,
             },
             "key" => Command::Key(parse_chord(arg(0, "a key")?)?),
-            "press" => Command::Press(parse_key(arg(0, "a key")?)?),
-            "release" => Command::Release(parse_key(arg(0, "a key")?)?),
+            "press" => match parse_button(arg(0, "a key or button")?) {
+                Ok(button) => Command::PressButton(button),
+                Err(_) => Command::Press(parse_key(arg(0, "a key")?)?),
+            },
+            "release" => match parse_button(arg(0, "a key or button")?) {
+                Ok(button) => Command::ReleaseButton(button),
+                Err(_) => Command::Release(parse_key(arg(0, "a key")?)?),
+            },
             "type" => {
                 let text = rest("some text")?;
                 if let Some(c) = text.chars().find(|&c| key_for_char(c).is_none()) {
@@ -440,6 +450,8 @@ struct Rig {
     settle: u32,
     wait: u32,
     input: VecDeque<InputStep>,
+    /// Where the pointer was last sent, for a button pressed without a node to press it on.
+    pointer: Vec2,
     shot: Option<Entity>,
 }
 
@@ -458,6 +470,7 @@ impl Plugin for RigPlugin {
             settle: 15,
             wait: 0,
             input: VecDeque::new(),
+            pointer: Vec2::ZERO,
             shot: None,
         })
         // Before anything reads this frame's input: picking does so in `First` already.
@@ -645,6 +658,7 @@ fn drive(
             }
             Command::Move { name, offset } => {
                 let at = locate(&name)? + offset;
+                rig.pointer = at;
                 rig.input.push_back(InputStep::Move(at));
             }
             Command::Drag {
@@ -690,6 +704,14 @@ fn drive(
             }
             Command::Press(code) => rig.input.push_back(InputStep::Key(code, Pressed)),
             Command::Release(code) => rig.input.push_back(InputStep::Key(code, Released)),
+            Command::PressButton(button) => {
+                let at = rig.pointer;
+                rig.input.push_back(InputStep::Button(at, button, Pressed));
+            }
+            Command::ReleaseButton(button) => {
+                let at = rig.pointer;
+                rig.input.push_back(InputStep::Button(at, button, Released));
+            }
             Command::Type(text) => {
                 rig.input.extend(text.chars().map(InputStep::Type));
                 rig.input.push_back(InputStep::Idle);

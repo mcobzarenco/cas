@@ -87,6 +87,10 @@ const NAME_GAP: f32 = 10.0;
 const KINDS_LISTED: usize = 8;
 /// In the lines that sum the pieces up: the width of how many there are, and of what they are.
 const SORT_COLUMNS: (f32, f32) = (24.0, 62.0);
+/// The side of the dial that shows which ways the ships of a kind fly.
+const DIAL: f32 = 30.0;
+/// The eight ways there are on the grid, clockwise from straight up; `y` points down.
+const WAYS: [(i32, i32); 8] = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)];
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -851,8 +855,10 @@ fn sort_line(index: usize, sort: &Sort) -> impl Scene {
     }
 }
 
-/// The name of a section of the list of pieces, over the columns of its rows.
-fn pieces_heading(title: &'static str) -> impl Scene {
+/// The name of a section of the list of pieces, over the columns of its rows. What keeps
+/// still has no period to speak of.
+fn pieces_heading(title: &'static str, period: bool) -> impl Scene {
+    let period = if period { "PERIOD" } else { "" };
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -862,7 +868,7 @@ fn pieces_heading(title: &'static str) -> impl Scene {
         }
         Children [
             (Node { flex_grow: 1.0, flex_basis: px(0) } Children [ column_title(title) ]),
-            (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ column_title("PERIOD") ]),
+            (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ column_title(period) ]),
             (Node { width: px(CELLS_COLUMN), justify_content: JustifyContent::End } Children [ column_title("CELLS") ]),
             (Node { width: px(CAUGHT_COLUMN), justify_content: JustifyContent::End } Children [ column_title("COUNT") ]),
         ]
@@ -870,28 +876,16 @@ fn pieces_heading(title: &'static str) -> impl Scene {
 }
 
 /// One kind of piece, as the spaceship list shows a kind of spaceship: its picture, how it
-/// moves or what it is, its period, its cells, how many of it there are, and as a bar their
-/// share of the `of` pieces of its section.
-fn piece_row(index: usize, kind: &Listed, of: usize, ship: bool) -> impl Scene {
+/// moves or how large it is, the ways its ships fly, its period, its cells, how many of it
+/// there are, and as a bar their share of the `of` pieces of its section.
+fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
     let name = Name::new(format!("Piece{index}"));
     let share = percent(100.0 * kind.count as f32 / of.max(1) as f32);
     let bar = Aspect::Pattern.color();
-    // A ship by its speed and the ways it flies, with the arrows of the mono face.
-    let about: Box<dyn SceneList> = if ship {
-        bsn_list![mono(kind.first.clone(), 14.0, palette::WHITE), caption(kind.second)].into()
-    } else {
-        let what = kind.first.clone();
-        bsn_list![(
-            Text(what)
-            TextFont {
-                font: FontSourceTemplate::Handle(fonts::REGULAR),
-                font_size: FontSize::Px(14.0),
-                weight: FontWeight::NORMAL,
-            }
-            TextColor(palette::WHITE)
-        )]
-        .into()
-    };
+    let title = mono(kind.title.clone(), 14.0, palette::WHITE);
+    let about: Box<dyn SceneList> =
+        if kind.note.is_empty() { bsn_list![title].into() } else { bsn_list![title, caption(kind.note)].into() };
+    let period = kind.period.map_or(String::new(), |period| period.to_string());
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
@@ -922,7 +916,8 @@ fn piece_row(index: usize, kind: &Listed, of: usize, ship: bool) -> impl Scene {
                         }
                         Children [ { about } ]
                     ),
-                    number(kind.period.to_string(), PERIOD_COLUMN, palette::LIGHT_GRAY_1),
+                    dial(&kind.ways),
+                    number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(kind.cells.to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     number(group_digits(kind.count as i64), CAUGHT_COLUMN, palette::WHITE),
                 ]
@@ -943,6 +938,44 @@ fn piece_row(index: usize, kind: &Listed, of: usize, ship: bool) -> impl Scene {
                 )]
             ),
         ]
+    }
+}
+
+/// The ways the pieces of a kind go, as a dial: the eight ways there are, lit where some of
+/// them went. The picture of a kind is the one it is filed under, whichever way its pieces
+/// fly; what stays where it is has no dial.
+fn dial(ways: &[(i32, i32)]) -> impl Scene {
+    let step = DIAL / 3.0;
+    let arrows: Vec<_> = WAYS
+        .iter()
+        .enumerate()
+        .map(|(eighths, &(dx, dy))| {
+            let color = if ways.contains(&(dx, dy)) { Aspect::Pattern.color() } else { palette::GRAY_3 };
+            let turned = UiTransform::from_rotation(Rot2::degrees(45.0 * eighths as f32));
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(step * (1 + dx) as f32),
+                    top: px(step * (1 + dy) as f32),
+                    width: px(step),
+                    height: px(step),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                }
+                Children [( icons::icon(icons::WAY, step, color) template_value(turned) )]
+            }
+        })
+        .collect();
+    let (side, shown) = if ways.is_empty() { (0.0, Display::None) } else { (DIAL, Display::Flex) };
+    bsn! {
+        Node {
+            display: shown,
+            width: px(side),
+            height: px(side),
+            flex_shrink: 0.0,
+        }
+        template_value(Pickable::IGNORE)
+        Children [ { arrows } ]
     }
 }
 
@@ -1437,13 +1470,13 @@ struct Sort {
     kinds: String,
 }
 
-/// What the pieces of a pattern are, sort by sort: the spaceships with their speeds and ways,
-/// the oscillators with their periods, the still lifes, and whatever else became of pieces.
+/// What the pieces of a pattern are, sort by sort: the spaceships with their speeds, the
+/// oscillators with their periods, the still lifes, and whatever else became of pieces.
 fn sorts(pieces: &[Piece], more: usize) -> Vec<Sort> {
-    let (ships, _) = listed(pieces);
+    let [ships, ..] = listed(pieces);
     let mut flying: Vec<(String, usize)> = Vec::new();
     for kind in &ships {
-        tally(&mut flying, kind.first.clone(), kind.count);
+        tally(&mut flying, kind.title.clone(), kind.count);
     }
     let mut periods: Vec<(u32, usize)> = Vec::new();
     let mut still = 0;
@@ -1515,80 +1548,63 @@ fn others(pieces: &[Piece], more: usize) -> Vec<(usize, &'static str, &'static s
     .collect()
 }
 
-/// A kind of piece as the list shows it: the form it is filed under, how it moves or what it
-/// is, a word more, its period, its cells, and how many pieces are of the kind.
+/// A kind of piece as the list shows it: the form it is filed under; how it moves, or how
+/// large it is; a word more; the ways its ships were seen to fly, clockwise from straight up;
+/// its period, unless it keeps still; its cells; and how many pieces are of the kind.
 struct Listed {
     form: Vec<Cell>,
-    first: String,
-    second: &'static str,
-    period: u32,
+    title: String,
+    note: &'static str,
+    ways: Vec<(i32, i32)>,
+    period: Option<u32>,
     cells: usize,
     count: usize,
 }
 
 /// The pieces that came back to their shape, kind by kind, the commonest first: the
-/// spaceships, each with the ways it was seen to fly, and what stays where it is, the
-/// oscillators and the still lifes among them.
-fn listed(pieces: &[Piece]) -> (Vec<Listed>, Vec<Listed>) {
-    let mut ships: Vec<(Listed, Vec<(i32, i32)>)> = Vec::new();
-    let mut staying: Vec<Listed> = Vec::new();
+/// spaceships, the oscillators and the still lifes.
+fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
+    let mut sorted: [Vec<Listed>; 3] = Default::default();
     for piece in pieces.iter().filter(|piece| !piece.form.is_empty()) {
-        let kind = |first: String, second, period| Listed {
-            form: piece.form.clone(),
-            first,
-            second,
-            period,
-            cells: piece.cells,
-            count: 1,
+        let size = || {
+            let (width, height) = bounding_box(&piece.form);
+            format!("{width}×{height}")
         };
-        match piece.kind {
-            PieceKind::Spaceship { period, displacement } => {
-                let way = (displacement.0.signum(), displacement.1.signum());
-                match ships.iter_mut().find(|(known, _)| known.form == piece.form) {
-                    Some((known, ways)) => {
-                        known.count += 1;
-                        if !ways.contains(&way) {
-                            ways.push(way);
-                        }
-                    }
-                    None => {
-                        let motion = Motion { period, displacement, canonical: Vec::new() };
-                        ships.push((kind(speed(&motion), heading(&motion), period), vec![way]));
-                    }
-                }
+        let (sort, title, note, period, way) = match piece.kind {
+            PieceKind::Spaceship { period, displacement: (dx, dy) } => {
+                let motion = Motion { period, displacement: (dx, dy), canonical: Vec::new() };
+                (0, speed(&motion), heading(&motion), Some(period), Some((dx.signum(), dy.signum())))
             }
-            PieceKind::Oscillator { .. } | PieceKind::StillLife => {
-                // A still life is the oscillator that takes one generation to be back.
-                let (what, period) = match piece.kind {
-                    PieceKind::Oscillator { period } => ("oscillator", period),
-                    _ => ("still life", 1),
-                };
-                match staying.iter_mut().find(|known| known.form == piece.form) {
-                    Some(known) => known.count += 1,
-                    None => staying.push(kind(what.to_string(), "", period)),
-                }
+            PieceKind::Oscillator { period } => (1, size(), "", Some(period), None),
+            PieceKind::StillLife => (2, size(), "", None, None),
+            _ => continue,
+        };
+        let kinds = &mut sorted[sort];
+        let known = match kinds.iter().position(|known| known.form == piece.form) {
+            Some(known) => known,
+            None => {
+                let form = piece.form.clone();
+                kinds.push(Listed { form, title, note, ways: Vec::new(), period, cells: piece.cells, count: 0 });
+                kinds.len() - 1
             }
-            _ => {}
+        };
+        kinds[known].count += 1;
+        if let Some(way) = way.filter(|way| !kinds[known].ways.contains(way)) {
+            kinds[known].ways.push(way);
         }
     }
-    // The ways a kind flies, as arrows after its speed, in reading order.
-    let mut ships: Vec<Listed> = ships
-        .into_iter()
-        .map(|(mut kind, mut ways)| {
-            ways.sort_by_key(|&(dx, dy)| (dy, dx));
-            let arrows: String = ways.iter().map(|&(dx, dy)| arrow(dx, dy)).collect();
-            kind.first = format!("{} {arrows}", kind.first);
-            kind
-        })
-        .collect();
-    ships.sort_by_key(|kind| std::cmp::Reverse(kind.count));
-    staying.sort_by_key(|kind| std::cmp::Reverse(kind.count));
-    (ships, staying)
+    for kinds in &mut sorted {
+        kinds.sort_by_key(|kind| std::cmp::Reverse(kind.count));
+        for kind in kinds {
+            kind.ways.sort_by_key(|&(dx, dy)| eighths(dx, dy));
+        }
+    }
+    sorted
 }
 
-/// Says what the pieces of the pattern on display are, under their line of the findings: sort
-/// by sort in a line each, or, with the list open, kind by kind with their pictures: the
-/// spaceships, then what stays where it is, then a word on the rest.
+/// Says what the pieces of the pattern on display are, under their line: sort by sort in a
+/// line each, or, with the list open, kind by kind with their pictures: the spaceships, the
+/// oscillators, the still lifes, and a word on the rest.
 fn list_pieces(
     analysis: Res<Analysis>,
     list: Single<Entity, With<PiecesList>>,
@@ -1602,11 +1618,15 @@ fn list_pieces(
     if shown.replace(now) == Some(now) {
         return;
     }
-    let (pieces, more) = subject.map_or((&[][..], 0), |subject| (&subject.study.pieces[..], subject.study.more_pieces));
-    let (ships, staying) = listed(pieces);
+    // One piece is the pattern itself, of which all is said above.
+    let (pieces, more) = match subject.map(|subject| &subject.study) {
+        Some(study) if study.pieces.len() + study.more_pieces > 1 => (&study.pieces[..], study.more_pieces),
+        _ => (&[][..], 0),
+    };
+    let kinds = listed(pieces);
     let sorts = sorts(pieces, more);
     // The list has the pieces that came back to their shape: without any, there is none.
-    let any = !ships.is_empty() || !staying.is_empty();
+    let any = kinds.iter().any(|kinds| !kinds.is_empty());
     let listing = any && analysis.listing;
     let mut show = |entity: Entity, shown: bool| {
         let display = if shown { Display::Flex } else { Display::None };
@@ -1629,14 +1649,15 @@ fn list_pieces(
         return;
     }
     let mut index = 0;
-    for (title, kinds, ship) in [("SPACESHIPS", &ships, true), ("OSCILLATORS", &staying, false)] {
+    for (title, kinds) in ["SPACESHIPS", "OSCILLATORS", "STILL LIFES"].into_iter().zip(&kinds) {
         if kinds.is_empty() {
             continue;
         }
         let of = kinds.iter().map(|kind| kind.count).sum();
-        rows.push(commands.spawn_scene(pieces_heading(title)).id());
+        let period = kinds.iter().any(|kind| kind.period.is_some());
+        rows.push(commands.spawn_scene(pieces_heading(title, period)).id());
         for kind in kinds.iter().take(KINDS_LISTED) {
-            rows.push(commands.spawn_scene(piece_row(index, kind, of, ship)).id());
+            rows.push(commands.spawn_scene(piece_row(index, kind, of)).id());
             index += 1;
         }
         if kinds.len() > KINDS_LISTED {
@@ -1696,6 +1717,11 @@ fn left_so_far(subject: &Subject) -> Option<String> {
     Some(format!("{said}, {} cells in it now", count(subject.world.population())))
 }
 
+/// How many eighths of a turn, clockwise from straight up, the way of a displacement is.
+fn eighths(dx: i32, dy: i32) -> usize {
+    WAYS.iter().position(|&way| way == (dx.signum(), dy.signum())).unwrap_or(0)
+}
+
 /// Which way a displacement points.
 fn arrow(dx: i32, dy: i32) -> &'static str {
     const ARROWS: [[&str; 3]; 3] = [["↖", "↑", "↗"], ["←", "·", "→"], ["↙", "↓", "↘"]];
@@ -1736,15 +1762,15 @@ mod tests {
             flying((2, 0)),
             Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
         ];
-        let (ships, staying) = listed(&apart);
-        // One kind of ship, flying two ways; and what stays, the commoner kind first, a still
-        // life being the oscillator that is back after one generation.
-        let said = |kind: &Listed| (kind.first.clone(), kind.second, kind.period, kind.cells, kind.count);
-        assert_eq!(ships.iter().map(said).collect::<Vec<_>>(), [("c/6 ←→".to_string(), "orthogonal", 12, 4, 3)]);
-        assert_eq!(
-            staying.iter().map(said).collect::<Vec<_>>(),
-            [("oscillator".to_string(), "", 4, 1, 2), ("still life".to_string(), "", 1, 4, 1)]
-        );
+        let [ships, oscillators, still] = listed(&apart);
+        // One kind of ship, flying two ways, which come clockwise from straight up; what goes
+        // round, by its size; and what keeps still, which has no period.
+        let said = |kind: &Listed| (kind.title.clone(), kind.note, kind.period, kind.cells, kind.count);
+        assert_eq!(ships.iter().map(said).collect::<Vec<_>>(), [("c/6".to_string(), "orthogonal", Some(12), 4, 3)]);
+        assert_eq!(ships[0].ways, [(1, 0), (-1, 0)]);
+        assert_eq!(oscillators.iter().map(said).collect::<Vec<_>>(), [("1×1".to_string(), "", Some(4), 1, 2)]);
+        assert_eq!(still.iter().map(said).collect::<Vec<_>>(), [("2×2".to_string(), "", None, 4, 1)]);
+        assert!(oscillators[0].ways.is_empty() && still[0].ways.is_empty());
         assert_eq!(
             others(&apart, 2),
             [(1, "one that grows", "that grow"), (2, "one more not followed", "more not followed")]
@@ -1754,13 +1780,20 @@ mod tests {
         assert_eq!(
             sorts(&apart, 2),
             [
-                sort(3, "spaceships", "c/6 ←→"),
+                sort(3, "spaceships", "c/6"),
                 sort(2, "oscillators", "period 4"),
                 sort(1, "still life", ""),
                 sort(1, "that grows", ""),
                 sort(2, "more not followed", ""),
             ]
         );
+    }
+
+    #[test]
+    fn a_way_is_so_many_eighths_of_a_turn() {
+        // Up is none, and round it goes with the clock: right a quarter, down a half.
+        assert_eq!([eighths(0, -3), eighths(2, -2), eighths(5, 0), eighths(1, 1)], [0, 1, 2, 3]);
+        assert_eq!([eighths(0, 4), eighths(-1, 1), eighths(-7, 0), eighths(-2, -2)], [4, 5, 6, 7]);
     }
 
     #[test]

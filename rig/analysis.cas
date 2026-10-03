@@ -123,22 +123,23 @@ until expect_text StudyWhat Flies apart: 513 cells across after 2 882 generation
 # Under the line of the pieces there is a line to each sort of them: how many, what, and the
 # kinds among them.
 expect_text StudyPieces 4 pieces
-expect_text PieceSort0 3 spaceships c/15 ↘, c/6 →, c/184 ↘
+expect_text PieceSort0 3 spaceships c/15, c/6, c/184
 expect_text PieceSort1 1 still life
 click AnalysisPause; wait 3; click AnalysisRestart; wait 10
 expect_text SmallStatus generation 0, no spaceship has left it, 17 cells in it now
 click AnalysisPause; wait 3
 expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
 shot analysis-7-pieces
-# A click on the line lists them kind by kind instead: the spaceships as the spaceship list
-# shows them (period, cells, how many; then speed and way), and what stays where it is
-# likewise. Another click folds the list away again.
+# A click on the line lists them kind by kind instead, the spaceships, the oscillators and the
+# still lifes each under a heading of their own: a kind as the spaceship list shows one
+# (period, cells, how many; then its speed, or its size if it stays where it is), with a
+# dial of the ways its ships fly. Another click folds the list away again.
 click PiecesToggle; wait 3
 expect_text StudyPieces 4 pieces
-expect_text Piece0 15 5 1 c/15 ↘ diagonal
-expect_text Piece1 12 4 1 c/6 → orthogonal
-expect_text Piece2 368 4 1 c/184 ↘ diagonal
-expect_text Piece3 1 4 1 still life
+expect_text Piece0 15 5 1 c/15 diagonal
+expect_text Piece1 12 4 1 c/6 orthogonal
+expect_text Piece2 368 4 1 c/184 diagonal
+expect_text Piece3 4 1 2×2
 shot analysis-7-pieces-listed
 click PiecesToggle; wait 3
 expect_text PieceSort1 1 still life
@@ -151,11 +152,11 @@ drag Grid 20 20; wait 20
 until expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
 # The ships of the four streams are one kind, flying four ways.
 expect_text StudyPieces 190 pieces
-expect_text PieceSort0 189 spaceships c/3 ↖↗↙↘
+expect_text PieceSort0 189 spaceships c/3
 expect_text PieceSort1 1 that grows
-shot analysis-8-gun
 click PiecesToggle; wait 3
-expect_text Piece0 6 3 189 c/3 ↖↗↙↘ diagonal
+expect_text Piece0 6 3 189 c/3 diagonal
+shot analysis-8-gun
 click PiecesToggle; wait 3
 
 # A field of oscillators is back when all of them are at once: after the least common multiple

@@ -40,6 +40,9 @@ pub const OPENS: &str = "\u{e13a}";
 pub const LESS: &str = "\u{e32a}";
 pub const MORE: &str = "\u{e3d4}";
 
+/// A way to go: up, to be turned.
+pub const WAY: &str = "\u{e08e}";
+
 pub struct IconsPlugin;
 
 impl Plugin for IconsPlugin {

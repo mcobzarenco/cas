@@ -669,9 +669,12 @@ impl Reading<'_, '_> {
             Some(carried.fold(text.to_string(), |read, span| read + &span.0))
         };
         // A node without text of its own, such as a button, reads as what is written in it.
+        // Icons are pictures, not words: the glyphs of the icon font are left out.
+        let icon =
+            |read: &String| !read.is_empty() && read.chars().all(|glyph| ('\u{e000}'..='\u{f8ff}').contains(&glyph));
         let read = text(entity).unwrap_or_else(|| {
             let within = self.children.iter_descendants(entity).filter_map(text);
-            within.collect::<Vec<_>>().join(" ")
+            within.filter(|read| !icon(read)).collect::<Vec<_>>().join(" ")
         });
         // Space is space, of whatever kind and however much: a script has single spaces.
         read.split_whitespace().collect::<Vec<_>>().join(" ")

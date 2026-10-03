@@ -55,12 +55,12 @@ const QUEUE: usize = 4096;
 
 /// Column widths of the list, shared by its header and its rows; the speed takes the rest,
 /// which must be room enough for the likes of `2c/184 ↘`, or the row would widen the panel.
-const PICTURE: (f32, f32) = (64.0, 44.0);
-const PERIOD_COLUMN: f32 = 44.0;
-const CELLS_COLUMN: f32 = 34.0;
-const CAUGHT_COLUMN: f32 = 54.0;
+pub(crate) const PICTURE: (f32, f32) = (64.0, 44.0);
+pub(crate) const PERIOD_COLUMN: f32 = 44.0;
+pub(crate) const CELLS_COLUMN: f32 = 34.0;
+pub(crate) const CAUGHT_COLUMN: f32 = 54.0;
 const ANALYSE_COLUMN: f32 = 24.0;
-const COLUMN_GAP: f32 = 8.0;
+pub(crate) const COLUMN_GAP: f32 = 8.0;
 
 #[derive(Resource, Default)]
 pub struct Catcher {
@@ -331,7 +331,7 @@ fn figure(label: &'static str, figure: Figure) -> impl Scene {
 }
 
 /// A column title of the list.
-fn heading(title: &'static str) -> impl Scene {
+pub(crate) fn heading(title: &'static str) -> impl Scene {
     bsn! {
         Text(title)
         TextFont {
@@ -343,7 +343,7 @@ fn heading(title: &'static str) -> impl Scene {
     }
 }
 
-fn mono(text: String, size: f32, color: Color) -> impl Scene {
+pub(crate) fn mono(text: String, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -471,7 +471,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
 }
 
 /// A figure set to the right of its column.
-fn number(text: String, column: f32, color: Color) -> impl Scene {
+pub(crate) fn number(text: String, column: f32, color: Color) -> impl Scene {
     bsn! {
         mono(text, 12.0, color)
         TextLayout { justify: Justify::Right }
@@ -483,7 +483,7 @@ fn number(text: String, column: f32, color: Color) -> impl Scene {
 /// lies on. The cells are given relative to a corner of the blocks the next step rewrites, so
 /// the picture is cut at block boundaries and shows them, as the grid does: how a pattern sits
 /// on the blocks is part of what it is.
-fn picture(cells: &[Cell]) -> impl Scene {
+pub(crate) fn picture(cells: &[Cell]) -> impl Scene {
     // Whole blocks: the bounding box widened to even coordinates on the left and the top (a
     // settled pattern starts at 0 or 1 either way) and to odd ones on the right and the bottom.
     let span = |axis: fn(&Cell) -> i32| {

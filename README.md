@@ -406,9 +406,13 @@ the catcher does with what reaches the edge, and the *Analysis* panel says what 
   its mirror image half way through its period); how many cells change from one generation to the
   next, and how many never do.
 * Or a pattern that **grows**, along lines as a gun does or over the plane, that **flies apart**,
-  or that had not repeated when the study ended. What it had become by
-  then is taken apart into the pieces that go their own ways, and each is followed alone: so many
-  spaceships of such kinds, oscillators, still lifes, one that keeps growing.
+  or that had not repeated when the study ended. What it had become by then is taken apart into
+  the pieces that go their own ways, and each is followed alone: so many spaceships of such
+  kinds, oscillators, still lifes, one that keeps growing. The pieces are listed under their
+  line of the findings: the spaceships as the spaceship list shows them, each kind with the ways
+  it flies, and under them what stays where it is, the oscillators and the still lifes. A click
+  on the line folds the list away into a line of text, and opens it again. A pattern that comes
+  back as several that never meet has its parts listed the same way.
 * For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
   blocks, and its run-length encoded text.
 

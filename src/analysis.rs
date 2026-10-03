@@ -13,14 +13,18 @@ use bevy::{
     feathers::{
         constants::fonts,
         controls::{FeathersButton, FeathersScrollbar},
+        cursor::EntityCursor,
+        palette,
         theme::{ThemeTextColor, ThemedText},
         tokens,
     },
+    picking::hover::Hovered,
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{FontSource, FontSourceTemplate, FontWeight},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    window::SystemCursorIcon,
 };
 
 use cas_core::{
@@ -34,6 +38,8 @@ use cas_core::{
 };
 
 use crate::{
+    catcher::{CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, heading as column_title, mono, number, picture},
+    icons,
     sim::{Settings, SimSystems},
     ui::{Aspect, caption, group_digits, panel_title, side_panel},
     view::{Framing, GridMaterial, GridParams, Stamp, cell_image, edge_of, upload},
@@ -71,6 +77,8 @@ const LONGEST_FRAME: f32 = 0.25;
 const TEXT_SHOWN: usize = 36;
 /// The size of what the findings say.
 const VALUE_SIZE: f32 = 12.0;
+/// So many kinds of spaceship, and of oscillator, are listed among the pieces.
+const KINDS_LISTED: usize = 8;
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -85,6 +93,8 @@ pub struct Analysis {
     /// How many patterns were studied: numbers the subjects, which tells a new one from the
     /// one before.
     studied: u64,
+    /// The list of the pieces is folded away into its line of text.
+    folded: bool,
     /// What the last button did.
     note: Option<String>,
 }
@@ -343,6 +353,14 @@ impl During {
 #[derive(Component, Default, Clone)]
 struct Row;
 
+/// Where the pieces a pattern came apart into are listed, kind by kind, and the mark on
+/// their line of the findings that turns as the list opens.
+#[derive(Component, Default, Clone)]
+struct PiecesList;
+
+#[derive(Component, Default, Clone)]
+struct PiecesChevron;
+
 /// The caption next to the Analyse button of the pattern card: what to do next.
 #[derive(Component, Default, Clone)]
 pub struct SelectHint;
@@ -380,7 +398,7 @@ impl Plugin for AnalysisPlugin {
             .add_systems(Update, call_off.in_set(SimSystems::Input))
             .add_systems(
                 Update,
-                (take_study, run_small_world, draw_small_world, sync_panel, show_status, label_pause)
+                (take_study, run_small_world, draw_small_world, sync_panel, list_pieces, show_status, label_pause)
                     .chain()
                     .in_set(SimSystems::Present),
             );
@@ -538,7 +556,17 @@ pub fn analysis_panel() -> impl Scene {
                                 line("CHANGES", Finding::Changes),
                                 line("SIZE", Finding::Size),
                                 line("SYMMETRY", Finding::Symmetry),
-                                line("PIECES", Finding::Pieces),
+                                pieces_line(),
+                                (
+                                    #PiecesList
+                                    Node {
+                                        display: Display::None,
+                                        flex_direction: FlexDirection::Column,
+                                        row_gap: px(4),
+                                        margin: UiRect::vertical(px(3)),
+                                    }
+                                    PiecesList
+                                ),
                                 line("TEXT", Finding::Text),
                             ]
                         ),
@@ -633,6 +661,167 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
                 }
                 template_value(name)
                 template_value(finding)
+            ),
+        ]
+    }
+}
+
+/// The line of the findings about the pieces: its name, with the mark that turns as the list
+/// under it opens, and what there is to say in a line. A click on the line opens the list or
+/// folds it away.
+fn pieces_line() -> impl Scene {
+    let name = Name::new("StudyPieces");
+    bsn! {
+        #PiecesToggle
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(10),
+        }
+        Row
+        Hovered
+        EntityCursor::System(SystemCursorIcon::Pointer)
+        on(|_: On<Pointer<Click>>, mut analysis: ResMut<Analysis>| analysis.folded = !analysis.folded)
+        Children [
+            (
+                Node {
+                    width: px(66),
+                    flex_shrink: 0.0,
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(5),
+                    margin: UiRect::top(px(3)),
+                }
+                template_value(Pickable::IGNORE)
+                Children [
+                    (
+                        Text("PIECES")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(fonts::BOLD),
+                            font_size: FontSize::Px(10.0),
+                            weight: FontWeight::BOLD,
+                        }
+                        ThemeTextColor(tokens::TEXT_DIM)
+                        template_value(Pickable::IGNORE)
+                    ),
+                    (
+                        icons::icon(icons::OPENS, 10.0, palette::LIGHT_GRAY_2)
+                        UiTransform
+                        PiecesChevron
+                        template_value(Pickable::IGNORE)
+                    ),
+                ]
+            ),
+            (
+                Text("—")
+                TextFont {
+                    font: FontSourceTemplate::Handle(fonts::REGULAR),
+                    font_size: FontSize::Px(VALUE_SIZE),
+                    weight: FontWeight::NORMAL,
+                }
+                ThemeTextColor(tokens::TEXT_MAIN)
+                Node {
+                    flex_grow: 1.0,
+                    flex_basis: px(0),
+                }
+                template_value(name)
+                template_value(Finding::Pieces)
+                template_value(Pickable::IGNORE)
+            ),
+        ]
+    }
+}
+
+/// The name of a section of the list of pieces, over the columns of its rows.
+fn pieces_heading(title: &'static str) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(COLUMN_GAP),
+            padding: UiRect { left: px(7), right: px(7), top: px(3) },
+        }
+        Children [
+            (Node { flex_grow: 1.0, flex_basis: px(0) } Children [ column_title(title) ]),
+            (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ column_title("PERIOD") ]),
+            (Node { width: px(CELLS_COLUMN), justify_content: JustifyContent::End } Children [ column_title("CELLS") ]),
+            (Node { width: px(CAUGHT_COLUMN), justify_content: JustifyContent::End } Children [ column_title("COUNT") ]),
+        ]
+    }
+}
+
+/// One kind of piece, as the spaceship list shows a kind of spaceship: its picture, how it
+/// moves or what it is, its period, its cells, how many of it there are, and as a bar their
+/// share of the `of` pieces of its section.
+fn piece_row(index: usize, kind: &Listed, of: usize, ship: bool) -> impl Scene {
+    let name = Name::new(format!("Piece{index}"));
+    let share = percent(100.0 * kind.count as f32 / of.max(1) as f32);
+    let bar = Aspect::Pattern.color();
+    // A ship by its speed and the ways it flies, with the arrows of the mono face.
+    let about: Box<dyn SceneList> = if ship {
+        bsn_list![mono(kind.first.clone(), 14.0, palette::WHITE), caption(kind.second)].into()
+    } else {
+        let what = kind.first.clone();
+        bsn_list![(
+            Text(what)
+            TextFont {
+                font: FontSourceTemplate::Handle(fonts::REGULAR),
+                font_size: FontSize::Px(14.0),
+                weight: FontWeight::NORMAL,
+            }
+            TextColor(palette::WHITE)
+        )]
+        .into()
+    };
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: px(6),
+            padding: UiRect::axes(px(7), px(5)),
+            border_radius: px(5),
+            flex_shrink: 0.0,
+        }
+        BackgroundColor(palette::GRAY_2)
+        template_value(name)
+        Children [
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(COLUMN_GAP),
+                }
+                Children [
+                    picture(&kind.form),
+                    (
+                        Node {
+                            flex_grow: 1.0,
+                            flex_basis: px(0),
+                            min_width: px(0),
+                            overflow: Overflow::clip(),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(2),
+                        }
+                        Children [ { about } ]
+                    ),
+                    number(kind.period.to_string(), PERIOD_COLUMN, palette::LIGHT_GRAY_1),
+                    number(kind.cells.to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
+                    number(group_digits(kind.count as i64), CAUGHT_COLUMN, palette::WHITE),
+                ]
+            ),
+            (
+                Node {
+                    height: px(3),
+                    border_radius: BorderRadius::MAX,
+                }
+                BackgroundColor(palette::GRAY_0)
+                Children [(
+                    Node {
+                        width: share,
+                        height: percent(100),
+                        border_radius: BorderRadius::MAX,
+                    }
+                    BackgroundColor(bar)
+                )]
             ),
         ]
     }
@@ -763,6 +952,8 @@ struct Shown {
     selecting: bool,
     /// The subject is picked up, to be put down on the grid.
     holding: bool,
+    /// The list of pieces is folded away, and their line says it all.
+    folded: bool,
     note: Option<String>,
 }
 
@@ -802,6 +993,7 @@ fn sync_panel(
         selecting: analysis.selecting,
         // A stamp from the list is the list's business.
         holding: stamp.is_held() && stamp.kind.is_none(),
+        folded: analysis.folded,
         note: analysis.note.clone(),
     };
     if shown.as_ref() == Some(&now) {
@@ -815,7 +1007,7 @@ fn sync_panel(
         show(part, during.is_now(subject.is_some(), busy.is_some()));
     }
     for (line, finding, mut text, color, row) in &mut findings {
-        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
+        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject, !analysis.folded));
         // A line with nothing to say is not there.
         show(row.parent(), content != "—");
         // The line is set in its own face, and the arrows in it in the one that has them
@@ -908,7 +1100,7 @@ fn label_pause(analysis: Res<Analysis>, mut label: Single<&mut Text, With<PauseL
 }
 
 /// What the study says, in words.
-fn found(finding: Finding, subject: &Subject) -> String {
+fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
     let study = &subject.study;
     let motion = study.motion.as_ref();
     let travels = motion.is_some_and(|motion| motion.heading() != Heading::Still);
@@ -991,6 +1183,11 @@ fn found(finding: Finding, subject: &Subject) -> String {
                 parts => format!("{parts} that never meet"),
             },
             _ if study.pieces.is_empty() => "—".to_string(),
+            // With the pieces listed underneath, the line only says how many there are.
+            _ if listing && lists(&study.pieces) => match study.pieces.len() + study.more_pieces {
+                1 => "one piece".to_string(),
+                total => format!("{total} pieces"),
+            },
             _ => pieces(&study.pieces, study.more_pieces),
         },
         Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
@@ -1059,7 +1256,7 @@ fn heading(motion: &Motion) -> &'static str {
 fn pieces(pieces: &[Piece], more: usize) -> String {
     let mut ships: Vec<(String, usize)> = Vec::new();
     let mut periods: Vec<(u32, usize)> = Vec::new();
-    let (mut still, mut grow, mut scatter, mut unsettled, mut big) = (0, 0, 0, 0, 0);
+    let mut still = 0;
     for piece in pieces {
         match piece.kind {
             PieceKind::Spaceship { period, displacement } => {
@@ -1069,10 +1266,7 @@ fn pieces(pieces: &[Piece], more: usize) -> String {
             }
             PieceKind::Oscillator { period } => tally(&mut periods, period),
             PieceKind::StillLife => still += 1,
-            PieceKind::Grows => grow += 1,
-            PieceKind::Scatters => scatter += 1,
-            PieceKind::Undecided => unsettled += 1,
-            PieceKind::Unexamined => big += 1,
+            _ => {}
         }
     }
     let mut said = Vec::new();
@@ -1099,24 +1293,168 @@ fn pieces(pieces: &[Piece], more: usize) -> String {
     if still > 0 {
         said.push(counted(still, "still life", "still lifes"));
     }
-    if grow > 0 {
-        said.push(counted(grow, "one that grows", "that grow"));
-    }
-    if scatter > 0 {
-        said.push(counted(scatter, "one that flies apart", "that fly apart"));
-    }
-    if unsettled > 0 {
-        said.push(counted(unsettled, "one still changing", "still changing"));
-    }
-    if big > 0 {
-        said.push(counted(big, "one too big to follow", "too big to follow"));
+    said.extend(others(pieces, more));
+    let total = pieces.len() + more;
+    let all = if total == 1 { "one piece".to_string() } else { format!("{total} pieces") };
+    format!("{all}: {}", said.join(", "))
+}
+
+/// The pieces that neither travel nor stay as they are, counted by what became of them, and
+/// those that were not followed.
+fn others(pieces: &[Piece], more: usize) -> Vec<String> {
+    let so_many = |kind: PieceKind| pieces.iter().filter(|piece| piece.kind == kind).count();
+    let mut said = Vec::new();
+    for (kind, one, many) in [
+        (PieceKind::Grows, "one that grows", "that grow"),
+        (PieceKind::Scatters, "one that flies apart", "that fly apart"),
+        (PieceKind::Undecided, "one still changing", "still changing"),
+        (PieceKind::Unexamined, "one too big to follow", "too big to follow"),
+    ] {
+        match so_many(kind) {
+            0 => {}
+            count => said.push(counted(count, one, many)),
+        }
     }
     if more > 0 {
         said.push(format!("{more} more not followed"));
     }
-    let total = pieces.len() + more;
-    let all = if total == 1 { "one piece".to_string() } else { format!("{total} pieces") };
-    format!("{all}: {}", said.join(", "))
+    said
+}
+
+/// Are there pieces to list: ones that came back to their shape, which have a form to show?
+fn lists(pieces: &[Piece]) -> bool {
+    pieces.iter().any(|piece| !piece.form.is_empty())
+}
+
+/// A kind of piece as the list shows it: the form it is filed under, how it moves or what it
+/// is, a word more, its period, its cells, and how many pieces are of the kind.
+struct Listed {
+    form: Vec<Cell>,
+    first: String,
+    second: &'static str,
+    period: u32,
+    cells: usize,
+    count: usize,
+}
+
+/// The pieces that came back to their shape, kind by kind, the commonest first: the
+/// spaceships, each with the ways it was seen to fly, and what stays where it is, the
+/// oscillators and the still lifes among them.
+fn listed(pieces: &[Piece]) -> (Vec<Listed>, Vec<Listed>) {
+    let mut ships: Vec<(Listed, Vec<(i32, i32)>)> = Vec::new();
+    let mut staying: Vec<Listed> = Vec::new();
+    for piece in pieces.iter().filter(|piece| !piece.form.is_empty()) {
+        let kind = |first: String, second, period| Listed {
+            form: piece.form.clone(),
+            first,
+            second,
+            period,
+            cells: piece.cells,
+            count: 1,
+        };
+        match piece.kind {
+            PieceKind::Spaceship { period, displacement } => {
+                let way = (displacement.0.signum(), displacement.1.signum());
+                match ships.iter_mut().find(|(known, _)| known.form == piece.form) {
+                    Some((known, ways)) => {
+                        known.count += 1;
+                        if !ways.contains(&way) {
+                            ways.push(way);
+                        }
+                    }
+                    None => {
+                        let motion = Motion { period, displacement, canonical: Vec::new() };
+                        ships.push((kind(speed(&motion), heading(&motion), period), vec![way]));
+                    }
+                }
+            }
+            PieceKind::Oscillator { .. } | PieceKind::StillLife => {
+                // A still life is the oscillator that takes one generation to be back.
+                let (what, period) = match piece.kind {
+                    PieceKind::Oscillator { period } => ("oscillator", period),
+                    _ => ("still life", 1),
+                };
+                match staying.iter_mut().find(|known| known.form == piece.form) {
+                    Some(known) => known.count += 1,
+                    None => staying.push(kind(what.to_string(), "", period)),
+                }
+            }
+            _ => {}
+        }
+    }
+    // The ways a kind flies, as arrows after its speed, in reading order.
+    let mut ships: Vec<Listed> = ships
+        .into_iter()
+        .map(|(mut kind, mut ways)| {
+            ways.sort_by_key(|&(dx, dy)| (dy, dx));
+            let arrows: String = ways.iter().map(|&(dx, dy)| arrow(dx, dy)).collect();
+            kind.first = format!("{} {arrows}", kind.first);
+            kind
+        })
+        .collect();
+    ships.sort_by_key(|kind| std::cmp::Reverse(kind.count));
+    staying.sort_by_key(|kind| std::cmp::Reverse(kind.count));
+    (ships, staying)
+}
+
+/// Lists the pieces of the pattern on display under their line of the findings, unless the
+/// list is folded away: the spaceships, then what stays where it is, then a word on the rest.
+fn list_pieces(
+    analysis: Res<Analysis>,
+    list: Single<Entity, With<PiecesList>>,
+    mut chevron: Single<(Entity, &mut UiTransform), With<PiecesChevron>>,
+    mut nodes: Query<&mut Node>,
+    mut shown: Local<Option<(Option<u64>, bool)>>,
+    mut commands: Commands,
+) {
+    let subject = analysis.shown();
+    let now = (subject.map(|subject| subject.number), analysis.folded);
+    if shown.replace(now) == Some(now) {
+        return;
+    }
+    let pieces = subject.map_or(&[][..], |subject| &subject.study.pieces);
+    let (ships, staying) = listed(pieces);
+    let any = !ships.is_empty() || !staying.is_empty();
+    let listing = any && !analysis.folded;
+    let mut show = |entity: Entity, shown: bool| {
+        let display = if shown { Display::Flex } else { Display::None };
+        if let Ok(mut node) = nodes.get_mut(entity)
+            && node.display != display
+        {
+            node.display = display;
+        }
+    };
+    // The mark is there while there is something to list, and points down while it is listed.
+    let (mark, turned) = &mut *chevron;
+    show(*mark, any);
+    turned.rotation = if listing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
+    show(*list, listing);
+    commands.entity(*list).despawn_related::<Children>();
+    if !listing {
+        return;
+    }
+    let mut rows = Vec::new();
+    let mut index = 0;
+    for (title, kinds, ship) in [("SPACESHIPS", &ships, true), ("OSCILLATORS", &staying, false)] {
+        if kinds.is_empty() {
+            continue;
+        }
+        let of = kinds.iter().map(|kind| kind.count).sum();
+        rows.push(commands.spawn_scene(pieces_heading(title)).id());
+        for kind in kinds.iter().take(KINDS_LISTED) {
+            rows.push(commands.spawn_scene(piece_row(index, kind, of, ship)).id());
+            index += 1;
+        }
+        if kinds.len() > KINDS_LISTED {
+            let more = counted(kinds.len() - KINDS_LISTED, "one more kind", "more kinds");
+            rows.push(commands.spawn_scene(caption(format!("and {more}"))).id());
+        }
+    }
+    let rest = subject.map_or(Vec::new(), |subject| others(pieces, subject.study.more_pieces));
+    if !rest.is_empty() {
+        rows.push(commands.spawn_scene(caption(format!("Besides: {}.", rest.join(", ")))).id());
+    }
+    commands.entity(*list).add_children(&rows);
 }
 
 /// Counts something up by name.
@@ -1185,5 +1523,39 @@ mod tests {
         assert_eq!(runs("↖↗ both"), [run("↖↗", true), run(" both", false)]);
         assert_eq!(runs("a mirror"), [run("a mirror", false)]);
         assert!(runs("").is_empty());
+    }
+
+    #[test]
+    fn pieces_are_listed_kind_by_kind() {
+        let ship = vec![(1, 0), (2, 0), (1, 2), (2, 2)];
+        let flying = |displacement| Piece {
+            cells: 4,
+            kind: PieceKind::Spaceship { period: 12, displacement },
+            form: ship.clone(),
+        };
+        let apart = [
+            flying((2, 0)),
+            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
+            flying((-2, 0)),
+            Piece { cells: 4, kind: PieceKind::StillLife, form: vec![(0, 1), (1, 1), (0, 2), (1, 2)] },
+            Piece { cells: 93, kind: PieceKind::Grows, form: Vec::new() },
+            flying((2, 0)),
+            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
+        ];
+        let (ships, staying) = listed(&apart);
+        // One kind of ship, flying two ways; and what stays, the commoner kind first, a still
+        // life being the oscillator that is back after one generation.
+        let said = |kind: &Listed| (kind.first.clone(), kind.second, kind.period, kind.cells, kind.count);
+        assert_eq!(ships.iter().map(said).collect::<Vec<_>>(), [("c/6 ←→".to_string(), "orthogonal", 12, 4, 3)]);
+        assert_eq!(
+            staying.iter().map(said).collect::<Vec<_>>(),
+            [("oscillator".to_string(), "", 4, 1, 2), ("still life".to_string(), "", 1, 4, 1)]
+        );
+        assert!(lists(&apart) && !lists(&apart[4..5]));
+        assert_eq!(others(&apart, 2), ["one that grows", "2 more not followed"]);
+        assert_eq!(
+            pieces(&apart, 0),
+            "7 pieces: 3 spaceships (c/6 → ×2, c/6 ←), 2 oscillators (period 4), a still life, one that grows"
+        );
     }
 }

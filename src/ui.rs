@@ -988,6 +988,7 @@ fn pattern_card() -> impl Scene {
             Children [
                 action_button("Soup", "Soup", Action::Soup),
                 action_button("Blob", "Blob", Action::Blob),
+                action_button("Cloud", "Cloud", Action::Cloud),
                 action_button("Clear", "Clear", Action::Clear),
             ]
         ),

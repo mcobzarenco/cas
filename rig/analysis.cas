@@ -16,7 +16,9 @@ place $2o2$2o 130 130
 move Grid 0 0; press left; move Grid 60 60; wait 3
 shot analysis-2-band
 release left; wait 20
-expect_text SelectHint on the grid, or from the list
+# The choosing stays on for the next pattern.
+expect_text SelectHint drag over it · Escape cancels
+expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
 expect_text StudyWhat Spaceship
 expect_text StudyPeriod 12 generations, moving (2, 0)
 expect_text StudySpeed c/6 orthogonal →
@@ -25,26 +27,34 @@ expect_text StudySize 2×3, up to 3×5
 expect_text StudySymmetry a mirror
 expect_text StudyPieces one piece
 expect_text StudyText $2o2$2o
-expect_text SmallCaption 42×32 cells of its own, 10 generations a second
+expect_text SmallCaption 42×32 cells, 10 generations a second
 shot analysis-3-spaceship
 
 # A band with nothing in it says so.
-key a; wait 3; drag Grid -200 -200; wait 10
+drag Grid -200 -200; wait 10
 expect_text AnalysisNote No live cells in there.
 expect_text StudyWhat Spaceship
 
 # A band drawn a generation later catches the ship between its blocks, which the study takes
 # into account: it is the same ship.
 step 1; wait 2
-key a; wait 3; drag Grid 60 60; wait 20
+drag Grid 60 60; wait 20
 expect_text StudyWhat Spaceship
 expect_text StudySpeed c/6 orthogonal →
+
+# The small world runs on its own clock; Pause holds it, and Restart takes it back to the
+# pattern as it set out, where it stands still until Play.
+click AnalysisPause; wait 3; click AnalysisRestart; wait 10
+expect_text SmallStatus generation 0
+expect_text AnalysisPause Play
+click AnalysisPause; wait 30
+expect_text AnalysisPause Pause
 
 # A still life, as single rotation has them: a block lying across two blocks of either
 # partition, so that no cell is ever alone in one. (A block in line with the partition is an
 # oscillator: it turns about, a cell at a time, where the other partition cuts it in four.)
 clear; place 2o$2o 100 101
-key a; wait 3; drag Grid -120 -120; wait 20
+drag Grid -120 -120; wait 20
 expect_text StudyWhat Still life
 expect_text StudyPeriod 1 generation
 expect_text StudySpeed —
@@ -54,11 +64,13 @@ expect_text StudySymmetry mirrors both ways, so a half turn
 shot analysis-4-still-life
 
 # Copy puts the pattern on the clipboard as text; Place picks it up to be put down on the
-# grid, with the stamp: here a second block, on the blocks of the current partition.
+# grid, with the stamp, which ends the choosing: here a second block, on the blocks of the
+# current partition.
 click AnalysisCopy; wait 3; expect_clipboard $2o$2o
 expect_text AnalysisNote Copied $2o$2o
 click AnalysisPlace; wait 3
 expect_text AnalysisNote Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.
+expect_text SelectHint on the grid, or from the list
 click Grid 0 0; wait 3; expect_population 8
 key Escape; wait 3
 expect_text AnalysisNote Place picks the pattern up, to be put down on the grid where you click.
@@ -91,14 +103,17 @@ place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o
 key a; wait 3; drag Grid -100 -100; wait 20
 expect_text StudyWhat Flies apart: 513 cells across after 2882 generations
 expect_text StudyPieces 4 pieces: 3 spaceships (c/15 ↘, c/6 →, c/184 ↘), a still life
-expect_text SmallTally no spaceship has left it, 17 cells in it now
+click AnalysisPause; wait 3; click AnalysisRestart; wait 10
+expect_text SmallStatus generation 0, no spaceship has left it, 17 cells in it now
+click AnalysisPause; wait 3
 expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o…
 shot analysis-7-pieces
 click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
 
 # A lone cell under the Four-way gun grows into a gun: along lines, and into spaceships.
+# (The choosing is still on from the last band.)
 rule four-way-gun; wait 2; clear; paint 128 128
-key a; wait 3; drag Grid 20 20; wait 20
+drag Grid 20 20; wait 20
 expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
 expect_text StudyPieces 190 pieces: 189 spaceships (c/3 ↙ ×48, c/3 ↗ ×47, c/3 ↖ ×47, one more kind), one that grows
 shot analysis-8-gun
@@ -107,7 +122,7 @@ click AnalysisClose; wait 3
 # Close puts the panel away; the key brings it back with the choosing on.
 click AnalysisClose; wait 5
 key a; wait 5
-expect_text AnalysisNote Drag over the pattern on the grid. Escape calls it off.
+expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
 key Escape; wait 3
 expect_text AnalysisNote Place picks the pattern up, to be put down on the grid where you click.
 quit

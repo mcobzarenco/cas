@@ -569,6 +569,7 @@ fn pick_kind(
     mut clipboard: ResMut<Clipboard>,
     mut catcher: ResMut<Catcher>,
     mut stamp: ResMut<Stamp>,
+    mut analysis: ResMut<Analysis>,
 ) {
     let Ok(&KindRow(index)) = rows.get(click.entity) else {
         return;
@@ -595,6 +596,8 @@ fn pick_kind(
         let forms = Analyser::new(universe.rule()).forms(&kind.motion.canonical);
         stamp.pick_up(forms, universe.rule(), Some((haul, index)));
         catcher.note = None;
+        // A click on the grid puts the pattern down now, rather than starting a band.
+        analysis.stop_choosing();
     }
 }
 

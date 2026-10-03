@@ -214,6 +214,25 @@ impl Universe {
         self.reset_clock();
     }
 
+    /// Clears the grid and scatters cells about the middle: as dense as `density` there, and
+    /// thinning out with distance, half as dense a twelfth of the grid's shorter side out,
+    /// with a long tail beyond. (The chance of a cell goes as 1 / (1 + (r/s)²)^(3/2): a bell
+    /// would end abruptly, and a 1/r² tail would never end.)
+    pub fn randomize_cloud(&mut self, density: f32, rng: &mut Rng) {
+        self.cells.fill(0);
+        let scale = (self.width.min(self.height) as f32 / 10.0).max(1.0);
+        let (cx, cy) = ((self.width as f32 - 1.0) / 2.0, (self.height as f32 - 1.0) / 2.0);
+        for y in 0..self.height {
+            let dy = (y as f32 - cy) / scale;
+            for (x, cell) in self.cells[y * self.width..][..self.width].iter_mut().enumerate() {
+                let dx = (x as f32 - cx) / scale;
+                let chance = density / (1.0 + dx * dx + dy * dy).powf(1.5);
+                *cell = (rng.next_f32() < chance) as u8;
+            }
+        }
+        self.reset_clock();
+    }
+
     /// A fresh pattern is generation 0, at the start of the vacuum's cycle.
     fn reset_clock(&mut self) {
         self.generation = 0;
@@ -768,6 +787,31 @@ mod tests {
         let cells = &universe.take_departures()[0].cells;
         // Found from (0, 6); after one step the blocks start on odd coordinates.
         assert_eq!(cells, &[(1, 1), (0, 1), (-1, 4)]);
+    }
+
+    #[test]
+    fn a_cloud_is_as_dense_as_asked_in_the_middle_and_thins_out() {
+        let mut universe = Universe::new(256, 256, rule("single-rotation"));
+        universe.randomize_cloud(0.5, &mut Rng::new(7));
+        let within = |from: f32, to: f32| {
+            let cells = (0..256).flat_map(|y| (0..256).map(move |x| (x, y)));
+            let ring: Vec<(usize, usize)> = cells
+                .filter(|&(x, y)| {
+                    let r = ((x as f32 - 127.5).powi(2) + (y as f32 - 127.5).powi(2)).sqrt();
+                    (from..to).contains(&r)
+                })
+                .collect();
+            let alive = ring.iter().filter(|&&(x, y)| universe.get(x, y)).count();
+            alive as f32 / ring.len() as f32
+        };
+        let (middle, edge_of_it, far) = (within(0.0, 6.0), within(18.0, 22.0), within(60.0, 70.0));
+        assert!((0.4..=0.55).contains(&middle), "{middle} in the middle");
+        assert!((0.18..=0.32).contains(&edge_of_it), "{edge_of_it} a twelfth of the side out");
+        assert!(far < 0.04, "{far} far out");
+        // About 2π · density · s² cells in all, s being a tenth of the side.
+        let population = universe.population();
+        assert!((1700..=2400).contains(&population), "{population} cells");
+        assert_eq!(universe.generation, 0);
     }
 
     #[test]

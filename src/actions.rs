@@ -44,6 +44,8 @@ pub enum Action {
     ZoomOut,
     Soup,
     Blob,
+    /// A random cloud: dense in the middle, thinning out.
+    Cloud,
     Clear,
     /// Make the grid this many cells wide and high.
     Resize(usize),
@@ -94,7 +96,7 @@ impl Toggle {
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 24] = [
+const KEYS: [(&str, Action); 25] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -113,6 +115,7 @@ const KEYS: [(&str, Action); 24] = [
     ("−", Action::ZoomOut),
     ("n", Action::Soup),
     ("b", Action::Blob),
+    ("u", Action::Cloud),
     ("c", Action::Clear),
     ("o", Action::Flip(Toggle::OpenBorder)),
     ("k", Action::Flip(Toggle::Catching)),
@@ -243,6 +246,10 @@ fn perform(
         Action::Blob => {
             let density = settings.density;
             universe.randomize_blob(density, &mut rng);
+        }
+        Action::Cloud => {
+            let density = settings.density;
+            universe.randomize_cloud(density, &mut rng);
         }
         Action::Clear => universe.clear(),
         Action::Resize(side) => {

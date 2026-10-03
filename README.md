@@ -92,8 +92,9 @@ cargo test --release --workspace
   case with hyphens (`critters`, `ship-factory`); Morita's number of a rule (`espca-01c5ef`);
   or any reversible table (`0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`).
 * `--width W`, `--height H`: the size of the grid, even numbers; 256 unless given.
-* `--init KIND`: what the grid starts with. `blob`, a random square in the middle; `soup`,
-  random cells all over; or `empty`. `--density D` and `--seed N` say how dense and which.
+* `--init KIND`: what the grid starts with. `blob`, a random square in the middle; `cloud`,
+  random cells thinning out from the middle; `soup`, random cells all over; or `empty`.
+  `--density D` and `--seed N` say how dense (in the middle, for a cloud) and which.
 * `--threads N`: threads for stepping large grids.
 * `--window WxH` and `--vsync auto|on|off`: the window. `auto` waits for vsync only in native
   Wayland windows; under XWayland that would stall the app.
@@ -261,7 +262,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | pan | | right- or middle-drag |
 | fit the grid to the window | **Fit** | `f` |
 | soup / blob density (0.01 % – 90 %, log scale) | *Density* slider (drag, click, or wheel) | |
-| random soup / random blob / clear | **Soup** / **Blob** / **Clear** | `n` / `b` / `c` |
+| random soup / random blob / random cloud, as dense as the slider says in the middle and thinning out / clear | **Soup** / **Blob** / **Cloud** / **Clear** | `n` / `b` / `u` / `c` |
 | grid size: 32 to 4096 cells each way; the pattern stays in the middle, what no longer fits is cut off | *Grid size* menu | |
 | open border: what reaches the edge of the grid leaves the world, instead of coming back on the other side | *Open border* | `o` |
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
@@ -374,13 +375,17 @@ reaches the edge, and the *Analysis* panel says what it is.
 * For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
   blocks, and its run-length encoded text.
 
-The panel shows the pattern living in a small world of its own, a torus just big enough for it. A
-pattern that never repeats would fill it, so that world has an open border instead, and what
-leaves through it is caught and counted, as on the grid: a gun's output, kind by kind. **Place**
-picks the pattern up to be put down on the grid again; **Copy** copies the text. ◎ in a row of the
-spaceship list sends that kind over. The study is a record: it stays when the rule changes, under
-the rule named next to the title, and **Place** then puts the same cells down under the rule now
-set.
+The panel shows the pattern living in a small world of its own, a torus just big enough for it,
+running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it
+set out. A pattern that never repeats would fill that world, so it has an open border instead, and
+what leaves through it is caught and counted, as on the grid: a gun's output, kind by kind.
+**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text. ◎ in a
+row of the spaceship list sends that kind over. The study is a record: it stays when the rule
+changes, under the rule named next to the title, and **Place** then puts the same cells down under
+the rule now set.
+
+Choosing stays on after a study, so the next drag studies the next pattern; `Escape`, `a` again,
+or picking a pattern up ends it, and left-drag paints again.
 
 <p align="center">
   <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally at c/15, 5 cells, no symmetry, one piece.">

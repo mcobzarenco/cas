@@ -37,6 +37,7 @@
 //! | `reverse on/off`    | run backwards                                                  |
 //! | `soup [DENSITY]`    | uniform random soup                                            |
 //! | `blob [DENSITY]`    | random square in the middle                                    |
+//! | `cloud [DENSITY]`   | random cloud about the middle, thinning out                    |
 //! | `expect_gen N`      | fail (exit code 1) unless the generation counter is N           |
 //! | `expect_cell X Y on/off` | fail unless the cell has that state (as part of the       |
 //! |                     | pattern: the vacuum is not counted in)                         |
@@ -45,7 +46,8 @@
 //! | `expect_population N` | fail unless the pattern has that many cells                  |
 //! | `expect_size W H`   | fail unless the grid is W cells wide and H high                |
 //! | `expect_checked NAME on/off` | fail unless the checkbox named NAME shows that state   |
-//! | `expect_text NAME TEXT` | fail unless the text node named NAME reads TEXT            |
+//! | `expect_text NAME TEXT` | fail unless the node named NAME reads TEXT (a button, by  |
+//! |                     | its caption)                                                   |
 //! | `expect_caught SHIPS KINDS` | fail unless the catcher has that many spaceships, of that many kinds |
 //! | `expect_clipboard TEXT` | fail unless the clipboard holds TEXT                       |
 //! | `clear`, `quit`     |                                                                |
@@ -121,6 +123,7 @@ pub enum Command {
     Vacuum(bool),
     Reverse(bool),
     Soup(Option<f32>),
+    Cloud(Option<f32>),
     Blob(Option<f32>),
     Clear,
     Fit,
@@ -236,6 +239,7 @@ pub fn parse_script(script: &str) -> Result<Vec<Command>, String> {
             "reverse" => Command::Reverse(parse_bool(arg(0, "on/off")?)?),
             "soup" => Command::Soup(args.first().map(|s| parse(s)).transpose()?),
             "blob" => Command::Blob(args.first().map(|s| parse(s)).transpose()?),
+            "cloud" => Command::Cloud(args.first().map(|s| parse(s)).transpose()?),
             "clear" => Command::Clear,
             "fit" => Command::Fit,
             "expect_gen" => Command::ExpectGeneration(parse(arg(0, "a generation")?)?),
@@ -584,7 +588,9 @@ impl Input<'_, '_> {
 fn drive(
     mut rig: ResMut<Rig>,
     mut input: Input,
-    nodes: Query<(&Name, &ComputedNode, &UiGlobalTransform, Has<Checked>, Option<&Text>)>,
+    nodes: Query<(Entity, &Name, &ComputedNode, &UiGlobalTransform, Has<Checked>, Option<&Text>)>,
+    children: Query<&Children>,
+    texts: Query<&Text>,
     screenshots: Query<(), With<Screenshot>>,
     mut app_exit: MessageWriter<AppExit>,
     mut playback: ResMut<Playback>,
@@ -625,12 +631,12 @@ fn drive(
     let node = |name: &str| {
         nodes
             .iter()
-            .find(|(n, ..)| n.as_str() == name)
+            .find(|(_, n, ..)| n.as_str() == name)
             .ok_or_else(|| format!("no UI node named {name:?}"))
     };
     // Centre of a named UI node in logical window coordinates.
     let locate = |name: &str| {
-        node(name).map(|(_, computed, transform, ..)| {
+        node(name).map(|(_, _, computed, transform, ..)| {
             transform.translation * computed.inverse_scale_factor
         })
     };
@@ -751,6 +757,10 @@ fn drive(
                 let density = density.unwrap_or(settings.density);
                 universe.randomize_blob(density, &mut rng);
             }
+            Command::Cloud(density) => {
+                let density = density.unwrap_or(settings.density);
+                universe.randomize_cloud(density, &mut rng);
+            }
             Command::Clear => universe.clear(),
             Command::Fit => view.fit = true,
             Command::ExpectGeneration(expected) => expect(
@@ -792,12 +802,21 @@ fn drive(
                 format!("expected playing to be {expected}"),
             )?,
             Command::ExpectChecked { name, checked } => {
-                let (_, _, _, found, _) = node(&name)?;
+                let (_, _, _, _, found, _) = node(&name)?;
                 expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
             }
             Command::ExpectText { name, text } => {
-                let (.., found) = node(&name)?;
-                let found = found.map_or("", |text| text.as_str());
+                // A node without text of its own, such as a button, reads as its caption.
+                let (entity, .., found) = node(&name)?;
+                let found = match found {
+                    Some(text) => text.to_string(),
+                    None => children
+                        .iter_descendants(entity)
+                        .filter_map(|child| texts.get(child).ok())
+                        .map(|text| text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                };
                 expect(found == text, format!("expected {name} to read {text:?}, found {found:?}"))?;
             }
             Command::ExpectCaught { ships, kinds } => {

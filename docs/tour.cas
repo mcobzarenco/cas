@@ -8,7 +8,7 @@
 #   ffmpeg -i shots/tour-spaceships.png -vf "crop=736:736:620:252,$P"  docs/spaceships.png
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:28,$P"   docs/cases.png
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:780,$P"  docs/properties.png
-#   ffmpeg -i shots/tour-analysis.png   -vf "crop=792:1360:600:0,$P"   docs/analysis.png
+#   ffmpeg -i shots/tour-analysis.png   -vf "crop=792:1440:600:0,$P"   docs/analysis.png
 #   ffmpeg -i shots/rule-NAME.png -vf "crop=1702:1702:889:49,scale=640:-1:flags=area,$P" docs/rule-NAME.png
 #   oxipng -o max --strip safe docs/*.png
 wait 25

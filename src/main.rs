@@ -47,10 +47,11 @@ struct Args {
     /// table of 16 block states such as 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15.
     #[arg(long, default_value = "single-rotation")]
     rule: BlockRule,
-    /// Initial pattern: a random square in the middle, a uniform random soup, or nothing.
+    /// Initial pattern: a random square in the middle, a cloud that thins out from the middle,
+    /// a uniform random soup, or nothing.
     #[arg(long, value_enum, default_value = "blob")]
     init: Init,
-    /// Live-cell probability of the initial pattern.
+    /// Live-cell probability of the initial pattern (in the middle, for a cloud).
     #[arg(long, default_value_t = 0.3)]
     density: f32,
     /// Seed of the random soup.
@@ -81,6 +82,7 @@ struct Args {
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Init {
     Blob,
+    Cloud,
     Soup,
     Empty,
 }
@@ -145,6 +147,7 @@ fn main() -> AppExit {
     let mut universe = Universe::new(args.width, args.height, args.rule);
     match args.init {
         Init::Blob => universe.randomize_blob(args.density, &mut rng),
+        Init::Cloud => universe.randomize_cloud(args.density, &mut rng),
         Init::Soup => universe.randomize(args.density, &mut rng),
         Init::Empty => {}
     }

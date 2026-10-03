@@ -85,10 +85,25 @@ struct Subject {
     world: Universe,
     clock: f32,
     pace: f32,
+    paused: bool,
     /// What left the small world, for a pattern that never repeats: its border is open then,
     /// and what reaches it is caught and told apart.
     census: Option<Census>,
     rle: String,
+}
+
+impl Subject {
+    /// The small world as it was when the study began: the pattern as it set out, at
+    /// generation 0, and nothing caught yet.
+    fn restart(&mut self) {
+        self.world = small_world(&self.study, &self.rule);
+        self.clock = 0.0;
+        if let Some(census) = &mut self.census {
+            self.world.open_border = true;
+            self.world.catching = true;
+            *census = Census::with(Analyser::new(&self.rule));
+        }
+    }
 }
 
 impl Analysis {
@@ -120,7 +135,7 @@ impl Analysis {
     /// Studies a pattern, given relative to a corner of the blocks the next step rewrites, as
     /// a pattern caught at the edge is, with the vacuum `phase` generations into its cycle.
     pub fn study(&mut self, cells: Vec<Cell>, phase: usize, universe: &Universe) {
-        self.selecting = false;
+        // Choosing stays on, for the next pattern.
         self.band = None;
         self.open = true;
         let rule = universe.rule();
@@ -154,6 +169,7 @@ impl Analysis {
             rule: rule.clone(),
             clock: 0.0,
             pace,
+            paused: false,
             census,
             study,
         });
@@ -216,9 +232,13 @@ enum Finding {
     Text,
 }
 
-/// The line under the small world's caption: what has left the small world.
+/// The line under the small world's caption: its generation, and what has left it.
 #[derive(Component, Default, Clone)]
-struct SmallTally;
+struct SmallStatus;
+
+/// The caption of the Pause button, which says Play while the small world stands still.
+#[derive(Component, Default, Clone)]
+struct PauseLabel;
 
 /// The line under the buttons.
 #[derive(Component, Default, Clone)]
@@ -256,7 +276,7 @@ impl Plugin for AnalysisPlugin {
             .add_systems(Update, call_off.in_set(SimSystems::Input))
             .add_systems(
                 Update,
-                (run_small_world, draw_small_world, sync_panel)
+                (run_small_world, draw_small_world, sync_panel, show_status, label_pause)
                     .chain()
                     .in_set(SimSystems::Present),
             );
@@ -311,10 +331,41 @@ pub fn analysis_panel() -> impl Scene {
                 }
                 SmallView
             ),
-            (#SmallCaption caption("") SmallCaption),
             (
-                // What left the small world: in the mono font, which has the arrows.
-                #SmallTally
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(6),
+                }
+                Children [
+                    (
+                        #SmallCaption
+                        caption("")
+                        SmallCaption
+                        Node { flex_grow: 1.0, flex_basis: px(0) }
+                    ),
+                    (
+                        #AnalysisPause
+                        @FeathersButton {
+                            @caption: bsn! { Text("Pause") ThemedText PauseLabel }
+                        }
+                        Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                        on(pause_world)
+                    ),
+                    (
+                        #AnalysisRestart
+                        @FeathersButton {
+                            @caption: bsn! { Text("Restart") ThemedText }
+                        }
+                        Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                        on(restart_world)
+                    ),
+                ]
+            ),
+            (
+                // The small world's generation, and what left it: in the mono font, which has
+                // the arrows.
+                #SmallStatus
                 Text("")
                 TextFont {
                     font: FontSourceTemplate::Handle(fonts::MONO),
@@ -322,8 +373,7 @@ pub fn analysis_panel() -> impl Scene {
                     weight: FontWeight::NORMAL,
                 }
                 ThemeTextColor(tokens::TEXT_DIM)
-                Node { display: Display::None }
-                SmallTally
+                SmallStatus
             ),
             (
                 Node {
@@ -433,6 +483,22 @@ fn place_subject(
         };
         stamp.pick_up(forms, universe.rule(), None);
         analysis.note = None;
+        // A click on the grid puts the pattern down now, rather than starting a band.
+        analysis.stop_choosing();
+    }
+}
+
+/// The small world stands still, or runs again.
+fn pause_world(_: On<Activate>, mut analysis: ResMut<Analysis>) {
+    if let Some(subject) = analysis.subject.as_mut() {
+        subject.paused = !subject.paused;
+    }
+}
+
+/// The small world starts over from the pattern as it set out.
+fn restart_world(_: On<Activate>, mut analysis: ResMut<Analysis>) {
+    if let Some(subject) = analysis.subject.as_mut() {
+        subject.restart();
     }
 }
 
@@ -459,7 +525,9 @@ fn run_small_world(time: Res<Time<Real>>, mut analysis: ResMut<Analysis>) {
     if !analysis.open {
         return;
     }
-    if let Some(subject) = analysis.bypass_change_detection().subject.as_mut() {
+    if let Some(subject) = analysis.bypass_change_detection().subject.as_mut()
+        && !subject.paused
+    {
         subject.clock += time.delta_secs() * subject.pace;
         let steps = subject.clock.floor();
         if steps >= 1.0 {
@@ -517,8 +585,7 @@ fn sync_panel(
     mut findings: Query<(&Finding, &mut Text, &mut TextFont)>,
     assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
-    mut tally: Single<(&mut Text, &mut Node), (With<SmallTally>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>, Without<AnalysisPanel>)>,
-    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallTally>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
+    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut shown: Local<Option<Shown>>,
@@ -526,17 +593,6 @@ fn sync_panel(
     let display = if analysis.open { Display::Flex } else { Display::None };
     if panel.display != display {
         panel.display = display;
-    }
-    // What left the small world changes as it runs; the line is there only for a world with
-    // an open border.
-    if analysis.open {
-        let (text, node) = &mut *tally;
-        let said = analysis.subject.as_ref().map_or(String::new(), left_so_far);
-        let display = if said.is_empty() { Display::None } else { Display::Flex };
-        if node.display != display {
-            node.display = display;
-        }
-        text.set_if_neq(Text(said));
     }
     let now = Shown {
         subject: analysis.subject.as_ref().map(|subject| subject.number),
@@ -561,20 +617,43 @@ fn sync_panel(
     for mut text in &mut captions {
         let content = subject.map_or(String::new(), |subject| {
             let (width, height) = (subject.world.width, subject.world.height);
-            format!("{width}×{height} cells of its own, {} generations a second", subject.pace.round())
+            format!("{width}×{height} cells, {} generations a second", subject.pace.round())
         });
         text.set_if_neq(Text(content));
     }
     rule_name.set_if_neq(Text(subject.map_or("", |subject| subject.rule.name()).to_string()));
     let what_next = match (analysis.selecting, subject.is_some(), now.holding) {
-        (true, ..) => "Drag over the pattern on the grid. Escape calls it off.",
+        (_, _, true) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
+        (true, false, _) => "Drag over the pattern on the grid. Escape calls it off.",
+        (true, true, _) => "Drag over another pattern, or Place picks this one up to be put down on the grid where you click.",
         (false, false, _) => "Nothing yet.",
-        (false, true, false) => "Place picks the pattern up, to be put down on the grid where you click.",
-        (false, true, true) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
+        (false, true, _) => "Place picks the pattern up, to be put down on the grid where you click.",
     };
     note.set_if_neq(Text(analysis.note.clone().unwrap_or(what_next.to_string())));
     let hint_text = if analysis.selecting { "drag over it · Escape cancels" } else { "on the grid, or from the list" };
     hint.set_if_neq(Text(hint_text.to_string()));
+}
+
+/// The line under the small world: where it has got to, and what has left it. It changes as
+/// the world runs.
+fn show_status(analysis: Res<Analysis>, mut status: Single<&mut Text, With<SmallStatus>>) {
+    if !analysis.open {
+        return;
+    }
+    let said = analysis.subject.as_ref().map_or(String::new(), |subject| {
+        let generation = format!("generation {}", subject.world.generation);
+        match left_so_far(subject) {
+            Some(left) => format!("{generation}, {left}"),
+            None => generation,
+        }
+    });
+    status.set_if_neq(Text(said));
+}
+
+/// The Pause button says what it would do.
+fn label_pause(analysis: Res<Analysis>, mut label: Single<&mut Text, With<PauseLabel>>) {
+    let paused = analysis.subject.as_ref().is_some_and(|subject| subject.paused);
+    label.set_if_neq(Text(if paused { "Play" } else { "Pause" }.to_string()));
 }
 
 /// What the study says, in words.
@@ -787,10 +866,8 @@ fn counted(n: usize, one: &str, many: &str) -> String {
 }
 
 /// What has left the small world so far, for a pattern that never repeats.
-fn left_so_far(subject: &Subject) -> String {
-    let Some(census) = &subject.census else {
-        return String::new();
-    };
+fn left_so_far(subject: &Subject) -> Option<String> {
+    let census = subject.census.as_ref()?;
     let (ships, others) = (census.ships(), census.others());
     let mut kinds: Vec<&cas_core::census::Kind> = census.kinds().iter().collect();
     kinds.sort_by_key(|kind| std::cmp::Reverse(kind.count));
@@ -813,7 +890,7 @@ fn left_so_far(subject: &Subject) -> String {
     if others > 0 {
         said.push_str(&format!(", {} that were none", others));
     }
-    format!("{said}, {} cells in it now", subject.world.population())
+    Some(format!("{said}, {} cells in it now", subject.world.population()))
 }
 
 /// Which way a displacement points.

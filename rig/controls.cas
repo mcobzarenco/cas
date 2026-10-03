@@ -57,4 +57,7 @@ key f; wait 2; shot controls-5-view
 # The fastest setting must leave the window responsive: these 30 frames take half a second.
 blob; speed 240; stride 512; play; wait 30; shot controls-6-flat-out
 pause; wait 2; expect_playing off
+
+# A cloud: as dense as the slider says in the middle, thinning out, generation 0 again.
+click Cloud; wait 3; expect_gen 0; shot controls-7-cloud
 quit

@@ -362,6 +362,27 @@ pub fn editor_panel() -> impl Scene {
                             editor.say("A random permutation.", universe.rule());
                         })
                     ),
+                    (
+                        // The rule that stands for all that make the same world: the least
+                        // table among its turns and mirrors, the generations of its vacuum's
+                        // cycle it could begin at, and the vacuum's flickering away.
+                        #RuleRepresentative
+                        @FeathersButton {
+                            @caption: bsn! { Text("Representative") ThemedText }
+                        }
+                        Node { flex_grow: 1.0 }
+                        on(|_: On<Activate>,
+                            mut universe: ResMut<Universe>,
+                            mut editor: ResMut<RuleEditor>| {
+                            let representative = universe.rule().representative();
+                            if representative == *universe.rule() {
+                                editor.say("Already the one that stands for all that make this world: turned, mirrored, or begun at another generation of the vacuum's cycle.", universe.rule());
+                            } else {
+                                universe.set_rule(representative);
+                                editor.say("The same world as before, under the table that stands for it: the least among its turns and mirrors, and the generations of the vacuum's cycle it could begin at.", universe.rule());
+                            }
+                        })
+                    ),
                 ]
             ),
             findings(),

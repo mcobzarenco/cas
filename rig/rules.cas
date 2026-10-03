@@ -17,6 +17,9 @@ expect_text RuleEspca
 shot rules-3-custom
 click RuleInverse; wait 2; expect_rule 0,4,2,3,8,5,6,7,1,9,10,11,12,13,14,15
 click RuleIdentity; wait 2; expect_rule 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+# The representative of Critters is Critters turned; it is its own.
+rule critters; wait 2; click RuleRepresentative; wait 2; expect_rule 15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0
+click RuleRepresentative; wait 2; expect_rule 15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0
 # A half-made exchange does not survive a change of rule.
 click Out3; wait 2; rule tron; wait 3; click Out6; wait 3; expect_rule tron
 

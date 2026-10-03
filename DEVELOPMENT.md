@@ -92,7 +92,7 @@ cells of each row at once and looks two blocks up per table access; a 256×256 g
 about 5 µs on one core, a 4096×4096 one about 0.3 ms on six. Small grids are stepped on the calling
 thread, large ones are shared out with rayon (`--threads`; the step is bound by memory, so a
 handful of threads is as fast as all of them). `cargo test --release -p cas-core -- --ignored
---nocapture stopwatch` times it.
+--nocapture stopwatch` times it, and what watching the edge costs on a grid full of soup.
 
 Drawing: the cell array is uploaded as-is into an `R8Uint` texture (one byte per cell, a plain
 `memcpy` when the universe changes) and a UI material's fragment shader does everything else, so
@@ -103,8 +103,11 @@ every cell under a pixel (up to 8×8) and lets any live cell show, so sparse pat
 
 The limitations users meet are in the README. Besides those:
 
-* Catching with a closed border on a grid full of soup is slow, six to nine times a plain step at
+* Catching with a closed border on a grid full of soup is slow, six times a plain step at
   256×256: everything on the edge is debris, and it is looked at again after every generation.
+  Debris is told from a chain of ships by how crowded it is and how its cells lie all around,
+  which is least plain in a thin soup: with a cell in ten alive, a generation costs thirty
+  plain steps.
 * The paused app still redraws every frame; Bevy's reactive update mode would let it idle.
 * Painting and wheel zoom assume a `UiScale` of 1.
 * A scripted window still takes the keyboard focus when it opens. Its input is discarded, but

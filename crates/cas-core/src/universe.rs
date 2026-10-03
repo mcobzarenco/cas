@@ -79,6 +79,14 @@ pub const PATTERN_CELLS: usize = 20;
 const CHAIN_RADIUS: i32 = 32;
 const CHAIN_CELLS: usize = 200;
 const CHAIN_GENERATIONS: u32 = 8;
+/// Noise is no chain of ships, and telling so must cost next to nothing: a grid full of it
+/// has it all along the edge, at every generation. Where the cell at the edge has this many
+/// cells within so far of it, what it belongs to is debris, and is not followed. Nor is it
+/// where the cells found first lie all around: the ships of a chain follow each other or fly
+/// abreast, a line of cells no wider than this either way.
+const CROWD_REACH: i32 = 8;
+const CROWD: usize = 32;
+const CHAIN_WIDTH: i32 = 10;
 
 impl Universe {
     pub fn new(width: usize, height: usize, rule: BlockRule) -> Self {
@@ -339,27 +347,52 @@ impl Universe {
         let wrap = |v: i32, size: i32| if (0..size).contains(&v) { v } else { v.rem_euclid(size) };
         let index = |(x, y): (i32, i32)| (wrap(y, height) * width + wrap(x, width)) as usize;
 
-        // Flood fill, no further than a chain of ships would need. Cells are taken out as they
-        // are found, which also marks them as seen.
+        // Flood fill: as far as a pattern goes, and no further than a chain of ships would
+        // need if it is more than a pattern. Cells are taken out as they are found, which
+        // also marks them as seen.
         let seed = (x as i32, y as i32);
         let mut pattern = vec![seed];
         self.cells[index(seed)] = 0;
         let mut visited = 0;
         let mut cut = false;
-        while visited < pattern.len() && pattern.len() < CHAIN_CELLS {
-            let (cx, cy) = pattern[visited];
-            visited += 1;
-            for dy in -PATTERN_REACH..=PATTERN_REACH {
-                for dx in -PATTERN_REACH..=PATTERN_REACH {
-                    let cell = (cx + dx, cy + dy);
-                    let near = (cell.0 - seed.0).abs().max((cell.1 - seed.1).abs()) <= CHAIN_RADIUS;
-                    if !near {
-                        cut |= self.cells[index(cell)] != 0;
-                    } else if std::mem::take(&mut self.cells[index(cell)]) != 0 {
-                        pattern.push(cell);
+        let mut most = PATTERN_CELLS;
+        loop {
+            while visited < pattern.len() && pattern.len() < most {
+                let (cx, cy) = pattern[visited];
+                visited += 1;
+                for dy in -PATTERN_REACH..=PATTERN_REACH {
+                    for dx in -PATTERN_REACH..=PATTERN_REACH {
+                        let cell = (cx + dx, cy + dy);
+                        let near = (cell.0 - seed.0).abs().max((cell.1 - seed.1).abs()) <= CHAIN_RADIUS;
+                        if !near {
+                            cut |= self.cells[index(cell)] != 0;
+                        } else if std::mem::take(&mut self.cells[index(cell)]) != 0 {
+                            pattern.push(cell);
+                        }
                     }
                 }
             }
+            if most == CHAIN_CELLS || pattern.len() < PATTERN_CELLS {
+                break;
+            }
+            // Too many cells for a pattern. They may be a chain of ships, unless it is
+            // crowded here (all of them right next to the cell at the edge, or many within
+            // sight of it) or they lie all around. That is debris, and it goes back as it
+            // was found.
+            let in_sight = |&(cx, cy): &(i32, i32)| (cx - seed.0).abs().max((cy - seed.1).abs()) <= CROWD_REACH;
+            let crowded = || {
+                let sight = -CROWD_REACH..=CROWD_REACH;
+                let around = sight.clone().flat_map(|dy| sight.clone().map(move |dx| (seed.0 + dx, seed.1 + dy)));
+                let left = around.filter(|&cell| self.cells[index(cell)] != 0).count();
+                left + pattern.iter().filter(|cell| in_sight(cell)).count() >= CROWD
+            };
+            if visited == 1 || narrowest(&pattern) > CHAIN_WIDTH || crowded() {
+                for &cell in &pattern {
+                    self.cells[index(cell)] = 1;
+                }
+                return None;
+            }
+            most = CHAIN_CELLS;
         }
         let offset = self.partition_offset() as i32;
         let block_corner = |v: i32| v - ((v - offset) & 1);
@@ -396,6 +429,20 @@ impl Universe {
     pub fn take_departures(&mut self) -> Vec<Departure> {
         std::mem::take(&mut self.departures)
     }
+}
+
+/// How wide cells lie across the line they are strung along: the least of their extents along
+/// the two axes and the two diagonals.
+fn narrowest(cells: &[(i32, i32)]) -> i32 {
+    let extent = |along: fn(&(i32, i32)) -> i32| {
+        let (least, most) = cells.iter().map(along).fold((i32::MAX, i32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        most - least
+    };
+    // Across a diagonal, a cell's width is two steps of `x + y`: seven tenths make it cells.
+    let across = |steps: i32| steps * 7 / 10;
+    let (wide, high) = (extent(|cell| cell.0), extent(|cell| cell.1));
+    let (down, up) = (across(extent(|cell| cell.0 - cell.1)), across(extent(|cell| cell.0 + cell.1)));
+    wide.min(high).min(down).min(up)
 }
 
 /// Grids smaller than this are stepped on the calling thread: handing rows to other threads
@@ -838,6 +885,28 @@ mod tests {
     }
 
     #[test]
+    fn the_streams_of_a_gun_are_taken_ship_by_ship() {
+        // A lone cell under the Four-way gun sends four streams of ships along the diagonals,
+        // one close behind the other. Off the middle of the grid, each stream meets the edge
+        // at a place of its own; with the border open the ships are caught there one by one,
+        // and the gun goes on firing in an otherwise empty world.
+        let mut universe = Universe::new(256, 256, rule("four-way-gun"));
+        universe.set(64, 100, true);
+        universe.open_border = true;
+        universe.catching = true;
+        let mut census = crate::census::Census::new(universe.rule());
+        for _ in 0..40 {
+            universe.step_by(100);
+            for departure in universe.take_departures() {
+                census.record(departure);
+            }
+        }
+        assert!(census.ships() > 400, "{} ships caught", census.ships());
+        assert!(census.others() * 20 < census.ships(), "{} others to {} ships", census.others(), census.ships());
+        assert!(universe.population() < 2000, "{} cells: the streams were not taken away", universe.population());
+    }
+
+    #[test]
     fn debris_is_worn_down_by_an_open_border_and_passes_a_closed_one() {
         // Six cells by six: too many to be a pattern.
         const { assert!(PATTERN_CELLS <= 36) };
@@ -947,6 +1016,17 @@ mod tests {
                 1e6 * per_step,
                 1e9 * per_step / (size * size) as f64,
             );
+        }
+        // What watching the edge costs where it is busiest: a grid full of soup, on which
+        // everything at the edge is debris, looked at again after every generation.
+        for (catching, open_border) in [(true, false), (false, true), (true, true)] {
+            let mut universe = Universe::new(256, 256, rule("single-rotation"));
+            universe.randomize(0.3, &mut Rng::new(3));
+            (universe.catching, universe.open_border) = (catching, open_border);
+            let started = Instant::now();
+            universe.step_by(2000);
+            let per_step = started.elapsed().as_secs_f64() / 2000.0;
+            println!("256×256 of soup, catching {catching}, open border {open_border}: {:.1} µs per generation", 1e6 * per_step);
         }
     }
 

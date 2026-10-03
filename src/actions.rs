@@ -52,6 +52,8 @@ pub enum Action {
     EditRule,
     /// Show or hide the list of the spaceships caught.
     Spaceships,
+    /// Show or hide the analysis panel; it opens choosing a pattern on the grid.
+    Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
     Analyse,
 }
@@ -121,7 +123,7 @@ const KEYS: [(&str, Action); 25] = [
     ("k", Action::Flip(Toggle::Catching)),
     ("s", Action::Spaceships),
     ("e", Action::EditRule),
-    ("a", Action::Analyse),
+    ("a", Action::Analysis),
 ];
 
 impl Action {
@@ -258,13 +260,17 @@ fn perform(
         }
         Action::EditRule => editor.toggle(),
         Action::Spaceships => catcher.toggle(),
-        Action::Analyse => {
-            analysis.choose();
-            // A band is drawn with the left button, which a stamp would answer to.
-            if analysis.selecting {
-                stamp.let_go();
+        Action::Analysis => {
+            analysis.toggle();
+            if analysis.is_open() {
+                analysis.start_choosing();
             }
         }
+        Action::Analyse => analysis.choose(),
+    }
+    // A band is drawn with the left button, which a stamp would answer to.
+    if analysis.selecting {
+        stamp.let_go();
     }
 }
 

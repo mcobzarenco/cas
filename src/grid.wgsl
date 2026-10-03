@@ -127,7 +127,8 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let block = stroke(min(to_block_edge.x, to_block_edge.y), params.line_width);
     color = mix(color, params.block_color.rgb, block * params.block_alpha * params.block_color.a);
 
-    // The band: a fill over the cells it spans and an outline along its edge.
+    // The band: a fill over the cells it spans, and along its edge a dark seam with the
+    // outline just outside it, so that the band shows against live cells on either side.
     if params.band_color.a > 0.0 {
         let lo = vec2<f32>(params.band_min);
         let hi = vec2<f32>(params.band_max) + 1.0;
@@ -135,7 +136,9 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         let to_band = max(d.x, d.y);
         let inside = clamp(0.5 - to_band, 0.0, 1.0);
         color = mix(color, params.band_color.rgb, inside * params.band_fill);
-        color = mix(color, params.band_color.rgb, stroke(abs(to_band), params.line_width) * params.band_color.a);
+        let w = params.line_width;
+        color = mix(color, params.background.rgb, stroke(abs(to_band), w) * params.band_color.a);
+        color = mix(color, params.band_color.rgb, stroke(abs(to_band - 1.5 * w), w) * params.band_color.a);
     }
 
     // Outside the grid: the background, darkened by a soft shadow hugging the grid.

@@ -2,7 +2,7 @@
 # Expects the default start-up (single rotation, 256×256).
 wait 25; clear
 
-# The key opens the panel and starts the choosing; the pattern card says so.
+# The key opens the panel, choosing a pattern; the pattern card says so.
 key a; wait 20
 expect_text SelectHint drag over it · Escape cancels
 expect_text AnalysisNote Drag over the pattern on the grid. Escape calls it off.
@@ -100,7 +100,7 @@ key Escape; wait 3; expect_rule critters
 # panel, and copied whole.
 rule single-rotation; clear
 place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
-key a; wait 3; drag Grid -100 -100; wait 20
+click Analyse; wait 3; drag Grid -100 -100; wait 20
 expect_text StudyWhat Flies apart: 513 cells across after 2882 generations
 expect_text StudyPieces 4 pieces: 3 spaceships (c/15 ↘, c/6 →, c/184 ↘), a still life
 click AnalysisPause; wait 3; click AnalysisRestart; wait 10
@@ -119,10 +119,18 @@ expect_text StudyPieces 190 pieces: 189 spaceships (c/3 ↙ ×48, c/3 ↗ ×47, 
 shot analysis-8-gun
 click AnalysisClose; wait 3
 
-# Close puts the panel away; the key brings it back with the choosing on.
+# Close puts the panel away; the key brings it back choosing, and puts it away again. The
+# button starts the choosing without closing anything; Escape ends it.
 click AnalysisClose; wait 5
 key a; wait 5
 expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
+key a; wait 5; shot analysis-9-closed
+key a; wait 5
 key Escape; wait 3
 expect_text AnalysisNote Place picks the pattern up, to be put down on the grid where you click.
+expect_text SelectHint on the grid, or from the list
+click Analyse; wait 3
+expect_text SelectHint drag over it · Escape cancels
+click Analyse; wait 3
+expect_text SelectHint on the grid, or from the list
 quit

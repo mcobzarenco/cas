@@ -52,12 +52,14 @@ const LISTED: usize = 200;
 /// When more than this many departures wait to be identified, the oldest are let go.
 const QUEUE: usize = 4096;
 
-/// Column widths of the list, shared by its header and its rows; the speed takes the rest.
+/// Column widths of the list, shared by its header and its rows; the speed takes the rest,
+/// which must be room enough for the likes of `2c/184 ↘`, or the row would widen the panel.
 const PICTURE: (f32, f32) = (64.0, 44.0);
-const PERIOD_COLUMN: f32 = 48.0;
-const CELLS_COLUMN: f32 = 38.0;
-const CAUGHT_COLUMN: f32 = 58.0;
-const ANALYSE_COLUMN: f32 = 26.0;
+const PERIOD_COLUMN: f32 = 44.0;
+const CELLS_COLUMN: f32 = 34.0;
+const CAUGHT_COLUMN: f32 = 54.0;
+const ANALYSE_COLUMN: f32 = 24.0;
+const COLUMN_GAP: f32 = 8.0;
 
 #[derive(Resource, Default)]
 pub struct Catcher {
@@ -226,7 +228,7 @@ pub fn catcher_panel() -> impl Scene {
                 Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    column_gap: px(10),
+                    column_gap: px(COLUMN_GAP),
                     padding: UiRect { left: px(8), right: px(18) },
                 }
                 Children [
@@ -401,15 +403,19 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                 Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    column_gap: px(10),
+                    column_gap: px(COLUMN_GAP),
                 }
                 template_value(Pickable::IGNORE)
                 Children [
                     picture(&motion.canonical),
                     (
+                        // Whatever is left; a speed too long for it is cut rather than let
+                        // widen the row, and the panel with it.
                         Node {
                             flex_grow: 1.0,
                             flex_basis: px(0),
+                            min_width: px(0),
+                            overflow: Overflow::clip(),
                             flex_direction: FlexDirection::Column,
                             row_gap: px(2),
                         }

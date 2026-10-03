@@ -268,7 +268,8 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
-| analyse a pattern | **Analyse**, then a drag around it; or ◎ in a row of the spaceship list | `a`, then left-drag |
+| show / hide the analysis panel; it opens choosing a pattern | | `a` |
+| choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or ◎ in a row of the spaceship list | left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
@@ -360,9 +361,9 @@ What left or was caught is gone: stepping backwards does not bring it back.
 
 ### Analysing a pattern
 
-**Analyse** (`a`) and a drag around some cells of the grid studies them on their own: the pattern
-is run on an unbounded plane until it is back in its starting shape, as the catcher does with what
-reaches the edge, and the *Analysis* panel says what it is.
+**Analyse** (or `a`, which opens the panel) and a drag around some cells of the grid studies them
+on their own: the pattern is run on an unbounded plane until it is back in its starting shape, as
+the catcher does with what reaches the edge, and the *Analysis* panel says what it is.
 
 * A **still life**, an **oscillator** or a **spaceship**, with its period, how far it moves in
   one, and its speed; whether it is one of its own turns or mirrors sooner than that (a glider is
@@ -384,8 +385,9 @@ row of the spaceship list sends that kind over. The study is a record: it stays 
 changes, under the rule named next to the title, and **Place** then puts the same cells down under
 the rule now set.
 
-Choosing stays on after a study, so the next drag studies the next pattern; `Escape`, `a` again,
-or picking a pattern up ends it, and left-drag paints again.
+Choosing stays on after a study, so the next drag studies the next pattern; `Escape`, **Analyse**
+again, or picking a pattern up ends it, and left-drag paints again. `a` puts the panel away, as
+`e` and `s` do theirs, and brings it back choosing.
 
 <p align="center">
   <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally at c/15, 5 cells, no symmetry, one piece.">

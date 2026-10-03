@@ -114,15 +114,25 @@ impl Analysis {
         }
     }
 
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
     /// Choosing a pattern on the grid begins, or is called off; it opens the panel, which
     /// says what to do.
     pub fn choose(&mut self) {
-        self.selecting = !self.selecting;
+        if self.selecting {
+            self.stop_choosing();
+        } else {
+            self.start_choosing();
+        }
+    }
+
+    pub fn start_choosing(&mut self) {
+        self.selecting = true;
         self.band = None;
         self.note = None;
-        if self.selecting {
-            self.open = true;
-        }
+        self.open = true;
     }
 
     pub fn stop_choosing(&mut self) {

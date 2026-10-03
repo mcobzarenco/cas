@@ -451,9 +451,12 @@ pub(crate) fn side_panel(width: f32, body: impl SceneList) -> impl Scene {
             padding: UiRect { top: px(GUTTER), bottom: px(GUTTER), right: px(GUTTER) },
         }
         Children [(
+            // A card is as wide as its panel, whatever is in it: content that does not fit
+            // overflows the card, rather than the card the panel.
             Node {
                 flex_grow: 1.0,
                 flex_basis: px(0),
+                min_width: px(0),
                 flex_direction: FlexDirection::Column,
                 padding: px(14),
                 row_gap: px(12),
@@ -564,11 +567,17 @@ fn label_with_key(label: &'static str, action: Action) -> Box<dyn SceneList> {
 
 /// A button that triggers `action`, labelled with its shortcut.
 fn action_button(label: &'static str, name: &'static str, action: Action) -> impl Scene {
+    action_button_hinted(label, name, action, action)
+}
+
+/// A button that triggers `action`, labelled with the shortcut of `hinted`: for a button
+/// whose key does the same thing as far as a glance tells, and more besides.
+fn action_button_hinted(label: &'static str, name: &'static str, action: Action, hinted: Action) -> impl Scene {
     let name = Name::new(name);
     let does = Does(action);
     bsn! {
         @FeathersButton {
-            @caption: {label_with_key(label, action)},
+            @caption: {label_with_key(label, hinted)},
         }
         Node { flex_grow: 1.0 }
         template_value(name)
@@ -1001,7 +1010,7 @@ fn pattern_card() -> impl Scene {
             }
             Children [
                 (
-                    action_button("Analyse", "Analyse", Action::Analyse)
+                    action_button_hinted("Analyse", "Analyse", Action::Analyse, Action::Analysis)
                     Node { flex_grow: 0.0 }
                 ),
                 (

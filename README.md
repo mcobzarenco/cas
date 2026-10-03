@@ -365,7 +365,9 @@ as many generations as were spent on it; how many cells and how much room it tak
 and whether it is one piece or several that never meet. The panel shows the pattern living in a
 small world of its own, a torus just big enough for it, and gives it as run-length encoded text.
 **Place** picks it up to be put down on the grid again; **Copy** copies the text. ◎ in a row of
-the spaceship list sends that kind over.
+the spaceship list sends that kind over. The study is a record: it stays when the rule changes,
+under the rule named next to the title, and **Place** then puts the same cells down under the rule
+now set.
 
 <p align="center">
   <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally, 5 cells, one piece.">

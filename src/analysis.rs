@@ -50,6 +50,8 @@ const WORK: u64 = 2_000_000;
 const GENERATIONS: (u32, u32) = (256, 8192);
 const MOST_CELLS: usize = 1024;
 const WIDEST: i32 = 512;
+/// So many characters of the pattern's text are shown; Copy copies all of it.
+const TEXT_SHOWN: usize = 36;
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -178,6 +180,10 @@ struct SmallView;
 #[derive(Component, Default, Clone)]
 struct SmallCaption;
 
+/// The name of the rule the pattern was studied in, next to the title.
+#[derive(Component, Default, Clone)]
+struct SubjectRule;
+
 /// One thing the study says.
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq, Debug)]
 enum Finding {
@@ -251,7 +257,18 @@ pub fn analysis_panel() -> impl Scene {
                     justify_content: JustifyContent::SpaceBetween,
                 }
                 Children [
-                    panel_title(Aspect::Pattern, "Analysis"),
+                    (
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Baseline,
+                            column_gap: px(10),
+                        }
+                        Children [
+                            panel_title(Aspect::Pattern, "Analysis"),
+                            // The rule the pattern was studied in, which the grid may have left.
+                            (#SubjectRule caption("") SubjectRule),
+                        ]
+                    ),
                     (
                         #AnalysisClose
                         @FeathersButton {
@@ -361,10 +378,21 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
     }
 }
 
-/// The pattern goes back on the grid: picked up, to be put down wherever.
-fn place_subject(_: On<Activate>, mut analysis: ResMut<Analysis>, mut stamp: ResMut<Stamp>) {
+/// The pattern goes back on the grid: picked up, to be put down wherever. Under another rule
+/// than it was studied in, the same cells go down, filed for that rule's vacuum.
+fn place_subject(
+    _: On<Activate>,
+    universe: Res<Universe>,
+    mut analysis: ResMut<Analysis>,
+    mut stamp: ResMut<Stamp>,
+) {
     if let Some(subject) = &analysis.subject {
-        stamp.pick_up(subject.forms.clone(), &subject.rule, None);
+        let forms = if universe.rule() == &subject.rule {
+            subject.forms.clone()
+        } else {
+            Analyser::new(universe.rule()).forms(&subject.study.start)
+        };
+        stamp.pick_up(forms, universe.rule(), None);
         analysis.note = None;
     }
 }
@@ -444,6 +472,7 @@ fn sync_panel(
     mut panel: Single<&mut Node, With<AnalysisPanel>>,
     mut findings: Query<(&Finding, &mut Text)>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
+    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut shown: Local<Option<Shown>>,
@@ -476,6 +505,7 @@ fn sync_panel(
         });
         text.set_if_neq(Text(content));
     }
+    rule_name.set_if_neq(Text(subject.map_or("", |subject| subject.rule.name()).to_string()));
     let what_next = match (analysis.selecting, subject.is_some(), now.holding) {
         (true, ..) => "Drag over the pattern on the grid. Escape calls it off.",
         (false, false, _) => "Nothing yet.",
@@ -550,7 +580,10 @@ fn found(finding: Finding, subject: &Subject) -> String {
             1 => "one piece".to_string(),
             parts => format!("{parts} that never meet"),
         },
-        Finding::Text => subject.rle.clone(),
+        Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
+            Some((end, _)) => format!("{}…", &subject.rle[..end]),
+            None => subject.rle.clone(),
+        },
     }
 }
 

@@ -72,6 +72,23 @@ expect_text StudyText b2o2$b2o
 expect_text StudySpeed c/6 orthogonal →
 shot analysis-5-from-the-list
 
+# The study stays when the rule changes, under the rule named next to the title; Place puts
+# the same cells down under the rule now set.
+expect_text SubjectRule Single rotation
+rule critters; wait 3; expect_text SubjectRule Single rotation
+shot analysis-6-another-rule
+click AnalysisPlace; wait 3; click Grid 0 0; wait 3; expect_population 4
+key Escape; wait 3; expect_rule critters
+
+# A long text is cut short on the panel, and copied whole.
+rule single-rotation; clear
+place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
+key a; wait 3; drag Grid -100 -100; wait 20
+expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o…
+shot analysis-7-long-text
+click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
+click AnalysisClose; wait 3
+
 # Close puts the panel away; the key brings it back with the choosing on.
 click AnalysisClose; wait 5
 key a; wait 5

@@ -293,22 +293,35 @@ impl Analyser {
     /// the one travelling furthest right, then furthest down, then with the smallest bounding
     /// box, then first in reading order of its cells.
     pub fn analyse(&self, cells: &[Cell], phase: usize) -> Option<Motion> {
-        // Nothing at all is no pattern.
+        // Nothing at all is no pattern, and what does not come back has no form to be filed
+        // under: that is found out first, since most of what is asked about does not.
         if cells.is_empty() {
             return None;
         }
-        let mut phases = Vec::new();
-        let fate = self.run(cells, phase, |form| phases.push(form.to_vec()), |_, _, _| {});
-        let Fate::Returns { period, displacement: moved } = fate else {
+        let returns = self.fate(cells, phase);
+        let Fate::Returns { period, displacement: moved } = returns else {
             return None;
         };
-        let (canonical, displacement) = phases
-            .iter()
-            .flat_map(|form| self.orientations.iter().map(move |&i| reorient(form, moved, &ORIENTATIONS[i])))
-            .min_by(|(a, a_moved), (b, b_moved)| {
-                let reading = |cells: &[Cell]| cells.iter().map(|&(x, y)| (y, x)).collect::<Vec<_>>();
-                (Reverse(a_moved), area(a), reading(a)).cmp(&(Reverse(b_moved), area(b), reading(b)))
-            })?;
+        // Then through its period once more. How far the pattern moves is the same at every
+        // phase, so of each orientation the form to keep is known as the forms come: a long
+        // period takes no more room than a short one.
+        let mut least: Vec<Option<Vec<Cell>>> = vec![None; self.orientations.len()];
+        let keep = |form: &[Cell]| {
+            for (least, &i) in least.iter_mut().zip(&self.orientations) {
+                let (turned, _) = reorient(form, moved, &ORIENTATIONS[i]);
+                if least.as_ref().is_none_or(|least| in_order(&turned, least).is_lt()) {
+                    *least = Some(turned);
+                }
+            }
+        };
+        if self.run(cells, phase, keep, |_, _, _| {}) != returns {
+            return None;
+        }
+        let seen = least.into_iter().zip(&self.orientations);
+        let seen = seen.filter_map(|(form, &i)| Some((form?, reorient(&[], moved, &ORIENTATIONS[i]).1)));
+        let (canonical, displacement) = seen.min_by(|(a, a_moved), (b, b_moved)| {
+            Reverse(a_moved).cmp(&Reverse(b_moved)).then_with(|| in_order(a, b))
+        })?;
         Some(Motion { period, displacement, canonical })
     }
 
@@ -814,6 +827,13 @@ fn extent(cells: &[Cell]) -> (i32, i32) {
 fn area(cells: &[Cell]) -> i32 {
     let (width, height) = extent(cells);
     width * height
+}
+
+/// The order in which forms that move alike are preferred: the smaller bounding box first,
+/// then the cells in reading order.
+fn in_order(a: &[Cell], b: &[Cell]) -> std::cmp::Ordering {
+    let reading = |&(x, y): &Cell| (y, x);
+    area(a).cmp(&area(b)).then_with(|| a.iter().map(reading).cmp(b.iter().map(reading)))
 }
 
 /// The pattern in the run-length encoding used for Life patterns: `b` dead, `o` alive, `$` end

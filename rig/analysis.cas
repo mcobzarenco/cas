@@ -6,7 +6,8 @@ wait 25; clear
 key a; wait 20
 expect_text SelectHint drag over it · Escape cancels
 expect_text AnalysisNote Drag over the pattern on the grid. Escape calls it off.
-expect_text StudyWhat —
+# Before any pattern the panel says what it is for, and nothing else.
+expect_shown AnalysisIntro on; expect_shown AnalysisView off; expect_shown StudyWhat off; expect_shown AnalysisPlace off
 shot analysis-1-choosing
 
 # A band around the lightest ship, which sits just below and right of the middle of the grid,
@@ -72,7 +73,8 @@ clear; place 2o$2o 100 101
 drag Grid -120 -120; wait 20
 until expect_text StudyWhat Still life
 expect_text StudyPeriod 1 generation
-expect_text StudySpeed —
+# A line with nothing to say is not there: a still life has no speed.
+expect_shown StudySpeed off
 expect_text StudyCells 4
 expect_text StudyChanges none
 expect_text StudySymmetry mirrors both ways, so a half turn
@@ -162,14 +164,13 @@ expect_text StudySize 701×1
 soup
 move Grid -150 -150; press left; move Grid 150 150; wait 2; release left
 until expect_shown AnalysisStop on
-expect_shown AnalysisPause off
-expect_text StudyWhat Being followed on its own…
+expect_shown AnalysisPause off; expect_shown AnalysisView off; expect_shown StudyWhat off
 expect_text AnalysisNote Stop takes what is known by then for the study. A drag over another pattern studies that one instead.
 wait 20; shot analysis-10-on-its-way
 click AnalysisStop
 until expect_shown AnalysisStop off
-expect_shown AnalysisPause on
-expect_text StudyPeriod —
+expect_shown AnalysisPause on; expect_shown AnalysisIntro off
+expect_shown StudyPeriod off
 shot analysis-11-stopped
 click Analyse; wait 3
 expect_text SelectHint on the grid, or from the list

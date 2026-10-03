@@ -314,14 +314,32 @@ struct PauseLabel;
 #[derive(Component, Default, Clone)]
 struct Note;
 
-/// When a control of the small world is there: while a pattern is at rest in it, or while a
-/// study is on its way.
+/// When a part of the panel is there. The panel shows what there is to show: before any
+/// pattern was studied, what it is for; then a pattern, or the study of one on its way.
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
 enum During {
     #[default]
-    Rest,
+    Nothing,
+    Pattern,
     Study,
+    PatternOrStudy,
 }
+
+impl During {
+    /// Is this the time, with a pattern on display or a study showing?
+    fn is_now(self, pattern: bool, study: bool) -> bool {
+        match self {
+            During::Nothing => !pattern && !study,
+            During::Pattern => pattern,
+            During::Study => study,
+            During::PatternOrStudy => pattern || study,
+        }
+    }
+}
+
+/// A line of the findings, which is not there while it has nothing to say.
+#[derive(Component, Default, Clone)]
+struct Row;
 
 /// The caption next to the Analyse button of the pattern card: what to do next.
 #[derive(Component, Default, Clone)]
@@ -421,22 +439,31 @@ pub fn analysis_panel() -> impl Scene {
                         }
                         ScrollArea
                         Children [
-                        caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, or send a spaceship over from the list."),
+                        (
+                            // What the panel is for, until there is a pattern in it.
+                            #AnalysisIntro
+                            caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, or send a spaceship over from the list.")
+                            template_value(During::Nothing)
+                        ),
                         (
                             #AnalysisView
                             Node {
+                                display: Display::None,
                                 width: px(VIEW.0),
                                 height: px(VIEW.1),
                                 flex_shrink: 0.0,
                             }
                             SmallView
+                            template_value(During::Pattern)
                         ),
                         (
                             Node {
+                                display: Display::None,
                                 flex_direction: FlexDirection::Row,
                                 align_items: AlignItems::Center,
                                 column_gap: px(6),
                             }
+                            template_value(During::PatternOrStudy)
                             Children [
                                 (
                                     #SmallCaption
@@ -450,7 +477,7 @@ pub fn analysis_panel() -> impl Scene {
                                         @caption: bsn! { Text("Pause") ThemedText PauseLabel }
                                     }
                                     Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
-                                    template_value(During::Rest)
+                                    template_value(During::Pattern)
                                     on(pause_world)
                                 ),
                                 (
@@ -459,7 +486,7 @@ pub fn analysis_panel() -> impl Scene {
                                         @caption: bsn! { Text("Restart") ThemedText }
                                     }
                                     Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
-                                    template_value(During::Rest)
+                                    template_value(During::Pattern)
                                     on(restart_world)
                                 ),
                                 (
@@ -491,12 +518,16 @@ pub fn analysis_panel() -> impl Scene {
                             }
                             ThemeTextColor(tokens::TEXT_DIM)
                             SmallStatus
+                            Node { display: Display::None }
+                            template_value(During::PatternOrStudy)
                         ),
                         (
                             Node {
+                                display: Display::None,
                                 flex_direction: FlexDirection::Column,
                                 row_gap: px(5),
                             }
+                            template_value(During::Pattern)
                             Children [
                                 line("WHAT", Finding::What),
                                 line("PERIOD", Finding::Period),
@@ -511,9 +542,11 @@ pub fn analysis_panel() -> impl Scene {
                         ),
                         (
                             Node {
+                                display: Display::None,
                                 flex_direction: FlexDirection::Row,
                                 column_gap: px(6),
                             }
+                            template_value(During::Pattern)
                             Children [
                                 (
                                     #AnalysisPlace
@@ -567,6 +600,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
             align_items: AlignItems::FlexStart,
             column_gap: px(10),
         }
+        Row
         Children [
             (
                 Text(label)
@@ -734,24 +768,30 @@ struct Shown {
 fn sync_panel(
     analysis: Res<Analysis>,
     stamp: Res<Stamp>,
-    mut panel: Single<&mut Node, (With<AnalysisPanel>, Without<During>)>,
-    mut controls: Query<(&During, &mut Node), Without<AnalysisPanel>>,
-    mut findings: Query<(&Finding, &mut Text, &mut TextFont)>,
+    panel: Single<Entity, With<AnalysisPanel>>,
+    parts: Query<(Entity, &During)>,
+    mut nodes: Query<&mut Node>,
+    mut findings: Query<(&Finding, &mut Text, &mut TextFont, &ChildOf)>,
     assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut rule_name: Single<
         &mut Text,
         (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>),
     >,
-    mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
+    mut note: Single<(Entity, &mut Text), (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut mark: Single<&mut BorderColor, With<ChoosingMark>>,
     mut shown: Local<Option<Shown>>,
 ) {
-    let display = if analysis.open { Display::Flex } else { Display::None };
-    if panel.display != display {
-        panel.display = display;
-    }
+    let mut show = |entity: Entity, shown: bool| {
+        let display = if shown { Display::Flex } else { Display::None };
+        if let Ok(mut node) = nodes.get_mut(entity)
+            && node.display != display
+        {
+            node.display = display;
+        }
+    };
+    show(*panel, analysis.open);
     let busy = analysis.busy();
     let now = Shown {
         subject: analysis.subject.as_ref().map(|subject| subject.number),
@@ -766,20 +806,15 @@ fn sync_panel(
     }
     let now = shown.insert(now);
 
-    // The controls of the small world, or the one that stops a study on its way.
-    for (during, mut node) in &mut controls {
-        let display = if (*during == During::Study) == busy.is_some() { Display::Flex } else { Display::None };
-        if node.display != display {
-            node.display = display;
-        }
-    }
+    // What there is to show: a pattern, the study of one on its way, or neither yet.
     let subject = analysis.shown();
-    for (finding, mut text, mut font) in &mut findings {
-        let content = match (subject, busy, finding) {
-            (Some(subject), ..) => found(*finding, subject),
-            (None, Some(_), Finding::What) => "Being followed on its own…".to_string(),
-            _ => "—".to_string(),
-        };
+    for (part, during) in &parts {
+        show(part, during.is_now(subject.is_some(), busy.is_some()));
+    }
+    for (finding, mut text, mut font, row) in &mut findings {
+        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
+        // A line with nothing to say is not there.
+        show(row.parent(), content != "—");
         let face = if in_mono(*finding, &content) { fonts::MONO } else { fonts::REGULAR };
         if text.set_if_neq(Text(content)) {
             font.font = FontSource::Handle(assets.load(face));
@@ -812,10 +847,14 @@ fn sync_panel(
         (true, true, _) => {
             "Drag over another pattern, or Place picks this one up to be put down on the grid where you click."
         }
-        (false, false, _) => "Nothing yet.",
+        // Before any pattern, the panel itself says what to do.
+        (false, false, _) => "",
         (false, true, _) => "Place picks the pattern up, to be put down on the grid where you click.",
     };
-    note.set_if_neq(Text(analysis.note.clone().unwrap_or(what_next.to_string())));
+    let (line, text) = &mut *note;
+    let said = analysis.note.clone().unwrap_or(what_next.to_string());
+    show(*line, !said.is_empty());
+    text.set_if_neq(Text(said));
     let hint_text = if analysis.selecting { "drag over it · Escape cancels" } else { "on the grid, or from the list" };
     hint.set_if_neq(Text(hint_text.to_string()));
     let outline = if analysis.selecting { Aspect::Pattern.color() } else { Color::NONE };

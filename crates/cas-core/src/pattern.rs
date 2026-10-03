@@ -85,7 +85,8 @@ pub struct Study {
     pub growth: Option<f32>,
     /// For a pattern that did not come back to its shape: what it had become, taken apart
     /// into the pieces that go their own ways, the largest first, each followed on its own;
-    /// and how many pieces beyond those were not looked at.
+    /// and how many pieces beyond those were not looked at. For a pattern that came back as
+    /// several that never meet: those. None for a pattern of a piece.
     pub pieces: Vec<Piece>,
     pub more_pieces: usize,
 }
@@ -123,6 +124,10 @@ pub enum Turn {
 pub struct Piece {
     pub cells: usize,
     pub kind: PieceKind,
+    /// The form the piece is filed under, if it comes back to its shape: one and the same
+    /// for a ship whichever way it flies and whenever it is met ([`Motion::canonical`]).
+    /// Empty for a piece that does not come back.
+    pub form: Vec<Cell>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -363,13 +368,14 @@ impl Analyser {
         );
         // The pattern came back: it is gone through once more for the form to file it under,
         // which is not for anyone to watch or to stop.
+        let unwatched = Analyser { watch: None, ..self.clone() };
         let motion = match fate {
-            Fate::Returns { .. } => Analyser { watch: None, ..self.clone() }.analyse(cells, phase),
+            Fate::Returns { .. } => unwatched.analyse(cells, phase),
             _ => None,
         };
         let parts = match fate {
-            Fate::Returns { period, .. } => self.parts(&start, 0, period).len(),
-            _ => 0,
+            Fate::Returns { period, .. } => self.parts(&start, 0, period),
+            _ => Vec::new(),
         };
         let growth = match fate {
             Fate::Returns { .. } => None,
@@ -377,6 +383,8 @@ impl Analyser {
         };
         // What spreads over the plane is one thing, not pieces.
         let (pieces, more_pieces) = match fate {
+            // Parts that never meet come back each on its own, when the whole does at the latest.
+            Fate::Returns { .. } if parts.len() > 1 => (parts.iter().map(|part| unwatched.piece(part).0).collect(), 0),
             Fate::Returns { .. } => (Vec::new(), 0),
             _ if growth.is_some_and(|growth| growth >= SPREADING) => (Vec::new(), 0),
             _ => {
@@ -392,7 +400,7 @@ impl Analyser {
             still,
             cells: (fewest, most),
             extent: (widest, highest),
-            parts,
+            parts: parts.len(),
             generations,
             symmetry: symmetry_of(&start),
             recurs,
@@ -471,29 +479,42 @@ impl Analyser {
             if work == 0 || self.stopped() {
                 break;
             }
-            let kind = if piece.len() > PIECE_CELLS {
-                PieceKind::Unexamined
-            } else {
-                analyser.max_cells = (4 * piece.len()).max(64);
-                let (width, height) = extent(piece);
-                analyser.max_extent = PIECE_EXTENT.max(width.max(height) + PIECE_EXTENT / 2);
-                let (fate, still, growth, generations) = analyser.follow(piece, 0);
-                work = work.saturating_sub(piece.len() as u64 * generations as u64);
-                match (fate, still) {
-                    (Fate::Returns { displacement: (0, 0), .. }, true) => PieceKind::StillLife,
-                    (Fate::Returns { period, displacement: (0, 0) }, false) => PieceKind::Oscillator { period },
-                    (Fate::Returns { period, displacement }, _) => PieceKind::Spaceship { period, displacement },
-                    // A gun among the pieces is too wide before it is too many cells too.
-                    (Fate::Grows | Fate::Scatters, _) if growth >= GROWING => PieceKind::Grows,
-                    (Fate::Grows, _) => PieceKind::Grows,
-                    (Fate::Scatters, _) => PieceKind::Scatters,
-                    (Fate::Undecided, _) => PieceKind::Undecided,
-                }
-            };
-            pieces.push(Piece { cells: piece.len(), kind });
+            if piece.len() > PIECE_CELLS {
+                pieces.push(Piece { cells: piece.len(), kind: PieceKind::Unexamined, form: Vec::new() });
+                continue;
+            }
+            analyser.max_cells = (4 * piece.len()).max(64);
+            let (width, height) = extent(piece);
+            analyser.max_extent = PIECE_EXTENT.max(width.max(height) + PIECE_EXTENT / 2);
+            let (piece, generations) = analyser.piece(piece);
+            work = work.saturating_sub(piece.cells as u64 * generations as u64);
+            pieces.push(piece);
         }
         let more = all.len() - pieces.len();
         (pieces, more)
+    }
+
+    /// What some cells do on their own, as a piece of something larger, and for how many
+    /// generations they were followed to find out.
+    fn piece(&self, cells: &[Cell]) -> (Piece, u32) {
+        let (fate, still, growth, generations) = self.follow(cells, 0);
+        let kind = match (fate, still) {
+            (Fate::Returns { displacement: (0, 0), .. }, true) => PieceKind::StillLife,
+            (Fate::Returns { period, displacement: (0, 0) }, false) => PieceKind::Oscillator { period },
+            (Fate::Returns { period, displacement }, _) => PieceKind::Spaceship { period, displacement },
+            // A gun among the pieces is too wide before it is too many cells too.
+            (Fate::Grows | Fate::Scatters, _) if growth >= GROWING => PieceKind::Grows,
+            (Fate::Grows, _) => PieceKind::Grows,
+            (Fate::Scatters, _) => PieceKind::Scatters,
+            (Fate::Undecided, _) => PieceKind::Undecided,
+        };
+        // What comes back is filed as the catcher files a ship: under one form, whichever way
+        // it lies.
+        let form = match fate {
+            Fate::Returns { .. } => self.analyse(cells, 0).map_or(Vec::new(), |motion| motion.canonical),
+            _ => Vec::new(),
+        };
+        (Piece { cells: cells.len(), kind, form }, generations)
     }
 
     /// The fate of a pattern; whether it kept still on the way; the power of time its cells
@@ -1080,10 +1101,15 @@ mod tests {
         assert_eq!(block.fate, Fate::Returns { period: 2, displacement: (0, 0) });
         assert!(block.still);
         assert_eq!((block.symmetry, block.heat, block.stator), (Symmetry::TwoMirrors, 0.0, 4));
-        // Two ships side by side are two patterns.
+        // Two ships side by side are two patterns, and each is a piece: the same ship twice.
         let mut pair = from_rle("b2o2$b2o").unwrap();
         pair.extend(from_rle("b2o2$b2o").unwrap().iter().map(|&(x, y)| (x, y + 6)));
-        assert_eq!(analyser.study(&pair, 0).unwrap().parts, 2);
+        let pair = analyser.study(&pair, 0).unwrap();
+        assert_eq!((pair.parts, pair.pieces.len(), pair.more_pieces), (2, 2, 0));
+        for piece in &pair.pieces {
+            assert_eq!(piece.kind, PieceKind::Spaceship { period: 12, displacement: (2, 0) });
+            assert_eq!((piece.cells, to_rle(&piece.form).as_str()), (4, "b2o2$b2o"));
+        }
         // A pattern that grows is followed until it has too many cells. This one spreads
         // over the plane: its cells go with the square of time, and it is all one piece,
         // which is not taken apart.
@@ -1137,6 +1163,8 @@ mod tests {
             "{kinds:?}"
         );
         assert_eq!((study.more_pieces, study.symmetry), (0, Symmetry::HalfTurn));
+        // Both are filed under the one form: the ship as it flies to the right.
+        assert!(study.pieces.iter().all(|piece| to_rle(&piece.form) == "b2o2$b2o"), "{:?}", study.pieces);
 
         // A gun from a single cell: it grows along lines, and what it had sent out by the time
         // it was given up on is spaceships.

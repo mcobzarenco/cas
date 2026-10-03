@@ -462,7 +462,7 @@ already flies and nothing stays: cells flying in formation are kinds too.) After
 
 | `--family` | the rules | tables | measured | on four threads |
 |------------|-----------|--------|----------|-----------------|
-| `espca` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 | seconds |
+| `quarter-turn` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 | seconds |
 | `half-turn` | look the same after a half turn | 1 105 920 | 146 252 | 17 minutes |
 | `mirror` | look the same in a mirror | 1 105 920 | 287 732 | about half an hour |
 | `conserving` | keep the number of cells of every block, or trade it for the number of dead cells as Critters does | 829 440 | 78 712 | 16 minutes |

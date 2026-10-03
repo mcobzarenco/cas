@@ -24,7 +24,7 @@ use clap::{Parser, ValueEnum};
 #[command(name = "cas-search", version, about)]
 struct Args {
     /// The rules to measure. Rules that differ only by a turn or a mirror are measured once.
-    #[arg(long, value_enum, default_value = "espca")]
+    #[arg(long, value_enum, default_value = "quarter-turn")]
     family: Family,
     /// Measure these rules instead of a family: presets, ESPCA numbers or tables.
     #[arg(long = "rule")]
@@ -67,7 +67,7 @@ struct Args {
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Family {
     /// The 1536 rules that look the same after a quarter turn: Morita's ESPCAs.
-    Espca,
+    QuarterTurn,
     /// The 1 105 920 rules that look the same after a half turn.
     HalfTurn,
     /// The 1 105 920 rules that look the same in a mirror.
@@ -181,7 +181,7 @@ fn main() {
         lines.iter().map(rule).collect()
     } else {
         families::distinct(match args.family {
-            Family::Espca => families::symmetric_under(rotate_cw),
+            Family::QuarterTurn => families::symmetric_under(rotate_cw),
             Family::HalfTurn => families::symmetric_under(rotate_180),
             Family::Mirror => families::symmetric_under(mirror),
             Family::Conserving => families::conserving(),

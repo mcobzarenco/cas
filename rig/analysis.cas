@@ -22,7 +22,8 @@ expect_text StudyPeriod 12 generations, moving (2, 0)
 expect_text StudySpeed c/6 orthogonal →
 expect_text StudyCells 4
 expect_text StudySize 2×3, up to 3×5
-expect_text StudyParts one piece
+expect_text StudySymmetry a mirror
+expect_text StudyPieces one piece
 expect_text StudyText $2o2$2o
 expect_text SmallCaption 42×32 cells of its own, 10 generations a second
 shot analysis-3-spaceship
@@ -48,6 +49,8 @@ expect_text StudyWhat Still life
 expect_text StudyPeriod 1 generation
 expect_text StudySpeed —
 expect_text StudyCells 4
+expect_text StudyChanges none
+expect_text StudySymmetry mirrors both ways, so a half turn
 shot analysis-4-still-life
 
 # Copy puts the pattern on the clipboard as text; Place picks it up to be put down on the
@@ -80,13 +83,25 @@ shot analysis-6-another-rule
 click AnalysisPlace; wait 3; click Grid 0 0; wait 3; expect_population 4
 key Escape; wait 3; expect_rule critters
 
-# A long text is cut short on the panel, and copied whole.
+# Four patterns at once fly apart: what they came to is told piece by piece, and the small
+# world's border is open, so that what leaves it is counted. A long text is cut short on the
+# panel, and copied whole.
 rule single-rotation; clear
 place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
 key a; wait 3; drag Grid -100 -100; wait 20
+expect_text StudyWhat Flies apart: 513 cells across after 2882 generations
+expect_text StudyPieces 4 pieces: 3 spaceships (c/15 ↘, c/6 →, c/184 ↘), a still life
+expect_text SmallTally no spaceship has left it, 17 cells in it now
 expect_text StudyText 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o…
-shot analysis-7-long-text
+shot analysis-7-pieces
 click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
+
+# A lone cell under the Four-way gun grows into a gun: along lines, and into spaceships.
+rule four-way-gun; wait 2; clear; paint 128 128
+key a; wait 3; drag Grid 20 20; wait 20
+expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
+expect_text StudyPieces 190 pieces: 189 spaceships (c/3 ↙ ×48, c/3 ↗ ×47, c/3 ↖ ×47, one more kind), one that grows
+shot analysis-8-gun
 click AnalysisClose; wait 3
 
 # Close puts the panel away; the key brings it back with the choosing on.

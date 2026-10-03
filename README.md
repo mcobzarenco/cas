@@ -330,7 +330,9 @@ edge are taken out of the world and identified, whether the border is open or cl
 border lets everything else pass. The grid is then outlined in the colour of the cells.
 
 * Live cells within four cells of each other are one pattern, as long as there are fewer than 20
-  of them; anything bigger is debris.
+  of them; anything bigger is debris. The ships of a dense stream lie within reach of each other
+  without ever meeting: then the chain is followed a few generations to see which cells go with
+  the one at the edge, and that ship is taken alone.
 * To identify a pattern it is run alone on an unbounded plane until it is back in its starting
   shape, which gives its period and how far it has moved by then. What moved is a spaceship; what
   did not, or never came back, is counted under *others*. Ships that fly side by side without
@@ -359,18 +361,29 @@ What left or was caught is gone: stepping backwards does not bring it back.
 
 **Analyse** (`a`) and a drag around some cells of the grid studies them on their own: the pattern
 is run on an unbounded plane until it is back in its starting shape, as the catcher does with what
-reaches the edge, and the *Analysis* panel says what it is: a still life, an oscillator or a
-spaceship with its period and speed, or a pattern that grows, flies apart or had not repeated after
-as many generations as were spent on it; how many cells and how much room it takes over its period;
-and whether it is one piece or several that never meet. The panel shows the pattern living in a
-small world of its own, a torus just big enough for it, and gives it as run-length encoded text.
-**Place** picks it up to be put down on the grid again; **Copy** copies the text. ◎ in a row of
-the spaceship list sends that kind over. The study is a record: it stays when the rule changes,
-under the rule named next to the title, and **Place** then puts the same cells down under the rule
-now set.
+reaches the edge, and the *Analysis* panel says what it is.
+
+* A **still life**, an **oscillator** or a **spaceship**, with its period, how far it moves in
+  one, and its speed; whether it is one of its own turns or mirrors sooner than that (a glider is
+  its mirror image half way through its period); how many cells change from one generation to the
+  next, and how many never do.
+* Or a pattern that **grows**, along lines as a gun does or over the plane, that **flies apart**,
+  or that had not repeated after as many generations as were spent on it. What it had become by
+  then is taken apart into the pieces that go their own ways, and each is followed alone: so many
+  spaceships of such kinds, oscillators, still lifes, one that keeps growing.
+* For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
+  blocks, and its run-length encoded text.
+
+The panel shows the pattern living in a small world of its own, a torus just big enough for it. A
+pattern that never repeats would fill it, so that world has an open border instead, and what
+leaves through it is caught and counted, as on the grid: a gun's output, kind by kind. **Place**
+picks the pattern up to be put down on the grid again; **Copy** copies the text. ◎ in a row of the
+spaceship list sends that kind over. The study is a record: it stays when the rule changes, under
+the rule named next to the title, and **Place** then puts the same cells down under the rule now
+set.
 
 <p align="center">
-  <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally, 5 cells, one piece.">
+  <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally at c/15, 5 cells, no symmetry, one piece.">
 </p>
 
 ## Searching for rules

@@ -15,12 +15,13 @@ use bevy::{
         tokens,
     },
     prelude::*,
-    text::{FontSourceTemplate, FontWeight},
+    text::{FontSource, FontSourceTemplate, FontWeight},
     ui_widgets::Activate,
 };
 
 use cas_core::{
-    pattern::{Analyser, Cell, Fate, Heading, Study, to_rle},
+    census::Census,
+    pattern::{Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, to_rle},
     rules::BlockRule,
     universe::Universe,
 };
@@ -28,7 +29,7 @@ use cas_core::{
 use crate::{
     sim::{Settings, SimSystems},
     ui::{Aspect, caption, panel_title, side_panel},
-    view::{EDGE, Framing, GridMaterial, GridParams, Stamp, cell_image, upload},
+    view::{Framing, GridMaterial, GridParams, Stamp, cell_image, edge_of, upload},
 };
 
 pub const ANALYSIS_WIDTH: f32 = 396.0;
@@ -36,9 +37,13 @@ pub const ANALYSIS_WIDTH: f32 = 396.0;
 /// The size of the small world's view, in logical pixels; the world has the same proportions.
 const VIEW: (f32, f32) = (360.0, 270.0);
 /// The small world runs at this many generations a second at least, and faster for a pattern
-/// with a long period, so that a period takes about this long; but no faster than this.
+/// with a long period, so that a period takes about this long; but no faster than this. A
+/// pattern that never repeats is run at a pace of its own, to see soon what comes of it.
 const PACE: (f32, f32) = (10.0, 120.0);
 const PERIOD_SECONDS: f32 = 1.5;
+const OPEN_PACE: f32 = 30.0;
+/// So many kinds of spaceship that left the small world are named, the commonest first.
+const KINDS_NAMED: usize = 3;
 /// The small world is this many times as wide as the pattern gets, within these bounds, and
 /// in any case wide enough for the pattern as it set out.
 const ROOM: i32 = 3;
@@ -80,6 +85,9 @@ struct Subject {
     world: Universe,
     clock: f32,
     pace: f32,
+    /// What left the small world, for a pattern that never repeats: its border is open then,
+    /// and what reaches it is caught and told apart.
+    census: Option<Census>,
     rle: String,
 }
 
@@ -127,17 +135,26 @@ impl Analysis {
         };
         let pace = match &study.motion {
             Some(motion) => (motion.period as f32 / PERIOD_SECONDS).clamp(PACE.0, PACE.1),
-            None => PACE.0,
+            None => OPEN_PACE,
         };
+        let mut world = small_world(&study, rule);
+        // A pattern that repeats is left to go round its torus. One that does not would fill
+        // it: what it sends out leaves through an open border instead, and is counted.
+        let census = (study.motion.is_none()).then(|| {
+            world.open_border = true;
+            world.catching = true;
+            Census::with(Analyser::new(rule))
+        });
         self.studied += 1;
         self.subject = Some(Subject {
             number: self.studied,
             forms: analyser.forms(&study.start),
-            world: small_world(&study, rule),
+            world,
             rle: to_rle(&study.start),
             rule: rule.clone(),
             clock: 0.0,
             pace,
+            census,
             study,
         });
         self.note = None;
@@ -192,10 +209,16 @@ enum Finding {
     Period,
     Speed,
     Cells,
+    Changes,
     Size,
-    Parts,
+    Symmetry,
+    Pieces,
     Text,
 }
+
+/// The line under the small world's caption: what has left the small world.
+#[derive(Component, Default, Clone)]
+struct SmallTally;
 
 /// The line under the buttons.
 #[derive(Component, Default, Clone)]
@@ -290,6 +313,19 @@ pub fn analysis_panel() -> impl Scene {
             ),
             (#SmallCaption caption("") SmallCaption),
             (
+                // What left the small world: in the mono font, which has the arrows.
+                #SmallTally
+                Text("")
+                TextFont {
+                    font: FontSourceTemplate::Handle(fonts::MONO),
+                    font_size: FontSize::Px(12.0),
+                    weight: FontWeight::NORMAL,
+                }
+                ThemeTextColor(tokens::TEXT_DIM)
+                Node { display: Display::None }
+                SmallTally
+            ),
+            (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: px(5),
@@ -299,8 +335,10 @@ pub fn analysis_panel() -> impl Scene {
                     line("PERIOD", Finding::Period),
                     line("SPEED", Finding::Speed),
                     line("CELLS", Finding::Cells),
+                    line("CHANGES", Finding::Changes),
                     line("SIZE", Finding::Size),
-                    line("PARTS", Finding::Parts),
+                    line("SYMMETRY", Finding::Symmetry),
+                    line("PIECES", Finding::Pieces),
                     line("TEXT", Finding::Text),
                 ]
             ),
@@ -337,12 +375,11 @@ pub fn analysis_panel() -> impl Scene {
 /// One finding: its name and, next to it, what was found.
 fn line(label: &'static str, finding: Finding) -> impl Scene {
     let name = Name::new(format!("Study{finding:?}"));
-    // The mono font has the diagonal arrows, and the text is in it anyway.
-    let font = if matches!(finding, Finding::Speed | Finding::Text) { fonts::MONO } else { fonts::REGULAR };
+    let font = if in_mono(finding, "") { fonts::MONO } else { fonts::REGULAR };
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Baseline,
+            align_items: AlignItems::FlexStart,
             column_gap: px(10),
         }
         Children [
@@ -355,8 +392,10 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
                 }
                 ThemeTextColor(tokens::TEXT_DIM)
                 Node {
-                    width: px(56),
+                    width: px(66),
                     flex_shrink: 0.0,
+                    // Level with the first line of what was found, which is set larger.
+                    margin: UiRect::top(px(3)),
                 }
             ),
             (
@@ -426,6 +465,11 @@ fn run_small_world(time: Res<Time<Real>>, mut analysis: ResMut<Analysis>) {
         if steps >= 1.0 {
             subject.world.step_by(steps as i64);
             subject.clock -= steps;
+            if let Some(census) = subject.census.as_mut() {
+                for departure in subject.world.take_departures() {
+                    census.record(departure);
+                }
+            }
         }
     }
 }
@@ -451,7 +495,7 @@ fn draw_small_world(
         upload(world, &mut image);
     }
     let framing = Framing::fitted(world, size, 1.0 / node.inverse_scale_factor);
-    let params = GridParams::new(world, framing, &settings, EDGE, None, None);
+    let params = GridParams::new(world, framing, &settings, edge_of(world), None, None);
     GridMaterial::set(&mut materials, &assets.material, params);
 }
 
@@ -470,9 +514,11 @@ fn sync_panel(
     analysis: Res<Analysis>,
     stamp: Res<Stamp>,
     mut panel: Single<&mut Node, With<AnalysisPanel>>,
-    mut findings: Query<(&Finding, &mut Text)>,
+    mut findings: Query<(&Finding, &mut Text, &mut TextFont)>,
+    assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
-    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
+    mut tally: Single<(&mut Text, &mut Node), (With<SmallTally>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>, Without<AnalysisPanel>)>,
+    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallTally>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut note: Single<&mut Text, (With<Note>, Without<Finding>, Without<SelectHint>)>,
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut shown: Local<Option<Shown>>,
@@ -480,6 +526,17 @@ fn sync_panel(
     let display = if analysis.open { Display::Flex } else { Display::None };
     if panel.display != display {
         panel.display = display;
+    }
+    // What left the small world changes as it runs; the line is there only for a world with
+    // an open border.
+    if analysis.open {
+        let (text, node) = &mut *tally;
+        let said = analysis.subject.as_ref().map_or(String::new(), left_so_far);
+        let display = if said.is_empty() { Display::None } else { Display::Flex };
+        if node.display != display {
+            node.display = display;
+        }
+        text.set_if_neq(Text(said));
     }
     let now = Shown {
         subject: analysis.subject.as_ref().map(|subject| subject.number),
@@ -494,9 +551,12 @@ fn sync_panel(
     let now = shown.insert(now);
 
     let subject = analysis.subject.as_ref();
-    for (finding, mut text) in &mut findings {
+    for (finding, mut text, mut font) in &mut findings {
         let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
-        text.set_if_neq(Text(content));
+        let face = if in_mono(*finding, &content) { fonts::MONO } else { fonts::REGULAR };
+        if text.set_if_neq(Text(content)) {
+            font.font = FontSource::Handle(assets.load(face));
+        }
     }
     for mut text in &mut captions {
         let content = subject.map_or(String::new(), |subject| {
@@ -522,15 +582,18 @@ fn found(finding: Finding, subject: &Subject) -> String {
     let study = &subject.study;
     let motion = study.motion.as_ref();
     let travels = motion.is_some_and(|motion| motion.heading() != Heading::Still);
-    let generations = |n: u32| format!("{n} generation{}", if n == 1 { "" } else { "s" });
     match finding {
         Finding::What => match (study.still, travels, study.fate) {
             (true, ..) => "Still life".to_string(),
             (_, true, _) => "Spaceship".to_string(),
             (_, _, Fate::Returns { .. }) => "Oscillator".to_string(),
-            (_, _, Fate::Grows) => {
-                format!("Grows: {} cells after {}", study.cells.1, generations(study.generations))
+            // A gun's streams get too wide before they are too many cells: what grows while
+            // it flies apart grows.
+            (_, _, Fate::Grows | Fate::Scatters) if study.growth.is_some_and(|growth| growth >= GROWING) => {
+                let how = if study.growth >= Some(SPREADING) { "over the plane" } else { "along lines, as a gun does" };
+                format!("Grows {how}: {} cells after {}", study.cells.1, generations(study.generations))
             }
+            (_, _, Fate::Grows) => format!("Grows: {} cells after {}", study.cells.1, generations(study.generations)),
             (_, _, Fate::Scatters) => format!(
                 "Flies apart: {} cells across after {}",
                 study.extent.0.max(study.extent.1),
@@ -538,34 +601,38 @@ fn found(finding: Finding, subject: &Subject) -> String {
             ),
             (_, _, Fate::Undecided) => format!("Undecided after {}", generations(study.generations)),
         },
-        Finding::Period => match (study.still, study.fate) {
-            (true, _) => generations(1),
-            (false, Fate::Returns { period, displacement: (dx, dy) }) if travels => {
-                format!("{}, moving ({dx}, {dy})", generations(period))
+        Finding::Period => {
+            let sooner = match study.recurs {
+                Some((after, turn)) if !study.still => format!(" ({} after {after})", turned(turn)),
+                _ => String::new(),
+            };
+            match (study.still, study.fate) {
+                (true, _) => generations(1),
+                (false, Fate::Returns { period, displacement: (dx, dy) }) if travels => {
+                    format!("{}{sooner}, moving ({dx}, {dy})", generations(period))
+                }
+                (false, Fate::Returns { period, .. }) => format!("{}{sooner}", generations(period)),
+                _ => "—".to_string(),
             }
-            (false, Fate::Returns { period, .. }) => generations(period),
-            _ => "—".to_string(),
-        },
+        }
         Finding::Speed => match (motion, study.fate) {
             // The motion is that of the canonical form; the way it goes is as it lies.
             (Some(motion), Fate::Returns { displacement: (dx, dy), .. }) if travels => {
-                let speed = match motion.speed() {
-                    (1, 1) => "c".to_string(),
-                    (1, period) => format!("c/{period}"),
-                    (cells, period) => format!("{cells}c/{period}"),
-                };
-                let heading = match motion.heading() {
-                    Heading::Orthogonal => "orthogonal",
-                    Heading::Diagonal => "diagonal",
-                    _ => "oblique",
-                };
-                format!("{speed} {heading} {}", arrow(dx, dy))
+                format!("{} {} {}", speed(motion), heading(motion), arrow(dx, dy))
             }
             _ => "—".to_string(),
         },
         Finding::Cells => match study.cells {
             (fewest, most) if fewest == most => fewest.to_string(),
             (fewest, most) => format!("{fewest} to {most}"),
+        },
+        Finding::Changes => match study.fate {
+            _ if study.still => "none".to_string(),
+            Fate::Returns { displacement: (0, 0), .. } if study.stator > 0 => {
+                format!("{:.1} cells a generation, {} never change", study.heat, study.stator)
+            }
+            Fate::Returns { .. } => format!("{:.1} cells a generation", study.heat),
+            _ => "—".to_string(),
         },
         Finding::Size => {
             let (width, height) = bounding_box(&study.start);
@@ -575,16 +642,178 @@ fn found(finding: Finding, subject: &Subject) -> String {
                 format!("{width}×{height}, up to {}×{}", study.extent.0, study.extent.1)
             }
         }
-        Finding::Parts => match study.parts {
-            0 => "—".to_string(),
-            1 => "one piece".to_string(),
-            parts => format!("{parts} that never meet"),
+        Finding::Symmetry => match study.symmetry {
+            Symmetry::None => "none",
+            Symmetry::Mirror => "a mirror",
+            Symmetry::DiagonalMirror => "a mirror across a diagonal",
+            Symmetry::HalfTurn => "a half turn",
+            Symmetry::TwoMirrors => "mirrors both ways, so a half turn",
+            Symmetry::TwoDiagonalMirrors => "mirrors across both diagonals, so a half turn",
+            Symmetry::QuarterTurn => "a quarter turn",
+            Symmetry::All => "every turn and mirror",
+        }
+        .to_string(),
+        Finding::Pieces => match study.fate {
+            Fate::Returns { .. } => match study.parts {
+                1 => "one piece".to_string(),
+                parts => format!("{parts} that never meet"),
+            },
+            _ if study.pieces.is_empty() => "—".to_string(),
+            _ => pieces(&study.pieces, study.more_pieces),
         },
         Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
             Some((end, _)) => format!("{}…", &subject.rle[..end]),
             None => subject.rle.clone(),
         },
     }
+}
+
+/// What is set in the mono font: the text of the pattern, and whatever points a way, since
+/// the mono font is the one with the diagonal arrows.
+fn in_mono(finding: Finding, text: &str) -> bool {
+    matches!(finding, Finding::Speed | Finding::Text) || text.contains(['↖', '↑', '↗', '←', '→', '↙', '↓', '↘'])
+}
+
+fn generations(n: u32) -> String {
+    format!("{n} generation{}", if n == 1 { "" } else { "s" })
+}
+
+fn turned(turn: Turn) -> &'static str {
+    match turn {
+        Turn::Quarter => "turned a quarter",
+        Turn::Half => "turned about",
+        Turn::Mirror => "mirrored",
+        Turn::DiagonalMirror => "mirrored across a diagonal",
+    }
+}
+
+/// A speed as a fraction of the speed of light.
+fn speed(motion: &Motion) -> String {
+    match motion.speed() {
+        (1, 1) => "c".to_string(),
+        (1, period) => format!("c/{period}"),
+        (cells, period) => format!("{cells}c/{period}"),
+    }
+}
+
+fn heading(motion: &Motion) -> &'static str {
+    match motion.heading() {
+        Heading::Orthogonal => "orthogonal",
+        Heading::Diagonal => "diagonal",
+        _ => "oblique",
+    }
+}
+
+/// What a pattern came apart into, counted by what the pieces are: spaceships by their speed
+/// and way, oscillators by their period, and the rest by what became of them.
+fn pieces(pieces: &[Piece], more: usize) -> String {
+    let mut ships: Vec<(String, usize)> = Vec::new();
+    let mut periods: Vec<(u32, usize)> = Vec::new();
+    let (mut still, mut grow, mut scatter, mut unsettled, mut big) = (0, 0, 0, 0, 0);
+    for piece in pieces {
+        match piece.kind {
+            PieceKind::Spaceship { period, displacement } => {
+                let motion = Motion { period, displacement, canonical: Vec::new() };
+                let name = format!("{} {}", speed(&motion), arrow(displacement.0, displacement.1));
+                tally(&mut ships, name);
+            }
+            PieceKind::Oscillator { period } => tally(&mut periods, period),
+            PieceKind::StillLife => still += 1,
+            PieceKind::Grows => grow += 1,
+            PieceKind::Scatters => scatter += 1,
+            PieceKind::Undecided => unsettled += 1,
+            PieceKind::Unexamined => big += 1,
+        }
+    }
+    let mut said = Vec::new();
+    if !ships.is_empty() {
+        ships.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+        let flown: usize = ships.iter().map(|(_, count)| count).sum();
+        let mut kinds: Vec<String> = ships
+            .iter()
+            .take(KINDS_NAMED)
+            .map(|(name, count)| if *count > 1 { format!("{name} ×{count}") } else { name.clone() })
+            .collect();
+        if ships.len() > KINDS_NAMED {
+            kinds.push(counted(ships.len() - KINDS_NAMED, "one more kind", "more kinds"));
+        }
+        said.push(format!("{} ({})", counted(flown, "spaceship", "spaceships"), kinds.join(", ")));
+    }
+    if !periods.is_empty() {
+        periods.sort();
+        let swinging: usize = periods.iter().map(|(_, count)| count).sum();
+        let named: Vec<String> = periods.iter().map(|(period, _)| period.to_string()).collect();
+        let of = if periods.len() == 1 { "period" } else { "periods" };
+        said.push(format!("{} ({of} {})", counted(swinging, "oscillator", "oscillators"), named.join(", ")));
+    }
+    if still > 0 {
+        said.push(counted(still, "still life", "still lifes"));
+    }
+    if grow > 0 {
+        said.push(counted(grow, "one that grows", "that grow"));
+    }
+    if scatter > 0 {
+        said.push(counted(scatter, "one that flies apart", "that fly apart"));
+    }
+    if unsettled > 0 {
+        said.push(counted(unsettled, "one still changing", "still changing"));
+    }
+    if big > 0 {
+        said.push(counted(big, "one too big to follow", "too big to follow"));
+    }
+    if more > 0 {
+        said.push(format!("{more} more not followed"));
+    }
+    let total = pieces.len() + more;
+    let all = if total == 1 { "one piece".to_string() } else { format!("{total} pieces") };
+    format!("{all}: {}", said.join(", "))
+}
+
+/// Counts something up by name.
+fn tally<T: PartialEq>(counts: &mut Vec<(T, usize)>, name: T) {
+    match counts.iter_mut().find(|(known, _)| *known == name) {
+        Some((_, count)) => *count += 1,
+        None => counts.push((name, 1)),
+    }
+}
+
+/// "a spaceship", "3 spaceships"; "one that grows", "3 that grow".
+fn counted(n: usize, one: &str, many: &str) -> String {
+    match n {
+        1 if one.starts_with("one ") => one.to_string(),
+        1 => format!("{} {one}", if one.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }),
+        n => format!("{n} {many}"),
+    }
+}
+
+/// What has left the small world so far, for a pattern that never repeats.
+fn left_so_far(subject: &Subject) -> String {
+    let Some(census) = &subject.census else {
+        return String::new();
+    };
+    let (ships, others) = (census.ships(), census.others());
+    let mut kinds: Vec<&cas_core::census::Kind> = census.kinds().iter().collect();
+    kinds.sort_by_key(|kind| std::cmp::Reverse(kind.count));
+    let named: Vec<String> = kinds
+        .iter()
+        .take(KINDS_NAMED)
+        .map(|kind| {
+            let (dx, dy) = kind.motion.displacement;
+            let name = format!("{} {}", speed(&kind.motion), arrow(dx, dy));
+            if kind.count > 1 { format!("{name} ×{}", kind.count) } else { name }
+        })
+        .collect();
+    let mut said = match ships {
+        0 => "no spaceship has left it".to_string(),
+        _ => format!("{} left it ({})", counted(ships as usize, "spaceship", "spaceships"), named.join(", ")),
+    };
+    if kinds.len() > KINDS_NAMED {
+        said.push_str(&format!(", {}", counted(kinds.len() - KINDS_NAMED, "one more kind", "more kinds")));
+    }
+    if others > 0 {
+        said.push_str(&format!(", {} that were none", others));
+    }
+    format!("{said}, {} cells in it now", subject.world.population())
 }
 
 /// Which way a displacement points.

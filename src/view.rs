@@ -37,7 +37,7 @@ pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
 pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 /// The outline of the grid: the edge of the world, in the colour of the world; in that of the
 /// pattern while it catches cells.
-pub const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
+const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
 const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
 /// The blocks are what the rule rewrites.
 pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.22);
@@ -464,10 +464,14 @@ fn update_material(
         zoom: view.zoom,
         pixel_ratio: 1.0 / node.inverse_scale_factor,
     };
-    let edge = if universe.catching { CATCHING_EDGE } else { EDGE };
     let band = analysis.band.map(|(a, b)| (a.min(b), a.max(b)));
-    let params = GridParams::new(&universe, framing, &settings, edge, stamp.placement(&universe), band);
+    let params = GridParams::new(&universe, framing, &settings, edge_of(&universe), stamp.placement(&universe), band);
     GridMaterial::set(&mut materials, &assets.material, params);
+}
+
+/// The colour of a universe's edge: the world's, or the pattern's while it catches cells.
+pub fn edge_of(universe: &Universe) -> (Color, f32) {
+    if universe.catching { CATCHING_EDGE } else { EDGE }
 }
 
 pub fn linear(color: Color, alpha: f32) -> Vec4 {

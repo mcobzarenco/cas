@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::rules::BlockRule;
+use crate::{pattern::Analyser, rules::BlockRule};
 
 /// SplitMix64: tiny, fast and deterministic, which is all a random soup needs.
 #[derive(Clone, Debug)]
@@ -70,8 +70,15 @@ pub struct Departure {
 
 /// Live cells this close to each other, along both axes, belong to the same pattern.
 const PATTERN_REACH: i32 = 4;
-/// Something with this many cells or more is debris, not a pattern.
+/// Something with this many cells or more is debris, not a pattern; unless it is a dense
+/// stream of ships, which lie within reach of each other without ever meeting. Then what is
+/// within so far of the cell at the edge, up to so many cells, is followed for so many
+/// generations to see which of it goes with that cell. (Whatever the chain is cut short of
+/// lies too far away to make itself felt in that time: a change spreads a block a step.)
 pub const PATTERN_CELLS: usize = 20;
+const CHAIN_RADIUS: i32 = 32;
+const CHAIN_CELLS: usize = 200;
+const CHAIN_GENERATIONS: u32 = 8;
 
 impl Universe {
     pub fn new(width: usize, height: usize, rule: BlockRule) -> Self {
@@ -313,34 +320,51 @@ impl Universe {
         let wrap = |v: i32, size: i32| if (0..size).contains(&v) { v } else { v.rem_euclid(size) };
         let index = |(x, y): (i32, i32)| (wrap(y, height) * width + wrap(x, width)) as usize;
 
-        // Flood fill. Cells are taken out as they are found, which also marks them as seen.
-        let mut pattern = vec![(x as i32, y as i32)];
-        self.cells[index(pattern[0])] = 0;
+        // Flood fill, no further than a chain of ships would need. Cells are taken out as they
+        // are found, which also marks them as seen.
+        let seed = (x as i32, y as i32);
+        let mut pattern = vec![seed];
+        self.cells[index(seed)] = 0;
         let mut visited = 0;
-        while visited < pattern.len() && pattern.len() < PATTERN_CELLS {
+        let mut cut = false;
+        while visited < pattern.len() && pattern.len() < CHAIN_CELLS {
             let (cx, cy) = pattern[visited];
             visited += 1;
             for dy in -PATTERN_REACH..=PATTERN_REACH {
                 for dx in -PATTERN_REACH..=PATTERN_REACH {
                     let cell = (cx + dx, cy + dy);
-                    if std::mem::take(&mut self.cells[index(cell)]) != 0 {
+                    let near = (cell.0 - seed.0).abs().max((cell.1 - seed.1).abs()) <= CHAIN_RADIUS;
+                    if !near {
+                        cut |= self.cells[index(cell)] != 0;
+                    } else if std::mem::take(&mut self.cells[index(cell)]) != 0 {
                         pattern.push(cell);
                     }
                 }
             }
         }
-        if pattern.len() >= PATTERN_CELLS {
-            // Debris: it goes back.
-            for &cell in &pattern {
-                self.cells[index(cell)] = 1;
-            }
-            return None;
-        }
         let offset = self.partition_offset() as i32;
         let block_corner = |v: i32| v - ((v - offset) & 1);
         let (x0, y0) = (block_corner(x as i32), block_corner(y as i32));
+        let relative = |cells: &[(i32, i32)]| cells.iter().map(|&(x, y)| (x - x0, y - y0)).collect::<Vec<_>>();
+        if cut || pattern.len() >= PATTERN_CELLS {
+            // Too much for a pattern, or more beyond: debris, or a dense stream. What goes
+            // with the cell at the edge is taken if that is a pattern; the rest goes back.
+            let own = match pattern.len() {
+                CHAIN_CELLS.. => Vec::new(),
+                _ => Analyser::new(&self.rule).with_first(&relative(&pattern), self.phase, CHAIN_GENERATIONS),
+            };
+            let own: Vec<(i32, i32)> = own.iter().map(|&(x, y)| (x + x0, y + y0)).collect();
+            let is_pattern = !own.is_empty() && own.len() < PATTERN_CELLS;
+            for cell in pattern.iter().filter(|cell| !is_pattern || !own.contains(cell)) {
+                self.cells[index(*cell)] = 1;
+            }
+            if !is_pattern {
+                return None;
+            }
+            pattern = own;
+        }
         Some(Departure {
-            cells: pattern.iter().map(|&(x, y)| (x - x0, y - y0)).collect(),
+            cells: relative(&pattern),
             phase: self.phase,
         })
     }
@@ -744,6 +768,29 @@ mod tests {
         let cells = &universe.take_departures()[0].cells;
         // Found from (0, 6); after one step the blocks start on odd coordinates.
         assert_eq!(cells, &[(1, 1), (0, 1), (-1, 4)]);
+    }
+
+    #[test]
+    fn a_dense_formation_at_the_edge_is_taken_ship_by_ship() {
+        // Six of the lightest ships abreast, six rows apart: within reach of each other, so
+        // that together they are too many cells for a pattern, and yet they never meet.
+        let mut universe = Universe::new(64, 64, rule("single-rotation"));
+        for ship in 0..6 {
+            for (x, y) in [(26, 13), (27, 13), (26, 15), (27, 15)] {
+                universe.set(x + 30, y + 6 * ship, true);
+            }
+        }
+        universe.catching = true;
+        let mut census = crate::census::Census::with(crate::pattern::Analyser::new(universe.rule()));
+        for _ in 0..100 {
+            universe.step(true);
+            for departure in universe.take_departures() {
+                assert!(departure.cells.len() < PATTERN_CELLS);
+                census.record(departure);
+            }
+        }
+        assert_eq!(universe.population(), 0, "every ship was taken");
+        assert_eq!((census.ships(), census.others()), (6, 0), "and taken whole");
     }
 
     #[test]

@@ -63,7 +63,92 @@ pub struct Study {
     pub parts: usize,
     /// For how many generations it was followed.
     pub generations: u32,
+    /// The turns and mirrors of the square under which the pattern, as it set out, is itself.
+    pub symmetry: Symmetry,
+    /// Whether the pattern is one of its own turns or mirrors (of those the rule allows) before
+    /// it is back in its shape, and after how many generations it first is: a glider is its
+    /// mirror image half way through its period.
+    pub recurs: Option<(u32, Turn)>,
+    /// How many cells change from one generation to the next, on average.
+    pub heat: f32,
+    /// How many cells were alive, where they are, the whole time it was followed.
+    pub stator: usize,
+    /// For a pattern that did not come back to its shape: the power of time its cells went
+    /// with, 2 for one that spreads over the plane, 1 for one that grows along lines, as a gun
+    /// does, 0 for one that did not grow to speak of. (A gun's streams are often too wide
+    /// before they are too many cells, so its fate is that it flies apart; its growth tells it
+    /// from a few ships parting.)
+    pub growth: Option<f32>,
+    /// For a pattern that did not come back to its shape: what it had become, taken apart
+    /// into the pieces that go their own ways, the largest first, each followed on its own;
+    /// and how many pieces beyond those were not looked at.
+    pub pieces: Vec<Piece>,
+    pub more_pieces: usize,
 }
+
+/// The turns and mirrors of the square under which a pattern is itself, as it sits on the
+/// block grid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Symmetry {
+    None,
+    /// One mirror, left to right or top to bottom.
+    Mirror,
+    /// One mirror, across a diagonal.
+    DiagonalMirror,
+    HalfTurn,
+    /// Left to right and top to bottom, which make a half turn.
+    TwoMirrors,
+    TwoDiagonalMirrors,
+    QuarterTurn,
+    /// Every turn and mirror.
+    All,
+}
+
+/// A turn or a mirror of the square, short of leaving it as it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Turn {
+    Quarter,
+    Half,
+    Mirror,
+    DiagonalMirror,
+}
+
+/// A piece of what a pattern became: cells that go their own way, apart from the rest, and
+/// what they do on their own.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Piece {
+    pub cells: usize,
+    pub kind: PieceKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PieceKind {
+    StillLife,
+    Oscillator { period: u32 },
+    Spaceship { period: u32, displacement: (i32, i32) },
+    Grows,
+    Scatters,
+    Undecided,
+    /// Too big to follow.
+    Unexamined,
+}
+
+/// What a pattern became is followed for so many more generations to see which of its cells
+/// still meet (long enough to tell apart what is parting, short enough that a gun's own
+/// piece is the gun and not its whole stream); the pieces that do not are then followed on
+/// their own, the largest first, each for so many generations and so far beyond its own
+/// width, until so much work (cells times generations) has been spent on them; a piece with
+/// more cells than this is not followed.
+const PIECE_WINDOW: u32 = 64;
+const PIECE_GENERATIONS: u32 = 512;
+const PIECE_WORK: u64 = 4_000_000;
+const PIECE_EXTENT: i32 = 128;
+const PIECE_CELLS: usize = 400;
+/// A pattern whose cells go with a higher power of time than this spreads over the plane,
+/// and what it spreads into is no pieces; one whose cells go with a lower power than
+/// [`GROWING`] is not growing at all.
+pub const SPREADING: f32 = 1.5;
+pub const GROWING: f32 = 0.5;
 
 /// The directions a pattern can travel in, as far as a square grid tells them apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,9 +208,9 @@ pub struct Analyser {
     /// complement acts in one and the same way on what differs from its vacuum, however
     /// the vacuum flickers underneath.
     tables: Vec<BlockRule>,
-    /// The orientations under which the rule looks the same: a pattern turned or flipped by
-    /// one of them is the same pattern, travelling another way.
-    orientations: Vec<Orientation>,
+    /// The orientations under which the rule looks the same, as indices into [`ORIENTATIONS`]:
+    /// a pattern turned or flipped by one of them is the same pattern, travelling another way.
+    orientations: Vec<usize>,
     /// Where to stop: a pattern that has not repeated after this many generations, or has
     /// grown beyond this many cells or this extent, is not recognised.
     pub max_generations: u32,
@@ -144,9 +229,8 @@ impl Analyser {
         tables.truncate(period);
         Self {
             tables,
-            orientations: ORIENTATIONS
-                .into_iter()
-                .filter(|orientation| rule.commutes_with(orientation.block))
+            orientations: (0..ORIENTATIONS.len())
+                .filter(|&i| rule.commutes_with(ORIENTATIONS[i].block))
                 .collect(),
             max_generations: 8192,
             max_cells: 256,
@@ -173,7 +257,7 @@ impl Analyser {
         };
         let (canonical, displacement) = phases
             .iter()
-            .flat_map(|form| self.orientations.iter().map(move |o| reorient(form, moved, o)))
+            .flat_map(|form| self.orientations.iter().map(move |&i| reorient(form, moved, &ORIENTATIONS[i])))
             .min_by(|(a, a_moved), (b, b_moved)| {
                 let reading = |cells: &[Cell]| cells.iter().map(|&(x, y)| (y, x)).collect::<Vec<_>>();
                 (Reverse(a_moved), area(a), reading(a)).cmp(&(Reverse(b_moved), area(b), reading(b)))
@@ -196,25 +280,49 @@ impl Analyser {
         if cells.is_empty() {
             return None;
         }
-        let mut start = Vec::new();
-        let (mut fewest, mut most) = (usize::MAX, 0);
-        let (mut widest, mut highest) = (0, 0);
+        let start = self.start(cells, phase);
+        let cycle = self.tables.len() as u32;
+        let (mut fewest, mut most) = (start.len(), start.len());
+        let (mut widest, mut highest) = extent(&start);
         let mut still = true;
         let mut generations = 0;
-        let fate = self.run(cells, phase, |_| {}, |from, pattern, moved| {
-            if start.is_empty() {
-                start = from.to_vec();
-            }
-            generations += 1;
-            fewest = fewest.min(pattern.len());
-            most = most.max(pattern.len());
-            let (width, height) = extent(pattern);
-            widest = widest.max(width);
-            highest = highest.max(height);
-            // The frame moves with the blocks; the cells themselves must not have.
-            let in_place = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1));
-            still &= in_place.eq(from.iter().copied());
-        });
+        // The cells where they lie, a generation ago and throughout; how many changed in all;
+        // how many there were at every generation; and the last form.
+        let mut before = start.clone();
+        let mut throughout = start.clone();
+        let mut changed = 0;
+        let mut populations = Vec::new();
+        let mut last = start.clone();
+        let (mut recurs, mut cycles) = (None, 0);
+        let fate = self.run(
+            cells,
+            phase,
+            |form| {
+                // Every time the tables start over the form is on the same footing as the
+                // start: the first time it is one of the start's turns or mirrors is noted.
+                if cycles > 0 && recurs.is_none() {
+                    recurs = self.turn_into(&start, form).map(|turn| (cycles * cycle, turn));
+                }
+                cycles += 1;
+            },
+            |_, pattern, moved| {
+                generations += 1;
+                fewest = fewest.min(pattern.len());
+                most = most.max(pattern.len());
+                let (width, height) = extent(pattern);
+                widest = widest.max(width);
+                highest = highest.max(height);
+                // The frame moves with the blocks; the cells themselves need not have.
+                let in_place: Vec<Cell> = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1)).collect();
+                still &= in_place == start;
+                changed += differing(&before, &in_place);
+                throughout = common(&throughout, &in_place);
+                before = in_place;
+                populations.push(pattern.len());
+                last.clear();
+                last.extend_from_slice(pattern);
+            },
+        );
         let motion = match fate {
             Fate::Returns { .. } => self.analyse(cells, phase),
             _ => None,
@@ -223,19 +331,132 @@ impl Analyser {
             Fate::Returns { period, .. } => self.parts(&start, 0, period).len(),
             _ => 0,
         };
+        let growth = match fate {
+            Fate::Returns { .. } => None,
+            _ => Some(growth_of(&populations)),
+        };
+        // What spreads over the plane is one thing, not pieces.
+        let (pieces, more_pieces) = match fate {
+            Fate::Returns { .. } => (Vec::new(), 0),
+            _ if growth.is_some_and(|growth| growth >= SPREADING) => (Vec::new(), 0),
+            _ => self.pieces(&last),
+        };
         Some(Study {
             fate,
             motion,
             still,
-            cells: (fewest.min(start.len()), most.max(start.len())),
-            extent: {
-                let (width, height) = extent(&start);
-                (widest.max(width), highest.max(height))
-            },
+            cells: (fewest, most),
+            extent: (widest, highest),
             parts,
             generations,
+            symmetry: symmetry_of(&start),
+            recurs,
+            heat: changed as f32 / generations.max(1) as f32,
+            stator: throughout.len(),
+            growth,
+            pieces,
+            more_pieces,
             start,
         })
+    }
+
+    /// The pattern settled and taken to the start of the tables' cycle, as [`Study::start`]
+    /// has it.
+    fn start(&self, cells: &[Cell], phase: usize) -> Vec<Cell> {
+        let mut pattern = cells.to_vec();
+        settle(&mut pattern);
+        let mut phase = phase % self.tables.len();
+        while phase != 0 {
+            advance(&mut pattern, self.tables[phase].table());
+            phase = (phase + 1) % self.tables.len();
+        }
+        pattern
+    }
+
+    /// The turn or mirror, of those the rule allows, that takes `form` into `start`, if one
+    /// does.
+    fn turn_into(&self, start: &[Cell], form: &[Cell]) -> Option<Turn> {
+        self.orientations
+            .iter()
+            .filter(|&&i| i != 0)
+            .find(|&&i| reorient(form, (0, 0), &ORIENTATIONS[i]).0 == start)
+            .map(|&i| turn(i))
+    }
+
+    /// What became of a pattern that did not come back to its shape: its last form taken
+    /// apart into the pieces that go their own ways, the largest first, each followed on its
+    /// own for a while; and how many pieces beyond those were left alone.
+    ///
+    /// Which cells belong together is not a matter of distance: the ships of a stream fly
+    /// closer to each other than the two halves of some ships lie. So the form is followed
+    /// for a while longer with every cell's descent kept track of, as [`Analyser::parts`]
+    /// does, and cells that have not come to share a block by then go their own ways.
+    fn pieces(&self, cells: &[Cell]) -> (Vec<Piece>, usize) {
+        let mut groups: Vec<usize> = (0..cells.len()).collect();
+        let mut pattern: Vec<(Cell, usize)> = cells.iter().copied().zip(0..).collect();
+        // Whole cycles of the tables, so that the pieces are at the start of one.
+        let window = PIECE_WINDOW.next_multiple_of(self.tables.len() as u32) as usize;
+        for table in self.tables.iter().cycle().take(window) {
+            advance_groups(&mut pattern, table.table(), &mut groups);
+        }
+        let mut all: Vec<(usize, Vec<Cell>)> = Vec::new();
+        for &(cell, group) in &pattern {
+            let group = root(&mut groups, group);
+            match all.iter_mut().find(|piece| piece.0 == group) {
+                Some(piece) => piece.1.push(cell),
+                None => all.push((group, vec![cell])),
+            }
+        }
+        all.sort_by_key(|(_, piece)| Reverse(piece.len()));
+        let mut analyser = Analyser {
+            tables: self.tables.clone(),
+            orientations: self.orientations.clone(),
+            max_generations: PIECE_GENERATIONS,
+            max_cells: 0,
+            max_extent: PIECE_EXTENT,
+        };
+        let mut work = PIECE_WORK;
+        let mut pieces = Vec::new();
+        for (_, piece) in &all {
+            if work == 0 {
+                break;
+            }
+            let kind = if piece.len() > PIECE_CELLS {
+                PieceKind::Unexamined
+            } else {
+                analyser.max_cells = (4 * piece.len()).max(64);
+                let (width, height) = extent(piece);
+                analyser.max_extent = PIECE_EXTENT.max(width.max(height) + PIECE_EXTENT / 2);
+                let (fate, still, growth, generations) = analyser.follow(piece, 0);
+                work = work.saturating_sub(piece.len() as u64 * generations as u64);
+                match (fate, still) {
+                    (Fate::Returns { displacement: (0, 0), .. }, true) => PieceKind::StillLife,
+                    (Fate::Returns { period, displacement: (0, 0) }, false) => PieceKind::Oscillator { period },
+                    (Fate::Returns { period, displacement }, _) => PieceKind::Spaceship { period, displacement },
+                    // A gun among the pieces is too wide before it is too many cells too.
+                    (Fate::Grows | Fate::Scatters, _) if growth >= GROWING => PieceKind::Grows,
+                    (Fate::Grows, _) => PieceKind::Grows,
+                    (Fate::Scatters, _) => PieceKind::Scatters,
+                    (Fate::Undecided, _) => PieceKind::Undecided,
+                }
+            };
+            pieces.push(Piece { cells: piece.len(), kind });
+        }
+        let more = all.len() - pieces.len();
+        (pieces, more)
+    }
+
+    /// The fate of a pattern; whether it kept still on the way; the power of time its cells
+    /// went with; and for how many generations it was followed.
+    fn follow(&self, cells: &[Cell], phase: usize) -> (Fate, bool, f32, u32) {
+        let mut still = true;
+        let mut populations = Vec::new();
+        let fate = self.run(cells, phase, |_| {}, |from, pattern, moved| {
+            let in_place = pattern.iter().map(|&(x, y)| (x + moved.0, y + moved.1));
+            still &= in_place.eq(from.iter().copied());
+            populations.push(pattern.len());
+        });
+        (fate, still, growth_of(&populations), populations.len() as u32)
     }
 
     /// A pattern filed at the start of the tables' cycle, as it is at every generation of the
@@ -263,14 +484,8 @@ impl Analyser {
         mut seen: impl FnMut(&[Cell]),
         mut each: impl FnMut(&[Cell], &[Cell], (i32, i32)),
     ) -> Fate {
-        let mut phase = phase % self.tables.len();
-        let mut pattern = cells.to_vec();
-        settle(&mut pattern);
         // Forms are only comparable where the same table comes next: go to the first one.
-        while phase != 0 {
-            advance(&mut pattern, self.tables[phase].table());
-            phase = (phase + 1) % self.tables.len();
-        }
+        let mut pattern = self.start(cells, phase);
         let start = pattern.clone();
         let mut moved = (0, 0);
         let mut generation = 0;
@@ -293,6 +508,23 @@ impl Analyser {
                 return Fate::Undecided;
             }
         }
+    }
+
+    /// The cells of a pattern that go with its first cell: those that come to share a block
+    /// with it, or with cells that did, within `generations`. The ships of a dense stream lie
+    /// within reach of each other without ever meeting; this tells the one at the edge of the
+    /// grid from the ones behind it.
+    pub fn with_first(&self, cells: &[Cell], phase: usize, generations: u32) -> Vec<Cell> {
+        let mut groups: Vec<usize> = (0..cells.len()).collect();
+        let mut pattern: Vec<(Cell, usize)> = cells.iter().copied().zip(0..).collect();
+        for table in self.tables.iter().cycle().skip(phase).take(generations as usize) {
+            advance_groups(&mut pattern, table.table(), &mut groups);
+        }
+        let first = root(&mut groups, 0);
+        (0..cells.len())
+            .filter(|&index| root(&mut groups, index) == first)
+            .map(|index| cells[index])
+            .collect()
     }
 
     /// The pattern taken apart into the groups of cells that never meet, where cells meet by
@@ -414,6 +646,83 @@ fn reorient(cells: &[Cell], moved: (i32, i32), orientation: &Orientation) -> (Ve
     settle(&mut turned);
     let (origin, tip) = ((orientation.cell)((0, 0)), (orientation.cell)(moved));
     (turned, (tip.0 - origin.0, tip.1 - origin.1))
+}
+
+/// The power of time that a pattern's cells went with, from how many it had at each
+/// generation: from what it gained half way and in the end, so that a gun with a long stream
+/// behind it still counts as growing along lines. 0 for a pattern that did not grow by a
+/// quarter at least: what it gained is then no more than a flicker.
+fn growth_of(populations: &[usize]) -> f32 {
+    let count = populations.len();
+    if count < 2 {
+        return 0.0;
+    }
+    let (first, half_way, end) = (populations[0], populations[count / 2 - 1], populations[count - 1]);
+    if (end as f32) < 1.25 * first as f32 {
+        return 0.0;
+    }
+    let gained = |cells: usize| cells.saturating_sub(first).max(1) as f32;
+    (gained(end) / gained(half_way)).log2().clamp(0.0, 3.0)
+}
+
+/// The turn or mirror that an orientation is.
+fn turn(orientation: usize) -> Turn {
+    match orientation {
+        1 | 3 => Turn::Quarter,
+        2 => Turn::Half,
+        4 | 5 => Turn::Mirror,
+        _ => Turn::DiagonalMirror,
+    }
+}
+
+/// The turns and mirrors under which a settled pattern is itself, as it sits on the blocks.
+fn symmetry_of(cells: &[Cell]) -> Symmetry {
+    let itself = |i: usize| reorient(cells, (0, 0), &ORIENTATIONS[i]).0 == cells;
+    let quarter = itself(1) && itself(3);
+    let half = itself(2);
+    let mirror = itself(4) || itself(5);
+    let diagonal = itself(6) || itself(7);
+    match (quarter, half, mirror, diagonal) {
+        (true, _, true, true) => Symmetry::All,
+        (true, ..) => Symmetry::QuarterTurn,
+        (_, true, true, _) => Symmetry::TwoMirrors,
+        (_, true, _, true) => Symmetry::TwoDiagonalMirrors,
+        (_, true, ..) => Symmetry::HalfTurn,
+        (_, _, true, _) => Symmetry::Mirror,
+        (_, _, _, true) => Symmetry::DiagonalMirror,
+        _ => Symmetry::None,
+    }
+}
+
+/// How many cells two sorted patterns do not have in common.
+fn differing(a: &[Cell], b: &[Cell]) -> u64 {
+    let key = |&(x, y): &Cell| (y, x);
+    let (mut i, mut j, mut apart) = (0, 0, 0);
+    while i < a.len() && j < b.len() {
+        match key(&a[i]).cmp(&key(&b[j])) {
+            std::cmp::Ordering::Less => (i, apart) = (i + 1, apart + 1),
+            std::cmp::Ordering::Greater => (j, apart) = (j + 1, apart + 1),
+            std::cmp::Ordering::Equal => (i, j) = (i + 1, j + 1),
+        }
+    }
+    (apart + (a.len() - i) + (b.len() - j)) as u64
+}
+
+/// The cells two sorted patterns have in common.
+fn common(a: &[Cell], b: &[Cell]) -> Vec<Cell> {
+    let key = |&(x, y): &Cell| (y, x);
+    let (mut i, mut j, mut both) = (0, 0, Vec::new());
+    while i < a.len() && j < b.len() {
+        match key(&a[i]).cmp(&key(&b[j])) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                both.push(a[i]);
+                (i, j) = (i + 1, j + 1);
+            }
+        }
+    }
+    both
 }
 
 /// Width and height of the bounding box.
@@ -639,8 +948,8 @@ mod tests {
             let expected = analyse("single-rotation", rle);
             let mut pattern = from_rle(rle).unwrap();
             for _ in 0..expected.period.min(60) {
-                for orientation in &analyser.orientations {
-                    let (turned, _) = reorient(&pattern, (0, 0), orientation);
+                for &orientation in &analyser.orientations {
+                    let (turned, _) = reorient(&pattern, (0, 0), &ORIENTATIONS[orientation]);
                     assert_eq!(analyser.analyse(&turned, 0).as_ref(), Some(&expected), "{rle}");
                 }
                 advance(&mut pattern, analyser.tables[0].table());
@@ -675,35 +984,80 @@ mod tests {
     #[test]
     fn a_study_says_what_a_pattern_does() {
         let analyser = Analyser::new(&rule("single-rotation"));
-        // The lightest spaceship: of a piece, four cells throughout.
+        // The lightest spaceship: of a piece, four cells throughout, two dominoes that mirror
+        // each other top to bottom. The rule has no mirrors, so it is never one of its own
+        // orientations before its period is up, whatever its shape.
         let ship = analyser.study(&from_rle("b2o2$b2o").unwrap(), 0).unwrap();
         assert_eq!(ship.fate, Fate::Returns { period: 12, displacement: (2, 0) });
         assert_eq!(ship.motion.as_ref().map(|m| m.speed()), Some((1, 6)));
         assert!(!ship.still);
         assert_eq!((ship.cells, ship.parts, ship.generations), ((4, 4), 1, 12));
         assert_eq!(ship.start, from_rle("b2o2$b2o").unwrap());
-        // A lone cell goes round in four generations.
+        assert_eq!((ship.symmetry, ship.recurs), (Symmetry::Mirror, None));
+        assert!(ship.heat > 0.0 && ship.stator == 0 && ship.growth.is_none() && ship.pieces.is_empty());
+        // A lone cell goes round in four generations, a quarter turn at a time: two cells
+        // change every generation, and none stays. In the corner of its block, it is itself
+        // only across the diagonal through that corner.
         let cell = analyser.study(&[(0, 0)], 0).unwrap();
         assert_eq!(cell.fate, Fate::Returns { period: 4, displacement: (0, 0) });
         assert!(!cell.still && cell.extent == (1, 1));
+        assert_eq!((cell.symmetry, cell.recurs), (Symmetry::DiagonalMirror, Some((1, Turn::Quarter))));
+        assert_eq!((cell.heat, cell.stator), (2.0, 0));
         // A block straddling the partitions never changes: a still life. (Cells are relative
         // to a corner of the blocks the next step rewrites, so this one lies across two of
-        // them, and across two of the other partition's as well.)
+        // them, and across two of the other partition's as well.) Turned a quarter it would
+        // straddle them the other way, so it has the two mirrors but not the quarter turn.
         let block = analyser.study(&[(0, 1), (1, 1), (0, 2), (1, 2)], 0).unwrap();
         assert_eq!(block.fate, Fate::Returns { period: 2, displacement: (0, 0) });
         assert!(block.still);
+        assert_eq!((block.symmetry, block.heat, block.stator), (Symmetry::TwoMirrors, 0.0, 4));
         // Two ships side by side are two patterns.
         let mut pair = from_rle("b2o2$b2o").unwrap();
         pair.extend(from_rle("b2o2$b2o").unwrap().iter().map(|&(x, y)| (x, y + 6)));
         assert_eq!(analyser.study(&pair, 0).unwrap().parts, 2);
-        // A pattern that grows is followed until it has too many cells.
+        // A pattern that grows is followed until it has too many cells. This one spreads
+        // over the plane: its cells go with the square of time, and it is all one piece,
+        // which is not taken apart.
         let mut small = Analyser::new(&rule("espca-0925bf"));
         small.max_cells = 50;
         let disk = small.study(&[(0, 0)], 0).unwrap();
         assert_eq!(disk.fate, Fate::Grows);
         assert!(disk.cells.1 > 50 && disk.extent.0 > 4 && disk.generations > 4, "{disk:?}");
         assert_eq!((disk.motion, disk.parts), (None, 0));
+        assert!(disk.growth.is_some_and(|growth| growth >= SPREADING), "{:?}", disk.growth);
+        assert!(disk.pieces.is_empty());
         assert_eq!(analyser.study(&[], 0), None);
+    }
+
+    #[test]
+    fn what_a_pattern_came_apart_into_is_told_piece_by_piece() {
+        // Two of the lightest ships, one turned about, flying away from each other: too far
+        // apart soon enough, and then each is a spaceship on its own.
+        let mut analyser = Analyser::new(&rule("single-rotation"));
+        analyser.max_extent = 40;
+        let mut pair = from_rle("b2o2$b2o").unwrap();
+        let (back, _) = reorient(&pair, (0, 0), &ORIENTATIONS[2]);
+        pair.extend(back.iter().map(|&(x, y)| (x - 10, y)));
+        let study = analyser.study(&pair, 0).unwrap();
+        assert_eq!(study.fate, Fate::Scatters);
+        let kinds: Vec<PieceKind> = study.pieces.iter().map(|piece| piece.kind).collect();
+        assert!(
+            kinds.contains(&PieceKind::Spaceship { period: 12, displacement: (2, 0) })
+                && kinds.contains(&PieceKind::Spaceship { period: 12, displacement: (-2, 0) })
+                && kinds.len() == 2,
+            "{kinds:?}"
+        );
+        assert_eq!((study.more_pieces, study.symmetry), (0, Symmetry::HalfTurn));
+
+        // A gun from a single cell: it grows along lines, and what it had sent out by the time
+        // it was given up on is spaceships.
+        let mut analyser = Analyser::new(&rule("four-way-gun"));
+        analyser.max_cells = 200;
+        let gun = analyser.study(&[(0, 0)], 0).unwrap();
+        assert_eq!(gun.fate, Fate::Grows);
+        assert!(gun.growth.is_some_and(|growth| growth < SPREADING), "{:?}", gun.growth);
+        let ships = gun.pieces.iter().filter(|piece| matches!(piece.kind, PieceKind::Spaceship { .. })).count();
+        assert!(ships >= 4 && ships + 1 >= gun.pieces.len(), "{:?}", gun.pieces);
     }
 
     #[test]
@@ -991,3 +1345,7 @@ mod morita {
         }
     }
 }
+
+
+
+

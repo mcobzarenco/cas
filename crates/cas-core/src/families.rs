@@ -646,7 +646,7 @@ mod tests {
         // a vacuum that goes through a cycle.
         assert_eq!(weighted.len(), 216_480);
         assert_eq!(weighted.iter().filter(|rule| rule.table()[0] == 0).count(), 107_664);
-        assert_eq!(distinct(weighted.clone()).len(), 20_743);
+        assert_eq!(distinct(weighted.clone()).len(), 20_729);
         for rule in weighted.iter().step_by(97) {
             let Population::Weighted(weights) = rule.population() else {
                 panic!("{rule} keeps no weight");
@@ -671,6 +671,7 @@ mod tests {
         // linear besides.
         let momentum = family("momentum").rules();
         assert_eq!(momentum.len(), 228);
+        assert_eq!(distinct(momentum.clone()).len(), 41);
         assert!(momentum.contains(&preset("hpp-gas")) && momentum.contains(&preset("swap-on-diagonal")));
         assert!(family("linear").holds(&preset("swap-on-diagonal")));
         assert_eq!(family("linear").count(ENUMERABLE), Some(322_560));

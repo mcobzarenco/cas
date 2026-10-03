@@ -241,13 +241,13 @@ impl Watch {
 /// Recognises patterns of one rule.
 #[derive(Clone)]
 pub struct Analyser {
-    /// The rule relative to its vacuum: the tables it goes through, one for each generation
-    /// until they repeat. That can be sooner than the vacuum does: a rule that is its own
-    /// complement acts in one and the same way on what differs from its vacuum, however
-    /// the vacuum flickers underneath.
+    /// The world of the rule ([`BlockRule::world`]): the tables it goes through as it acts
+    /// on what differs from its vacuum, one for each generation until they repeat.
     tables: Vec<BlockRule>,
-    /// The orientations under which the rule looks the same, as indices into [`ORIENTATIONS`]:
-    /// a pattern turned or flipped by one of them is the same pattern, travelling another way.
+    /// The orientations under which that world looks the same, as indices into
+    /// [`ORIENTATIONS`]: a pattern turned or flipped by one of them is the same pattern,
+    /// travelling another way. They are those of every one of the tables, which may be more
+    /// than the rule's own: a vacuum can have less symmetry than what happens on it.
     orientations: Vec<usize>,
     /// Where to stop: a pattern that has not repeated after this many generations, or has
     /// grown beyond this many cells or this extent, is not recognised.
@@ -260,18 +260,11 @@ pub struct Analyser {
 
 impl Analyser {
     pub fn new(rule: &BlockRule) -> Self {
-        let mut tables = rule.relative_to_vacuum();
-        let repeats_after = |period: &usize| {
-            let later = tables.iter().cycle().skip(*period);
-            tables.len().is_multiple_of(*period) && tables.iter().zip(later).all(|(a, b)| a == b)
-        };
-        let period = (1..=tables.len()).find(repeats_after).unwrap_or(tables.len());
-        tables.truncate(period);
+        let tables = rule.world();
+        let looks_the_same = |&i: &usize| tables.iter().all(|table| table.commutes_with(ORIENTATIONS[i].block));
         Self {
+            orientations: (0..ORIENTATIONS.len()).filter(looks_the_same).collect(),
             tables,
-            orientations: (0..ORIENTATIONS.len())
-                .filter(|&i| rule.commutes_with(ORIENTATIONS[i].block))
-                .collect(),
             max_generations: 8192,
             max_cells: 256,
             max_extent: 256,
@@ -1043,6 +1036,24 @@ mod tests {
         }
         // Critters is not its own complement: there the two generations differ.
         assert_eq!(Analyser::new(&rule("critters")).tables.len(), 2);
+    }
+
+    #[test]
+    fn a_world_may_look_the_same_where_its_vacuum_does_not() {
+        // Empty space under this rule goes through two diagonals, which no quarter turn leaves
+        // alone: the rule looks the same after a half turn only. What differs from the vacuum
+        // looks the same after every turn, and so a ship flying down and the same ship flying
+        // right are one kind.
+        let rule: BlockRule = "6,2,7,5,14,3,15,11,4,0,12,1,10,8,13,9".parse().unwrap();
+        assert_eq!(rule.vacuum_cycle(), [0, 6, 15, 9]);
+        assert!(rule.commutes_with(rotate_180) && !rule.commutes_with(rotate_cw));
+        let analyser = Analyser::new(&rule);
+        assert_eq!(analyser.orientations, [0, 1, 2, 3]);
+        let ship = vec![(1, 0), (1, 2), (2, 2), (3, 1)];
+        let (turned, _) = reorient(&ship, (0, 0), &ORIENTATIONS[1]);
+        let (down, right) = (analyser.analyse(&ship, 0).unwrap(), analyser.analyse(&turned, 0).unwrap());
+        assert_eq!((down.period, down.heading()), (68, Heading::Orthogonal));
+        assert_eq!(down, right);
     }
 
     #[test]

@@ -306,8 +306,9 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
 
 * **Identity** and **Inverse** (the rule that undoes the current one) replace the table.
   **Canonical** replaces it with the rule's canonical form, the one table that stands for every
-  rule making the same world: the least among its turns and mirrors and the generations of its
-  vacuum's cycle it could begin at, which is the one the search measures. A preset is not always
+  rule making the same world: the least among its turns and mirrors, the generations of its
+  vacuum's cycle it could begin at and the vacuums it could have, which is the one the search
+  measures. A preset is not always
   in canonical form: Critters' is Critters turned, so the menu then says *Custom* of the same
   world.
 * **Random** draws a rule. Left alone it is any of the 16! permutations, nearly all of which turn
@@ -510,15 +511,15 @@ everywhere else: Critters conserves cells.
 | property | the rules | tables | worlds |
 |----------|-----------|--------|--------|
 | `quarter-turn` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 |
-| `half-turn` | look the same after a half turn | 1 105 920 | 146 252 |
-| `mirror`, `flip` | look the same in a mirror, left to right or top to bottom (the same worlds, turned) | 1 105 920 | 287 732 |
+| `half-turn` | look the same after a half turn | 1 105 920 | 146 040 |
+| `mirror`, `flip` | look the same in a mirror, left to right or top to bottom (the same worlds, turned) | 1 105 920 | 287 455 |
 | `diagonal`, `anti-diagonal` | look the same in a mirror across a diagonal | 15 482 880 | sampled |
-| `conserving` | patterns keep their number of cells | 845 040 | 79 706 |
-| `weighted` | patterns keep a weighted number of cells and not their number; `weights=1,2,4,1` names the weights of the corners | 216 480 | 20 743 |
-| `momentum` | patterns keep their momentum, a cell's corner being the way it is going, as Morita reads it | 228 | 44 |
+| `conserving` | patterns keep their number of cells | 845 040 | 79 612 |
+| `weighted` | patterns keep a weighted number of cells and not their number; `weights=1,2,4,1` names the weights of the corners | 216 480 | 20 729 |
+| `momentum` | patterns keep their momentum, a cell's corner being the way it is going, as Morita reads it | 228 | 41 |
 | `parity` | patterns keep the parity of their number of cells | 1.6 billion | sampled |
 | `turning` | every block becomes a turn or a mirror of itself: Single rotation, the billiard ball machine, the HPP gas | 27 648 | 3 808 |
-| `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933) | | 2 351, 24 995, 263 691 |
+| `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933) | | 2 351, 24 995, 263 646 |
 | `linear` | patterns superpose: the rule is affine over the field of two elements | 322 560 | 2 606 |
 | `involution` | the rule is its own inverse | 46 million | sampled |
 | `complement` | dead and alive are interchangeable | 10 million | sampled |
@@ -528,11 +529,12 @@ everywhere else: Critters conserves cells.
 *Tables* is how many rules have the property, *worlds* how many are left to measure: rules that
 make the same world are measured once, those that differ only by a turn or a mirror, by the
 generation of the vacuum's cycle they begin at (Critters, and Critters with dead and alive
-exchanged), or by a vacuum that flickers and changes nothing else. A world takes 7 to 15 ms on
+exchanged), or by the vacuum alone: one that flickers where another stands still, or has
+another texture, while patterns do the same over both. A world takes 7 to 15 ms on
 four threads, the tame ones longest: the half-turn family 17 minutes, the turning rules one.
 
 Together the properties cut each other down to size, which is how to get at the ones too large
-to go through: `diagonal+conserving` is 272 worlds, `half-turn+involution` 2 728,
+to go through: `diagonal+conserving` is 241 worlds, `half-turn+involution` 2 695,
 `mirror+flip` 200, `quarter-turn+mirror` (every turn and mirror) 40. Some have nothing in common:
 no rule keeps a weight of its own and looks the same after a half turn. A family of more than
 eight million tables is not gone through but sampled: `--limit` rules of it (1000 unless said)

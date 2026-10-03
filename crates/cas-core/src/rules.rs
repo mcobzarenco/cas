@@ -525,6 +525,22 @@ impl BlockRule {
             .collect()
     }
 
+    /// The world the rule makes: the tables it goes through as it acts on what differs from
+    /// the vacuum, one for each generation until they repeat. That can be sooner than the
+    /// vacuum does: a rule that is its own complement acts in one and the same way however
+    /// its vacuum flickers underneath. Two rules that go through the same tables do the same
+    /// to every pattern, whatever their vacuums look like.
+    pub fn world(&self) -> Vec<BlockRule> {
+        let mut tables = self.relative_to_vacuum();
+        let repeats_after = |period: &usize| {
+            let later = tables.iter().cycle().skip(*period);
+            tables.len().is_multiple_of(*period) && tables.iter().zip(later).all(|(a, b)| a == b)
+        };
+        let period = (1..=tables.len()).find(repeats_after).unwrap_or(tables.len());
+        tables.truncate(period);
+        tables
+    }
+
     pub fn population(&self) -> Population {
         let conserves = |rule: &BlockRule| {
             (0..16u8).all(|state| popcount(rule.table[state as usize]) == popcount(state))
@@ -592,26 +608,39 @@ impl BlockRule {
 
     /// The rule as it looks when the plane is turned or mirrored by `transform`.
     pub fn seen_through(&self, transform: fn(u8) -> u8) -> BlockRule {
-        let mut table = [0; 16];
-        for block in 0..16u8 {
-            table[transform(block) as usize] = transform(self.table[block as usize]);
-        }
-        BlockRule::new(table).expect("a permutation relabelled is a permutation")
+        BlockRule::new(seen_through(&self.table, transform)).expect("a permutation relabelled is a permutation")
     }
 
-    /// The canonical form of the rule: of all the rules that differ from this one only in how
-    /// one looks at them, turned or mirrored, begun at another generation of the vacuum's
-    /// cycle, or with a vacuum that flickers and changes nothing else, the one whose table
-    /// comes first. One table to stand for them all.
+    /// The canonical form of the rule: of all the rules that make the same world, the one whose
+    /// table comes first. One table to stand for them all.
+    ///
+    /// They are the rules that differ from this one only in how one looks at them: turned or
+    /// mirrored; begun at another generation of the world's cycle; or with another vacuum
+    /// under the same world ([`BlockRule::world`]), be it one that only flickers where this
+    /// one stands still, or one of another texture.
     pub fn canonical(&self) -> BlockRule {
-        // A rule that is its own complement acts on what differs from its vacuum in one
-        // way at every generation: that way is the rule to look at.
-        let relative = self.relative_to_vacuum();
-        let flickers_only = relative.iter().all(|table| *table == relative[0]);
-        let begun = if flickers_only { vec![relative[0].clone()] } else { self.begun_later() };
-        let turned = |rule: &BlockRule| TURNS_AND_MIRRORS.map(|transform| rule.seen_through(transform));
-        let seen = begun.iter().flat_map(turned).chain(begun.iter().cloned());
-        seen.min_by_key(|rule| rule.table).expect("the rule itself is among them")
+        let world = self.world();
+        let mut least: Option<[u8; 16]> = None;
+        let mut consider = |table: [u8; 16]| {
+            if least.is_none_or(|least| table < least) {
+                least = Some(table);
+            }
+        };
+        // The world begun at every generation of its cycle, over every vacuum that makes it:
+        // the empty block may become anything, as long as what differs from the vacuum still
+        // goes through the same tables. And each of those rules through every turn and mirror.
+        for begun in 0..world.len() {
+            for empty in 0..16u8 {
+                let table = world[begun].table.map(|outcome| outcome ^ empty);
+                if goes_through(&table, &world, begun) {
+                    consider(table);
+                    for transform in TURNS_AND_MIRRORS {
+                        consider(seen_through(&table, transform));
+                    }
+                }
+            }
+        }
+        BlockRule::new(least.expect("the rule itself is among them")).expect("a permutation relabelled is a permutation")
     }
 
     /// The rule as it is for a world that begins at a later generation of the vacuum's cycle,
@@ -619,6 +648,7 @@ impl BlockRule {
     /// them what differs from the vacuum goes through the same tables, only begun elsewhere:
     /// they are one world, seen some generations apart. Under Critters, whose vacuum flips,
     /// the other one is Critters with dead and alive exchanged.
+    #[cfg(test)]
     pub(crate) fn begun_later(&self) -> Vec<BlockRule> {
         let vacuum = self.vacuum_cycle();
         let later = |(generation, relative): (usize, &BlockRule)| {
@@ -715,6 +745,33 @@ impl FromStr for BlockRule {
                 .map_err(|_| RuleError::Entry(entry.to_string()).to_string())?;
         }
         Self::new(table).map_err(|error| error.to_string())
+    }
+}
+
+/// A table as it looks when the plane is turned or mirrored by `transform`.
+fn seen_through(table: &[u8; 16], transform: fn(u8) -> u8) -> [u8; 16] {
+    let mut seen = [0; 16];
+    for block in 0..16u8 {
+        seen[transform(block) as usize] = transform(table[block as usize]);
+    }
+    seen
+}
+
+/// Does a rule with this table go through the tables of `world`, from the one at `begun` on
+/// and round again, as it acts on what differs from its own vacuum?
+fn goes_through(table: &[u8; 16], world: &[BlockRule], begun: usize) -> bool {
+    let (mut vacuum, mut generation) = (0u8, 0);
+    loop {
+        let after = table[vacuum as usize];
+        let expected = &world[(begun + generation) % world.len()].table;
+        if (0..16u8).any(|block| table[(block ^ vacuum) as usize] ^ after != expected[block as usize]) {
+            return false;
+        }
+        (vacuum, generation) = (rotate_180(after), generation + 1);
+        // The vacuum is back at the empty block: the world must be back at its beginning.
+        if vacuum == 0 {
+            return generation % world.len() == 0;
+        }
     }
 }
 
@@ -1192,6 +1249,57 @@ mod tests {
         // So are two guns of the search: ESPCA-f6b580 and ESPCA-fd1560.
         let gun = BlockRule::from_espca("f6b580").unwrap();
         assert_eq!(BlockRule::from_espca("fd1560").unwrap().canonical(), gun.canonical());
+    }
+
+    #[test]
+    fn a_world_is_one_whatever_vacuum_lies_under_it() {
+        let rule = |table: &str| table.parse::<BlockRule>().unwrap();
+        // Two rules whose empty space flips, between nothing and everything under the one
+        // and between nothing and one diagonal under the other. What differs from the vacuum
+        // goes through the same two tables under both: one world, and one canonical form.
+        let solid = rule("15,7,11,3,13,5,9,1,8,6,10,2,12,4,14,0");
+        let striped = rule("9,1,13,5,11,3,15,7,14,0,12,4,10,2,8,6");
+        assert_eq!((solid.vacuum_cycle(), striped.vacuum_cycle()), (vec![0, 15], vec![0, 9]));
+        assert_eq!(solid.world(), striped.world());
+        assert_eq!(solid.world().len(), 2);
+        assert_eq!(solid.canonical(), striped.canonical());
+        // Two more, whose worlds are a quarter turn of each other over vacuums that are not.
+        let (a, b) = (rule("6,14,2,10,13,12,0,8,7,15,3,11,5,4,1,9"), rule("15,1,11,3,13,5,9,7,14,6,10,2,12,4,8,0"));
+        let turned: Vec<BlockRule> = a.world().iter().map(|table| table.seen_through(rotate_cw)).collect();
+        assert_eq!(turned, b.world());
+        assert_eq!(a.canonical(), b.canonical());
+        // The world of a rule whose vacuum only flickers is one table: the rule without it.
+        let flickering = BlockRule::from_espca("fb3510").unwrap();
+        assert_eq!(flickering.world(), [BlockRule::from_espca("04caef").unwrap()]);
+
+        // The canonical form makes the world of the rule it stands for, turned or mirrored
+        // at most and begun wherever, and is the same for all that do.
+        let mut state = 5u64;
+        let mut random = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state >> 33
+        };
+        let rules = PRESETS.iter().map(|preset| preset.rule()).chain((0..300).map(|_| BlockRule::random(&mut random)));
+        for rule in rules.collect::<Vec<_>>() {
+            let canonical = rule.canonical();
+            assert_eq!(canonical.canonical(), canonical, "{rule}");
+            for transform in TURNS_AND_MIRRORS {
+                assert_eq!(rule.seen_through(transform).canonical(), canonical, "{rule}");
+            }
+            let (world, mut stood_for) = (rule.world(), canonical.world());
+            let same = |stood_for: &[BlockRule]| {
+                let seen = |transform: Option<fn(u8) -> u8>| -> Vec<BlockRule> {
+                    stood_for.iter().map(|table| transform.map_or(table.clone(), |transform| table.seen_through(transform))).collect()
+                };
+                seen(None) == world || TURNS_AND_MIRRORS.iter().any(|&transform| seen(Some(transform)) == world)
+            };
+            let mut found = false;
+            for _ in 0..stood_for.len() {
+                found |= same(&stood_for);
+                stood_for.rotate_left(1);
+            }
+            assert!(found, "{rule} and {canonical} make different worlds");
+        }
     }
 
     #[test]

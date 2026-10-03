@@ -4,7 +4,11 @@
 cargo run --features dev            # dynamic linking: much faster incremental builds
 cargo test --release --workspace
 cargo clippy --release --workspace --all-targets
+cargo fmt --all                     # 120 columns, short things on one line: rustfmt.toml
 ```
+
+The last three run on every push (`.github/workflows/ci.yml`), with warnings as errors. The rig
+scripts below need a window and a GPU, and are run by hand.
 
 ## Test rig
 

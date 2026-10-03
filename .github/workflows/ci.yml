@@ -1,0 +1,27 @@
+# What `cargo` can check without a window: the formatting, the lints and the tests. The rig
+# scripts in `rig/` drive the app itself and need a display and a GPU; they are run by hand.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      # Bevy's native Wayland windows need these headers at build time.
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --release --workspace --all-targets -- -D warnings
+      - run: cargo test --release --workspace

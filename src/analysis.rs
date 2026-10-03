@@ -75,10 +75,14 @@ const SHOWS_AFTER: f32 = 0.15;
 const LONGEST_FRAME: f32 = 0.25;
 /// So many characters of the pattern's text are shown; Copy copies all of it.
 const TEXT_SHOWN: usize = 36;
-/// The size of what the findings say.
+/// The size of what the findings say, the width of their names, and the gap after those.
 const VALUE_SIZE: f32 = 12.0;
+const NAME_COLUMN: f32 = 66.0;
+const NAME_GAP: f32 = 10.0;
 /// So many kinds of spaceship, and of oscillator, are listed among the pieces.
 const KINDS_LISTED: usize = 8;
+/// In the lines that sum the pieces up: the width of how many there are, and of what they are.
+const SORT_COLUMNS: (f32, f32) = (24.0, 62.0);
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -93,8 +97,9 @@ pub struct Analysis {
     /// How many patterns were studied: numbers the subjects, which tells a new one from the
     /// one before.
     studied: u64,
-    /// The list of the pieces is folded away into its line of text.
-    folded: bool,
+    /// The pieces are listed under their line, kind by kind and with their pictures. Folded
+    /// away, a line to each sort of piece says what there is.
+    listing: bool,
     /// What the last button did.
     note: Option<String>,
 }
@@ -563,7 +568,6 @@ pub fn analysis_panel() -> impl Scene {
                                         display: Display::None,
                                         flex_direction: FlexDirection::Column,
                                         row_gap: px(4),
-                                        margin: UiRect::vertical(px(3)),
                                     }
                                     PiecesList
                                 ),
@@ -628,7 +632,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
         Node {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
-            column_gap: px(10),
+            column_gap: px(NAME_GAP),
         }
         Row
         Children [
@@ -641,7 +645,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
                 }
                 ThemeTextColor(tokens::TEXT_DIM)
                 Node {
-                    width: px(66),
+                    width: px(NAME_COLUMN),
                     flex_shrink: 0.0,
                     // Level with the first line of what was found, which is set larger.
                     margin: UiRect::top(px(3)),
@@ -667,8 +671,8 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
 }
 
 /// The line of the findings about the pieces: its name, with the mark that turns as the list
-/// under it opens, and what there is to say in a line. A click on the line opens the list or
-/// folds it away.
+/// under it opens, and how many pieces there are. A click on the line opens the list or folds
+/// it away.
 fn pieces_line() -> impl Scene {
     let name = Name::new("StudyPieces");
     bsn! {
@@ -676,16 +680,16 @@ fn pieces_line() -> impl Scene {
         Node {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::FlexStart,
-            column_gap: px(10),
+            column_gap: px(NAME_GAP),
         }
         Row
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
-        on(|_: On<Pointer<Click>>, mut analysis: ResMut<Analysis>| analysis.folded = !analysis.folded)
+        on(|_: On<Pointer<Click>>, mut analysis: ResMut<Analysis>| analysis.listing = !analysis.listing)
         Children [
             (
                 Node {
-                    width: px(66),
+                    width: px(NAME_COLUMN),
                     flex_shrink: 0.0,
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
@@ -727,6 +731,66 @@ fn pieces_line() -> impl Scene {
                 template_value(name)
                 template_value(Finding::Pieces)
                 template_value(Pickable::IGNORE)
+            ),
+        ]
+    }
+}
+
+/// A sort of piece in a line of its own, level with what the findings say: how many there
+/// are, what they are, and in dimmer letters the kinds among them.
+fn sort_line(index: usize, sort: &Sort) -> impl Scene {
+    let name = Name::new(format!("PieceSort{index}"));
+    let (count, what) = (count(sort.count), sort.name);
+    let value = |text: String, color: Color| {
+        bsn! {
+            Text(text)
+            TextFont {
+                font: FontSourceTemplate::Handle(fonts::REGULAR),
+                font_size: FontSize::Px(VALUE_SIZE),
+                weight: FontWeight::NORMAL,
+            }
+            TextColor(color)
+        }
+    };
+    // The arrows among the kinds are set in the face that has them all.
+    let kinds: Vec<_> = runs(&sort.kinds)
+        .into_iter()
+        .map(|(run, arrows)| {
+            let font = if arrows { fonts::MONO } else { fonts::REGULAR };
+            bsn! {
+                TextSpan(run)
+                TextFont {
+                    font: FontSourceTemplate::Handle(font),
+                    font_size: FontSize::Px(VALUE_SIZE),
+                    weight: FontWeight::NORMAL,
+                }
+                TextColor(palette::LIGHT_GRAY_2)
+            }
+        })
+        .collect();
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::FlexStart,
+            column_gap: px(6),
+            margin: UiRect::left(px(NAME_COLUMN + NAME_GAP)),
+            flex_shrink: 0.0,
+        }
+        template_value(name)
+        Children [
+            (
+                value(count, palette::LIGHT_GRAY_1)
+                TextLayout { justify: Justify::Right }
+                Node { width: px(SORT_COLUMNS.0), flex_shrink: 0.0 }
+            ),
+            (
+                value(what.to_string(), palette::LIGHT_GRAY_1)
+                Node { min_width: px(SORT_COLUMNS.1), flex_shrink: 0.0 }
+            ),
+            (
+                value(String::new(), palette::LIGHT_GRAY_2)
+                Node { flex_grow: 1.0, flex_basis: px(0) }
+                Children [ {kinds} ]
             ),
         ]
     }
@@ -952,8 +1016,6 @@ struct Shown {
     selecting: bool,
     /// The subject is picked up, to be put down on the grid.
     holding: bool,
-    /// The list of pieces is folded away, and their line says it all.
-    folded: bool,
     note: Option<String>,
 }
 
@@ -993,7 +1055,6 @@ fn sync_panel(
         selecting: analysis.selecting,
         // A stamp from the list is the list's business.
         holding: stamp.is_held() && stamp.kind.is_none(),
-        folded: analysis.folded,
         note: analysis.note.clone(),
     };
     if shown.as_ref() == Some(&now) {
@@ -1007,7 +1068,7 @@ fn sync_panel(
         show(part, during.is_now(subject.is_some(), busy.is_some()));
     }
     for (line, finding, mut text, color, row) in &mut findings {
-        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject, !analysis.folded));
+        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
         // A line with nothing to say is not there.
         show(row.parent(), content != "—");
         // The line is set in its own face, and the arrows in it in the one that has them
@@ -1100,7 +1161,7 @@ fn label_pause(analysis: Res<Analysis>, mut label: Single<&mut Text, With<PauseL
 }
 
 /// What the study says, in words.
-fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
+fn found(finding: Finding, subject: &Subject) -> String {
     let study = &subject.study;
     let motion = study.motion.as_ref();
     let travels = motion.is_some_and(|motion| motion.heading() != Heading::Still);
@@ -1180,18 +1241,12 @@ fn found(finding: Finding, subject: &Subject, listing: bool) -> String {
             Symmetry::All => "every turn and mirror",
         }
         .to_string(),
-        Finding::Pieces => match study.period {
-            Some(_) => match study.parts {
-                1 => "one piece".to_string(),
-                parts => format!("{parts} that never meet"),
-            },
-            None if study.pieces.is_empty() => "—".to_string(),
-            // With the pieces listed underneath, the line only says how many there are.
-            None if listing && lists(&study.pieces) => match study.pieces.len() + study.more_pieces {
-                1 => "one piece".to_string(),
-                total => format!("{total} pieces"),
-            },
-            None => pieces(&study.pieces, study.more_pieces),
+        // How many there are; what they are is said underneath, sort by sort or kind by kind.
+        Finding::Pieces => match (study.period, study.parts, study.pieces.len() + study.more_pieces) {
+            (Some(_), 1, _) | (None, _, 1) => "one piece".to_string(),
+            (Some(_), parts, _) => format!("{} that never meet", count(parts)),
+            (None, _, 0) => "—".to_string(),
+            (None, _, total) => format!("{} pieces", count(total)),
         },
         Finding::Text => match subject.rle.char_indices().nth(TEXT_SHOWN) {
             Some((end, _)) => format!("{}…", &subject.rle[..end]),
@@ -1255,79 +1310,91 @@ fn heading(motion: &Motion) -> &'static str {
     }
 }
 
-/// What a pattern came apart into, counted by what the pieces are: spaceships by their speed
-/// and way, oscillators by their period, and the rest by what became of them.
-fn pieces(pieces: &[Piece], more: usize) -> String {
-    let mut ships: Vec<(String, usize)> = Vec::new();
+/// A sort of piece, as a line of the summary has it: how many pieces are of it, what they are
+/// called, and a word on the kinds among them.
+#[derive(Debug, PartialEq)]
+struct Sort {
+    count: usize,
+    name: &'static str,
+    kinds: String,
+}
+
+/// What the pieces of a pattern are, sort by sort: the spaceships with their speeds and ways,
+/// the oscillators with their periods, the still lifes, and whatever else became of pieces.
+fn sorts(pieces: &[Piece], more: usize) -> Vec<Sort> {
+    let (ships, _) = listed(pieces);
+    let mut flying: Vec<(String, usize)> = Vec::new();
+    for kind in &ships {
+        tally(&mut flying, kind.first.clone(), kind.count);
+    }
     let mut periods: Vec<(u32, usize)> = Vec::new();
     let mut still = 0;
     for piece in pieces {
         match piece.kind {
-            PieceKind::Spaceship { period, displacement } => {
-                let motion = Motion { period, displacement, canonical: Vec::new() };
-                let name = format!("{} {}", speed(&motion), arrow(displacement.0, displacement.1));
-                tally(&mut ships, name);
-            }
-            PieceKind::Oscillator { period } => tally(&mut periods, period),
+            PieceKind::Oscillator { period } => tally(&mut periods, period, 1),
             PieceKind::StillLife => still += 1,
             _ => {}
         }
     }
-    let mut said = Vec::new();
-    if !ships.is_empty() {
-        ships.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
-        let flown: usize = ships.iter().map(|(_, count)| count).sum();
-        let mut kinds: Vec<String> = ships
-            .iter()
-            .take(KINDS_NAMED)
-            .map(|(name, count)| if *count > 1 { format!("{name} ×{count}") } else { name.clone() })
-            .collect();
-        if ships.len() > KINDS_NAMED {
-            kinds.push(counted(ships.len() - KINDS_NAMED, "one more kind", "more kinds"));
-        }
-        said.push(format!("{} ({})", counted(flown, "spaceship", "spaceships"), kinds.join(", ")));
-    }
-    if !periods.is_empty() {
-        periods.sort();
-        let swinging: usize = periods.iter().map(|(_, count)| count).sum();
-        let named: Vec<String> = periods.iter().map(|(period, _)| period.to_string()).collect();
-        let of = if periods.len() == 1 { "period" } else { "periods" };
-        said.push(format!("{} ({of} {})", counted(swinging, "oscillator", "oscillators"), named.join(", ")));
-    }
-    if still > 0 {
-        said.push(counted(still, "still life", "still lifes"));
-    }
-    said.extend(others(pieces, more));
-    let total = pieces.len() + more;
-    let all = if total == 1 { "one piece".to_string() } else { format!("{total} pieces") };
-    format!("{all}: {}", said.join(", "))
-}
-
-/// The pieces that neither travel nor stay as they are, counted by what became of them, and
-/// those that were not followed.
-fn others(pieces: &[Piece], more: usize) -> Vec<String> {
-    let so_many = |kind: PieceKind| pieces.iter().filter(|piece| piece.kind == kind).count();
-    let mut said = Vec::new();
-    for (kind, one, many) in [
-        (PieceKind::Grows, "one that grows", "that grow"),
-        (PieceKind::Scatters, "one that flies apart", "that fly apart"),
-        (PieceKind::Undecided, "one still changing", "still changing"),
-        (PieceKind::Unexamined, "one too big to follow", "too big to follow"),
+    // The commoner period first, and of two as common the shorter.
+    periods.sort_by_key(|&(period, count)| (std::cmp::Reverse(count), period));
+    let periods: Vec<(String, usize)> = periods.iter().map(|(period, count)| (period.to_string(), *count)).collect();
+    let of = if periods.len() == 1 { "period" } else { "periods" };
+    let so_many = |kinds: &[(String, usize)]| kinds.iter().map(|(_, count)| count).sum::<usize>();
+    let mut sorts = Vec::new();
+    for (count, one, many, kinds) in [
+        (so_many(&flying), "spaceship", "spaceships", commonest(&flying, "one more kind", "more kinds")),
+        (so_many(&periods), "oscillator", "oscillators", format!("{of} {}", commonest(&periods, "one more", "more"))),
+        (still, "still life", "still lifes", String::new()),
     ] {
-        match so_many(kind) {
-            0 => {}
-            count => said.push(counted(count, one, many)),
+        if count > 0 {
+            sorts.push(Sort { count, name: if count == 1 { one } else { many }, kinds });
         }
     }
-    if more > 0 {
-        said.push(format!("{more} more not followed"));
-    }
-    said
+    // "one that grows" is 1 "that grows" here, where the number has a column of its own.
+    let rest = others(pieces, more).into_iter().map(|(count, one, many)| Sort {
+        count,
+        name: if count == 1 { one.strip_prefix("one ").unwrap_or(one) } else { many },
+        kinds: String::new(),
+    });
+    sorts.extend(rest);
+    sorts
 }
 
-/// Are there pieces to list: ones that came back to their shape, which have a form to show?
-fn lists(pieces: &[Piece]) -> bool {
-    pieces.iter().any(|piece| !piece.form.is_empty())
+/// The commonest of some kinds by name, with how many there are of each where it is more than
+/// one, and how many kinds were left out. A line breaks between kinds: a name stays with its
+/// number, and the words about the rest stay together.
+fn commonest(kinds: &[(String, usize)], one_more: &str, more: &str) -> String {
+    let mut kinds: Vec<&(String, usize)> = kinds.iter().collect();
+    kinds.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+    let named: Vec<String> = kinds
+        .iter()
+        .take(KINDS_NAMED)
+        .map(|(name, count)| if *count > 1 && kinds.len() > 1 { format!("{name}\u{a0}×{count}") } else { name.clone() })
+        .collect();
+    match kinds.len().saturating_sub(KINDS_NAMED) {
+        0 => named.join(", "),
+        left => {
+            let rest = format!("and {}", counted(left, one_more, more)).replace(' ', "\u{a0}");
+            format!("{} {rest}", named.join(", "))
+        }
+    }
+}
+
+/// The pieces that neither travel nor stay as they are, by what became of them, and those
+/// that were not followed: how many, and what to call one of them and several.
+fn others(pieces: &[Piece], more: usize) -> Vec<(usize, &'static str, &'static str)> {
+    let so_many = |kind: PieceKind| pieces.iter().filter(|piece| piece.kind == kind).count();
+    [
+        (so_many(PieceKind::Grows), "one that grows", "that grow"),
+        (so_many(PieceKind::Scatters), "one that flies apart", "that fly apart"),
+        (so_many(PieceKind::Undecided), "one still changing", "still changing"),
+        (so_many(PieceKind::Unexamined), "one too big to follow", "too big to follow"),
+        (more, "one more not followed", "more not followed"),
+    ]
+    .into_iter()
+    .filter(|&(count, ..)| count > 0)
+    .collect()
 }
 
 /// A kind of piece as the list shows it: the form it is filed under, how it moves or what it
@@ -1401,8 +1468,9 @@ fn listed(pieces: &[Piece]) -> (Vec<Listed>, Vec<Listed>) {
     (ships, staying)
 }
 
-/// Lists the pieces of the pattern on display under their line of the findings, unless the
-/// list is folded away: the spaceships, then what stays where it is, then a word on the rest.
+/// Says what the pieces of the pattern on display are, under their line of the findings: sort
+/// by sort in a line each, or, with the list open, kind by kind with their pictures: the
+/// spaceships, then what stays where it is, then a word on the rest.
 fn list_pieces(
     analysis: Res<Analysis>,
     list: Single<Entity, With<PiecesList>>,
@@ -1412,14 +1480,16 @@ fn list_pieces(
     mut commands: Commands,
 ) {
     let subject = analysis.shown();
-    let now = (subject.map(|subject| subject.number), analysis.folded);
+    let now = (subject.map(|subject| subject.number), analysis.listing);
     if shown.replace(now) == Some(now) {
         return;
     }
-    let pieces = subject.map_or(&[][..], |subject| &subject.study.pieces);
+    let (pieces, more) = subject.map_or((&[][..], 0), |subject| (&subject.study.pieces[..], subject.study.more_pieces));
     let (ships, staying) = listed(pieces);
+    let sorts = sorts(pieces, more);
+    // The list has the pieces that came back to their shape: without any, there is none.
     let any = !ships.is_empty() || !staying.is_empty();
-    let listing = any && !analysis.folded;
+    let listing = any && analysis.listing;
     let mut show = |entity: Entity, shown: bool| {
         let display = if shown { Display::Flex } else { Display::None };
         if let Ok(mut node) = nodes.get_mut(entity)
@@ -1432,12 +1502,14 @@ fn list_pieces(
     let (mark, turned) = &mut *chevron;
     show(*mark, any);
     turned.rotation = if listing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
-    show(*list, listing);
+    show(*list, !sorts.is_empty());
     commands.entity(*list).despawn_related::<Children>();
+    let mut rows = Vec::new();
     if !listing {
+        rows.extend(sorts.iter().enumerate().map(|(index, sort)| commands.spawn_scene(sort_line(index, sort)).id()));
+        commands.entity(*list).add_children(&rows);
         return;
     }
-    let mut rows = Vec::new();
     let mut index = 0;
     for (title, kinds, ship) in [("SPACESHIPS", &ships, true), ("OSCILLATORS", &staying, false)] {
         if kinds.is_empty() {
@@ -1454,18 +1526,18 @@ fn list_pieces(
             rows.push(commands.spawn_scene(caption(format!("and {more}"))).id());
         }
     }
-    let rest = subject.map_or(Vec::new(), |subject| others(pieces, subject.study.more_pieces));
+    let rest: Vec<String> = others(pieces, more).iter().map(|&(count, one, many)| counted(count, one, many)).collect();
     if !rest.is_empty() {
         rows.push(commands.spawn_scene(caption(format!("Besides: {}.", rest.join(", ")))).id());
     }
     commands.entity(*list).add_children(&rows);
 }
 
-/// Counts something up by name.
-fn tally<T: PartialEq>(counts: &mut Vec<(T, usize)>, name: T) {
+/// Counts so many more of something up by name.
+fn tally<T: PartialEq>(counts: &mut Vec<(T, usize)>, name: T, more: usize) {
     match counts.iter_mut().find(|(known, _)| *known == name) {
-        Some((_, count)) => *count += 1,
-        None => counts.push((name, 1)),
+        Some((_, count)) => *count += more,
+        None => counts.push((name, more)),
     }
 }
 
@@ -1555,11 +1627,34 @@ mod tests {
             staying.iter().map(said).collect::<Vec<_>>(),
             [("oscillator".to_string(), "", 4, 1, 2), ("still life".to_string(), "", 1, 4, 1)]
         );
-        assert!(lists(&apart) && !lists(&apart[4..5]));
-        assert_eq!(others(&apart, 2), ["one that grows", "2 more not followed"]);
         assert_eq!(
-            pieces(&apart, 0),
-            "7 pieces: 3 spaceships (c/6 → ×2, c/6 ←), 2 oscillators (period 4), a still life, one that grows"
+            others(&apart, 2),
+            [(1, "one that grows", "that grow"), (2, "one more not followed", "more not followed")]
         );
+        // And summed up, a line to each sort.
+        let sort = |count, name, kinds: &str| Sort { count, name, kinds: kinds.to_string() };
+        assert_eq!(
+            sorts(&apart, 2),
+            [
+                sort(3, "spaceships", "c/6 ←→"),
+                sort(2, "oscillators", "period 4"),
+                sort(1, "still life", ""),
+                sort(1, "that grows", ""),
+                sort(2, "more not followed", ""),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_commonest_kinds_are_named() {
+        let kinds = |counts: &[(&str, usize)]| counts.iter().map(|&(name, count)| (name.to_string(), count)).collect();
+        let few: Vec<(String, usize)> = kinds(&[("16", 22), ("4", 215)]);
+        assert_eq!(commonest(&few, "one more", "more"), "4\u{a0}×215, 16\u{a0}×22");
+        let many: Vec<(String, usize)> = kinds(&[("8", 8), ("4", 215), ("16", 22), ("28", 4), ("36", 2)]);
+        assert_eq!(commonest(&many, "one more", "more"), "4\u{a0}×215, 16\u{a0}×22, 8\u{a0}×8 and\u{a0}2\u{a0}more");
+        let ships: Vec<(String, usize)> = kinds(&[("c/3 ↖↗↙↘", 189)]);
+        assert_eq!(commonest(&ships, "one more kind", "more kinds"), "c/3 ↖↗↙↘");
+        let four: Vec<(String, usize)> = kinds(&[("a", 1), ("b", 1), ("c", 1), ("d", 1)]);
+        assert_eq!(commonest(&four, "one more kind", "more kinds"), "a, b, c and\u{a0}one\u{a0}more\u{a0}kind");
     }
 }

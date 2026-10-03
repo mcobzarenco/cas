@@ -647,11 +647,30 @@ struct Reading<'w, 's> {
     spans: Query<'w, 's, &'static TextSpan>,
 }
 
+impl Reading<'_, '_> {
+    fn of(&self, entity: Entity) -> String {
+        // A text reads on through the spans that carry it on in another face or colour.
+        let text = |entity: Entity| {
+            let text = self.texts.get(entity).ok()?;
+            let carried = self.children.get(entity).into_iter().flatten();
+            let carried = carried.filter_map(|&span| self.spans.get(span).ok());
+            Some(carried.fold(text.to_string(), |read, span| read + &span.0))
+        };
+        // A node without text of its own, such as a button, reads as what is written in it.
+        let read = text(entity).unwrap_or_else(|| {
+            let within = self.children.iter_descendants(entity).filter_map(text);
+            within.collect::<Vec<_>>().join(" ")
+        });
+        // Space is space, of whatever kind and however much: a script has single spaces.
+        read.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+}
+
 /// Runs the script: one input step or one command per frame.
 fn drive(
     mut rig: ResMut<Rig>,
     mut input: Input,
-    nodes: Query<(Entity, &Name, &ComputedNode, &UiGlobalTransform, Has<Checked>, Option<&Text>)>,
+    nodes: Query<(Entity, &Name, &ComputedNode, &UiGlobalTransform, Has<Checked>)>,
     reading: Reading,
     screenshots: Query<(), With<Screenshot>>,
     mut app_exit: MessageWriter<AppExit>,
@@ -850,7 +869,7 @@ fn drive(
                 expect(playback.playing == expected, format!("expected playing to be {expected}"))?
             }
             Command::ExpectChecked { name, checked } => {
-                let (_, _, _, _, found, _) = node(&name)?;
+                let (.., found) = node(&name)?;
                 expect(found == checked, format!("expected {name} to be checked: {checked}"))?;
             }
             Command::ExpectShown { name, shown: expected } => {
@@ -858,23 +877,8 @@ fn drive(
                 expect(shown(computed) == expected, format!("expected {name} to be on display: {expected}"))?;
             }
             Command::ExpectText { name, text } => {
-                // A node without text of its own, such as a button, reads as its caption.
-                let (entity, .., found) = node(&name)?;
-                let found = match found {
-                    // A text reads on through the spans that carry it on in another face.
-                    Some(text) => {
-                        let carried = reading.children.get(entity).into_iter().flatten();
-                        let carried = carried.filter_map(|&span| reading.spans.get(span).ok());
-                        carried.fold(text.to_string(), |read, span| read + &span.0)
-                    }
-                    None => reading
-                        .children
-                        .iter_descendants(entity)
-                        .filter_map(|child| reading.texts.get(child).ok())
-                        .map(|text| text.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                };
+                let (entity, ..) = node(&name)?;
+                let found = reading.of(entity);
                 expect(found == text, format!("expected {name} to read {text:?}, found {found:?}"))?;
             }
             Command::ExpectCaught { ships, kinds } => {

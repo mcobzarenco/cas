@@ -35,19 +35,35 @@ struct GridParams {
     band_max: vec2<i32>,
     band_color: vec4<f32>,
     band_fill: f32,
-    // A pattern about to be placed, shown as a ghost: its colour, where its origin is, how
-    // many cells it has, and the cells, two to a vector.
+    // A pattern about to be placed, shown as a ghost: its colour, where on the grid the
+    // origin of its picture is, and how many cells wide and high the picture is (none for no
+    // stamp).
     stamp_color: vec4<f32>,
     stamp_origin: vec2<i32>,
-    stamp_count: u32,
-    stamp: array<vec4<i32>, 32>,
+    stamp_size: vec2<i32>,
 };
 
 @group(1) @binding(0) var<uniform> params: GridParams;
 @group(1) @binding(1) var cells: texture_2d<u32>;
+// The picture of the stamp: one byte per cell, as the cells are.
+@group(1) @binding(2) var stamp: texture_2d<u32>;
 
-// 1 if the cell containing `c` is drawn alive, 0 otherwise.
-fn alive_at(c: vec2<f32>) -> f32 {
+// 1 if the cell containing `c` is a cell of the stamp, which may reach round the torus.
+fn stamp_at(c: vec2<f32>) -> f32 {
+    let grid = vec2<i32>(params.grid_size);
+    let cell = ((vec2<i32>(floor(c)) - params.stamp_origin) % grid + grid) % grid;
+    if any(cell >= params.stamp_size) {
+        return 0.0;
+    }
+    return f32(textureLoad(stamp, cell, 0).r & 1u);
+}
+
+// 1 if the cell containing `c` is drawn alive, 0 otherwise; for the ghost, if it is a cell of
+// the stamp.
+fn alive_at(c: vec2<f32>, ghost: bool) -> f32 {
+    if ghost {
+        return stamp_at(c);
+    }
     let last = vec2<i32>(params.grid_size) - vec2<i32>(1);
     let cell = clamp(vec2<i32>(floor(c)), vec2<i32>(0), last);
     let corner = (vec2<u32>(cell) + u32(params.block_offset)) & vec2<u32>(1u);
@@ -55,16 +71,16 @@ fn alive_at(c: vec2<f32>) -> f32 {
     return f32((textureLoad(cells, cell, 0).r ^ vacuum) & 1u);
 }
 
-// Share of the pixel around cell coordinate `c` that is drawn alive.
-fn coverage_at(c: vec2<f32>) -> f32 {
+// Share of the pixel around cell coordinate `c` that is drawn alive, or that is the ghost's.
+fn coverage_at(c: vec2<f32>, ghost: bool) -> f32 {
     // Cells per pixel along one axis.
     let footprint = 1.0 / params.scale;
     if footprint <= 1.0 {
         // Four taps on a rotated grid: smooth cell edges at fractional zooms.
-        return 0.25 * (alive_at(c + footprint * vec2<f32>(-0.375, -0.125))
-            + alive_at(c + footprint * vec2<f32>(0.125, -0.375))
-            + alive_at(c + footprint * vec2<f32>(0.375, 0.125))
-            + alive_at(c + footprint * vec2<f32>(-0.125, 0.375)));
+        return 0.25 * (alive_at(c + footprint * vec2<f32>(-0.375, -0.125), ghost)
+            + alive_at(c + footprint * vec2<f32>(0.125, -0.375), ghost)
+            + alive_at(c + footprint * vec2<f32>(0.375, 0.125), ghost)
+            + alive_at(c + footprint * vec2<f32>(-0.125, 0.375), ghost));
     }
     // Zoomed out, several cells share the pixel: look at each of them, up to 8×8.
     let n = min(i32(ceil(footprint)), 8);
@@ -72,7 +88,7 @@ fn coverage_at(c: vec2<f32>) -> f32 {
     for (var j = 0; j < n; j++) {
         for (var i = 0; i < n; i++) {
             let tap = (vec2<f32>(f32(i), f32(j)) + 0.5) / f32(n) - 0.5;
-            alive += alive_at(c + tap * footprint);
+            alive += alive_at(c + tap * footprint, ghost);
         }
     }
     // A lone cell would fade away in the average, so any live cell lifts the pixel. The lift
@@ -86,23 +102,6 @@ fn stroke(distance: f32, width: f32) -> f32 {
     return clamp(0.5 * width + 0.5 - distance, 0.0, 1.0);
 }
 
-// 1 if the cell containing `c` is a cell of the stamp, which may reach round the torus.
-fn stamp_at(c: vec2<f32>) -> f32 {
-    if params.stamp_count == 0u {
-        return 0.0;
-    }
-    let grid = vec2<i32>(params.grid_size);
-    let rel = ((vec2<i32>(floor(c)) - params.stamp_origin) % grid + grid) % grid;
-    for (var i = 0u; i < params.stamp_count; i++) {
-        let pair = params.stamp[i / 2u];
-        let cell = select(pair.zw, pair.xy, (i & 1u) == 0u);
-        if all(cell == rel) {
-            return 1.0;
-        }
-    }
-    return 0.0;
-}
-
 @fragment
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     // Physical pixels from the centre of the node, then cell coordinates.
@@ -113,8 +112,11 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let q = max(-c, c - params.grid_size) * params.scale;
     let outside = max(q.x, q.y);
 
-    var color = mix(params.dead.rgb, params.alive.rgb, coverage_at(c));
-    color = mix(color, params.stamp_color.rgb, params.stamp_color.a * stamp_at(c));
+    var color = mix(params.dead.rgb, params.alive.rgb, coverage_at(c, false));
+    // The ghost is drawn as the cells are, so that it shows as well from far away.
+    if params.stamp_size.x > 0 {
+        color = mix(color, params.stamp_color.rgb, params.stamp_color.a * coverage_at(c, true));
+    }
 
     // Cell grid: a line on every integer coordinate.
     let to_cell_edge = abs(fract(c + 0.5) - 0.5) * params.scale;

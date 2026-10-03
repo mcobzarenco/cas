@@ -44,7 +44,7 @@ use crate::{
     icons,
     sim::{Settings, SimSystems},
     ui::{Aspect, caption, field_frame, group_digits, panel_title, side_panel},
-    view::{Framing, GridMaterial, GridParams, Stamp, cell_image, edge_of, upload},
+    view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
 };
 
 pub const ANALYSIS_WIDTH: f32 = 396.0;
@@ -400,7 +400,9 @@ impl FromWorld for SmallAssets {
     fn from_world(world: &mut World) -> Self {
         let empty = Universe::new(WORLD_SIDES.0, WORLD_SIDES.0, BlockRule::identity());
         let image = world.resource_mut::<Assets<Image>>().add(cell_image(&empty));
-        let material = world.resource_mut::<Assets<GridMaterial>>().add(GridMaterial::new(image.clone()));
+        // Nothing is ever put down in the small world: its material has the picture of no stamp.
+        let no_stamp = world.resource_mut::<Assets<Image>>().add(blank_image());
+        let material = world.resource_mut::<Assets<GridMaterial>>().add(GridMaterial::new(image.clone(), no_stamp));
         Self { image, material, empty }
     }
 }

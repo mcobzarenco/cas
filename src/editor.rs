@@ -376,10 +376,10 @@ pub fn editor_panel() -> impl Scene {
                             mut editor: ResMut<RuleEditor>| {
                             let representative = universe.rule().representative();
                             if representative == *universe.rule() {
-                                editor.say("Already the one that stands for all that make this world: turned, mirrored, or begun at another generation of the vacuum's cycle.", universe.rule());
+                                editor.say("This table already represents its world: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
                             } else {
                                 universe.set_rule(representative);
-                                editor.say("The same world as before, under the table that stands for it: the least among its turns and mirrors, and the generations of the vacuum's cycle it could begin at.", universe.rule());
+                                editor.say("The same world under the table that represents it: the first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
                             }
                         })
                     ),

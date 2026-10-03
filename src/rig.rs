@@ -638,13 +638,21 @@ impl Input<'_, '_> {
     }
 }
 
+/// What a node of the interface reads as: its own text with the spans that carry it on, or,
+/// for a node without text of its own, the texts in it.
+#[derive(SystemParam)]
+struct Reading<'w, 's> {
+    children: Query<'w, 's, &'static Children>,
+    texts: Query<'w, 's, &'static Text>,
+    spans: Query<'w, 's, &'static TextSpan>,
+}
+
 /// Runs the script: one input step or one command per frame.
 fn drive(
     mut rig: ResMut<Rig>,
     mut input: Input,
     nodes: Query<(Entity, &Name, &ComputedNode, &UiGlobalTransform, Has<Checked>, Option<&Text>)>,
-    children: Query<&Children>,
-    texts: Query<&Text>,
+    reading: Reading,
     screenshots: Query<(), With<Screenshot>>,
     mut app_exit: MessageWriter<AppExit>,
     mut playback: ResMut<Playback>,
@@ -853,10 +861,16 @@ fn drive(
                 // A node without text of its own, such as a button, reads as its caption.
                 let (entity, .., found) = node(&name)?;
                 let found = match found {
-                    Some(text) => text.to_string(),
-                    None => children
+                    // A text reads on through the spans that carry it on in another face.
+                    Some(text) => {
+                        let carried = reading.children.get(entity).into_iter().flatten();
+                        let carried = carried.filter_map(|&span| reading.spans.get(span).ok());
+                        carried.fold(text.to_string(), |read, span| read + &span.0)
+                    }
+                    None => reading
+                        .children
                         .iter_descendants(entity)
-                        .filter_map(|child| texts.get(child).ok())
+                        .filter_map(|child| reading.texts.get(child).ok())
                         .map(|text| text.as_str())
                         .collect::<Vec<_>>()
                         .join(" "),

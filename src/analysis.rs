@@ -69,6 +69,8 @@ const SHOWS_AFTER: f32 = 0.15;
 const LONGEST_FRAME: f32 = 0.25;
 /// So many characters of the pattern's text are shown; Copy copies all of it.
 const TEXT_SHOWN: usize = 36;
+/// The size of what the findings say.
+const VALUE_SIZE: f32 = 12.0;
 
 #[derive(Resource, Default)]
 pub struct Analysis {
@@ -593,7 +595,7 @@ pub fn analysis_panel() -> impl Scene {
 /// One finding: its name and, next to it, what was found.
 fn line(label: &'static str, finding: Finding) -> impl Scene {
     let name = Name::new(format!("Study{finding:?}"));
-    let font = if in_mono(finding, "") { fonts::MONO } else { fonts::REGULAR };
+    let font = face(finding);
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -621,7 +623,7 @@ fn line(label: &'static str, finding: Finding) -> impl Scene {
                 Text("—")
                 TextFont {
                     font: FontSourceTemplate::Handle(font),
-                    font_size: FontSize::Px(12.0),
+                    font_size: FontSize::Px(VALUE_SIZE),
                     weight: FontWeight::NORMAL,
                 }
                 ThemeTextColor(tokens::TEXT_MAIN)
@@ -771,7 +773,7 @@ fn sync_panel(
     panel: Single<Entity, With<AnalysisPanel>>,
     parts: Query<(Entity, &During)>,
     mut nodes: Query<&mut Node>,
-    mut findings: Query<(&Finding, &mut Text, &mut TextFont, &ChildOf)>,
+    mut findings: Query<(Entity, &Finding, &mut Text, &TextColor, &ChildOf)>,
     assets: Res<AssetServer>,
     mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
     mut rule_name: Single<
@@ -782,6 +784,7 @@ fn sync_panel(
     mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
     mut mark: Single<&mut BorderColor, With<ChoosingMark>>,
     mut shown: Local<Option<Shown>>,
+    mut commands: Commands,
 ) {
     let mut show = |entity: Entity, shown: bool| {
         let display = if shown { Display::Flex } else { Display::None };
@@ -811,13 +814,20 @@ fn sync_panel(
     for (part, during) in &parts {
         show(part, during.is_now(subject.is_some(), busy.is_some()));
     }
-    for (finding, mut text, mut font, row) in &mut findings {
+    for (line, finding, mut text, color, row) in &mut findings {
         let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
         // A line with nothing to say is not there.
         show(row.parent(), content != "—");
-        let face = if in_mono(*finding, &content) { fonts::MONO } else { fonts::REGULAR };
-        if text.set_if_neq(Text(content)) {
-            font.font = FontSource::Handle(assets.load(face));
+        // The line is set in its own face, and the arrows in it in the one that has them
+        // all: what comes after the first run of text goes into spans of its own.
+        let mut runs = runs(&content);
+        let first = if runs.first().is_some_and(|(_, arrows)| !arrows) { runs.remove(0).0 } else { String::new() };
+        text.set_if_neq(Text(first));
+        commands.entity(line).despawn_related::<Children>();
+        for (run, arrows) in runs {
+            let font = FontSource::Handle(assets.load(if arrows { fonts::MONO } else { face(*finding) }));
+            let font = TextFont { font, font_size: FontSize::Px(VALUE_SIZE), ..default() };
+            commands.entity(line).with_child((TextSpan::new(run), font, *color));
         }
     }
     for mut text in &mut captions {
@@ -990,10 +1000,23 @@ fn found(finding: Finding, subject: &Subject) -> String {
     }
 }
 
-/// What is set in the mono font: the text of the pattern, and whatever points a way, since
-/// the mono font is the one with the diagonal arrows.
-fn in_mono(finding: Finding, text: &str) -> bool {
-    matches!(finding, Finding::Speed | Finding::Text) || text.contains(['↖', '↑', '↗', '←', '→', '↙', '↓', '↘'])
+/// The face a finding is set in: the text of a pattern in the mono one, as text to copy is.
+fn face(finding: Finding) -> &'static str {
+    if finding == Finding::Text { fonts::MONO } else { fonts::REGULAR }
+}
+
+/// A line taken apart into what is text and what is arrows, in order. The face of the panel
+/// has no arrows along the diagonals, and the mono face has all eight.
+fn runs(line: &str) -> Vec<(String, bool)> {
+    let mut runs: Vec<(String, bool)> = Vec::new();
+    for symbol in line.chars() {
+        let arrow = ['↖', '↑', '↗', '←', '→', '↙', '↓', '↘'].contains(&symbol);
+        match runs.last_mut() {
+            Some((run, arrows)) if *arrows == arrow => run.push(symbol),
+            _ => runs.push((symbol.to_string(), arrow)),
+        }
+    }
+    runs
 }
 
 fn generations(n: u32) -> String {
@@ -1145,4 +1168,22 @@ fn left_so_far(subject: &Subject) -> Option<String> {
 fn arrow(dx: i32, dy: i32) -> &'static str {
     const ARROWS: [[&str; 3]; 3] = [["↖", "↑", "↗"], ["←", "·", "→"], ["↙", "↓", "↘"]];
     ARROWS[(dy.signum() + 1) as usize][(dx.signum() + 1) as usize]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_line_comes_apart_into_text_and_arrows() {
+        let run = |text: &str, arrows: bool| (text.to_string(), arrows);
+        assert_eq!(runs("c/6 orthogonal →"), [run("c/6 orthogonal ", false), run("→", true)]);
+        assert_eq!(
+            runs("2 spaceships (c/15 ↘, c/6 →)"),
+            [run("2 spaceships (c/15 ", false), run("↘", true), run(", c/6 ", false), run("→", true), run(")", false)]
+        );
+        assert_eq!(runs("↖↗ both"), [run("↖↗", true), run(" both", false)]);
+        assert_eq!(runs("a mirror"), [run("a mirror", false)]);
+        assert!(runs("").is_empty());
+    }
 }

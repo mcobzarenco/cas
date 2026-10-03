@@ -639,6 +639,60 @@ pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
     }
 }
 
+/// The side of the box a tile has its picture in.
+pub(crate) const GLYPH: f32 = 48.0;
+
+/// A symmetry as a picture in such a box. Where a point just right of the top of a square
+/// ends up under each way of turning and mirroring it, as `(x, y)` from the middle: first as
+/// it is, then in the order of `TURNS_AND_MIRRORS`. The ones a rule or a pattern is itself
+/// under are a picture of its symmetry.
+pub(crate) const ORBIT: [(f32, f32); 8] =
+    [(6.0, -16.0), (16.0, 6.0), (-6.0, 16.0), (-16.0, -6.0), (-6.0, -16.0), (6.0, 16.0), (-16.0, 6.0), (16.0, -6.0)];
+/// The axes of the mirrors among those, left to right, top to bottom, and the two diagonals:
+/// which of the eight each is, and how far a bar through the middle is turned to lie along it.
+pub(crate) const AXES: [(usize, f32); 4] = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)];
+
+/// The box a finding is shown in: of a rule in the editor, of a pattern in the analysis.
+pub(crate) fn tile() -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(8),
+            padding: px(6),
+            border_radius: px(5),
+        }
+        BackgroundColor(palette::GRAY_2)
+    }
+}
+
+/// The name of a finding.
+pub(crate) fn tile_label(name: &'static str) -> impl Scene {
+    bsn! {
+        Text(name)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::BOLD),
+            font_size: FontSize::Px(9.0),
+            weight: FontWeight::BOLD,
+        }
+        template_value(LetterSpacing::Px(0.5))
+        TextColor(palette::LIGHT_GRAY_2)
+    }
+}
+
+/// What was found, in words.
+pub(crate) fn tile_value(text: &'static str) -> impl Scene {
+    bsn! {
+        Text(text)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::REGULAR),
+            font_size: FontSize::Px(12.0),
+            weight: FontWeight::NORMAL,
+        }
+        TextColor(palette::LIGHT_GRAY_1)
+    }
+}
+
 /// The frame of a text field: a well in its card, which shows while there is nothing in the
 /// field, with the text a little way in from its edges.
 pub(crate) fn field_frame() -> impl Scene {

@@ -22,7 +22,7 @@ use bevy::{
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
-    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, LetterSpacing, TextEdit, TextEditChange},
+    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
     window::SystemCursorIcon,
 };
@@ -37,7 +37,10 @@ use crate::{
     icons,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},
-    ui::{Aspect, caption, field_frame, panel_title, section, side_panel},
+    ui::{
+        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, panel_title, section, side_panel, tile, tile_label as label,
+        tile_value as value,
+    },
     view::{ALIVE, DEAD},
 };
 
@@ -46,14 +49,7 @@ pub const EDITOR_WIDTH: f32 = 376.0;
 /// Side of one cell in the little block pictures.
 const CELL: f32 = 12.0;
 /// Side of the square a property's picture is drawn in, and of a cell of the vacuum's tiles.
-const GLYPH: f32 = 48.0;
 const VACUUM_CELL: f32 = 6.0;
-
-/// Where a point just right of the top of a square ends up under each way of turning and
-/// mirroring it, as `(x, y)` from the middle: first as it is, then in the order of
-/// [`TURNS_AND_MIRRORS`]. The ones a rule is symmetric under are a picture of its symmetry.
-const ORBIT: [(f32, f32); 8] =
-    [(6.0, -16.0), (16.0, 6.0), (-6.0, 16.0), (-16.0, -6.0), (-6.0, -16.0), (6.0, 16.0), (-16.0, 6.0), (16.0, -6.0)];
 
 /// The cases, one rotation orbit per row: the blocks in a row are quarter turns of each other.
 const ORBITS: [&[u8]; 6] = [&[0], &[1, 2, 8, 4], &[3, 10, 12, 5], &[6, 9], &[7, 11, 14, 13], &[15]];
@@ -574,20 +570,6 @@ fn findings() -> impl Scene {
     )
 }
 
-/// The box a finding is shown in.
-fn tile() -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(8),
-            padding: px(6),
-            border_radius: px(5),
-        }
-        BackgroundColor(palette::GRAY_2)
-    }
-}
-
 /// A finding: its picture, its name and what was found.
 fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> impl Scene {
     // The rig finds what was found by this name.
@@ -627,33 +609,6 @@ fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> imp
     }
 }
 
-/// The name of a finding.
-fn label(name: &'static str) -> impl Scene {
-    bsn! {
-        Text(name)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::BOLD),
-            font_size: FontSize::Px(9.0),
-            weight: FontWeight::BOLD,
-        }
-        template_value(LetterSpacing::Px(0.5))
-        TextColor(palette::LIGHT_GRAY_2)
-    }
-}
-
-/// What was found, in words.
-fn value(text: &'static str) -> impl Scene {
-    bsn! {
-        Text(text)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::REGULAR),
-            font_size: FontSize::Px(12.0),
-            weight: FontWeight::NORMAL,
-        }
-        TextColor(palette::LIGHT_GRAY_1)
-    }
-}
-
 fn mono(text: &'static str, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
@@ -689,9 +644,8 @@ fn symmetry_picture() -> impl SceneList {
             }
         })
         .collect();
-    // Left-right, top-bottom, and the two diagonals: a bar through the middle, turned.
     let color = Aspect::Rule.color();
-    let axes: Vec<_> = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)]
+    let axes: Vec<_> = AXES
         .into_iter()
         .map(|(element, degrees): (usize, f32)| {
             let part = Part::Axis(element);

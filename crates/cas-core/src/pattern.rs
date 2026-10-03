@@ -75,8 +75,12 @@ pub struct Study {
     /// For how many generations it was followed: one known by its pieces, for as long as the
     /// slowest of them takes to be back.
     pub generations: u32,
-    /// The turns and mirrors of the square under which the pattern, as it set out, is itself.
+    /// The turns and mirrors of the square under which the pattern, as it set out, is itself;
+    /// and which those are: as it is, turned a quarter clockwise, turned about, turned a
+    /// quarter the other way, mirrored left to right and top to bottom, and mirrored across
+    /// either diagonal, in the order of [`TURNS_AND_MIRRORS`](crate::rules::TURNS_AND_MIRRORS).
     pub symmetry: Symmetry,
+    pub symmetries: [bool; 8],
     /// Whether the pattern is one of its own turns or mirrors (of those the rule allows) before
     /// it is back in its shape, and after how many generations it first is: a glider is its
     /// mirror image half way through its period.
@@ -448,6 +452,7 @@ impl Analyser {
                 self.pieces(&last)
             }
         };
+        let symmetries = symmetries_of(&start);
         Some(Study {
             fate,
             period,
@@ -457,7 +462,8 @@ impl Analyser {
             extent: (widest, highest),
             parts: parts.len(),
             generations,
-            symmetry: symmetry_of(&start),
+            symmetry: symmetry_of(&symmetries),
+            symmetries,
             recurs,
             heat: changed as f32 / generations.max(1) as f32,
             stator: throughout.len(),
@@ -933,13 +939,18 @@ fn turn(orientation: usize) -> Turn {
     }
 }
 
-/// The turns and mirrors under which a settled pattern is itself, as it sits on the blocks.
-fn symmetry_of(cells: &[Cell]) -> Symmetry {
-    let itself = |i: usize| reorient(cells, (0, 0), &ORIENTATIONS[i]).0 == cells;
-    let quarter = itself(1) && itself(3);
-    let half = itself(2);
-    let mirror = itself(4) || itself(5);
-    let diagonal = itself(6) || itself(7);
+/// Which turns and mirrors leave a settled pattern as it is, as it sits on the blocks: one
+/// answer for each of the [`ORIENTATIONS`].
+fn symmetries_of(cells: &[Cell]) -> [bool; 8] {
+    std::array::from_fn(|i| reorient(cells, (0, 0), &ORIENTATIONS[i]).0 == cells)
+}
+
+/// What the turns and mirrors that leave a pattern as it is come to.
+fn symmetry_of(itself: &[bool; 8]) -> Symmetry {
+    let quarter = itself[1] && itself[3];
+    let half = itself[2];
+    let mirror = itself[4] || itself[5];
+    let diagonal = itself[6] || itself[7];
     match (quarter, half, mirror, diagonal) {
         (true, _, true, true) => Symmetry::All,
         (true, ..) => Symmetry::QuarterTurn,
@@ -1272,6 +1283,9 @@ mod tests {
         assert_eq!((ship.cells, ship.parts, ship.generations), ((4, 4), 1, 12));
         assert_eq!(ship.start, from_rle("b2o2$b2o").unwrap());
         assert_eq!((ship.symmetry, ship.recurs), (Symmetry::Mirror, None));
+        // On the blocks it is itself as it is and mirrored left to right, and not top to bottom,
+        // where its rows would come to lie across the blocks the other way.
+        assert_eq!(ship.symmetries, [true, false, false, false, true, false, false, false]);
         assert!(ship.heat > 0.0 && ship.stator == 0 && ship.growth.is_none() && ship.pieces.is_empty());
         // A lone cell goes round in four generations, a quarter turn at a time: two cells
         // change every generation, and none stays. In the corner of its block, it is itself
@@ -1280,6 +1294,7 @@ mod tests {
         assert_eq!(cell.fate, Fate::Returns { period: 4, displacement: (0, 0) });
         assert!(!cell.still && cell.extent == (1, 1));
         assert_eq!((cell.symmetry, cell.recurs), (Symmetry::DiagonalMirror, Some((1, Turn::Quarter))));
+        assert_eq!(cell.symmetries, [true, false, false, false, false, false, true, false]);
         assert_eq!((cell.heat, cell.stator), (2.0, 0));
         // A block straddling the partitions never changes: a still life. (Cells are relative
         // to a corner of the blocks the next step rewrites, so this one lies across two of
@@ -1289,6 +1304,7 @@ mod tests {
         assert_eq!(block.fate, Fate::Returns { period: 2, displacement: (0, 0) });
         assert!(block.still);
         assert_eq!((block.symmetry, block.heat, block.stator), (Symmetry::TwoMirrors, 0.0, 4));
+        assert_eq!(block.symmetries, [true, false, true, false, true, true, false, false]);
         // Two ships side by side are two patterns, and each is a piece: the same ship twice.
         let mut pair = from_rle("b2o2$b2o").unwrap();
         pair.extend(from_rle("b2o2$b2o").unwrap().iter().map(|&(x, y)| (x, y + 6)));

@@ -455,7 +455,7 @@ mod tests {
         // In ESPCA-09457f a lone cell is a gun, whatever larger seeds do; and the same holds
         // for the rule seen in a mirror, where other seeds come first.
         let gun = rule("espca-09457f");
-        for rule in [gun.representative(), gun] {
+        for rule in [gun.canonical(), gun] {
             let report = measure(&rule, &glance());
             assert_eq!(report.character(), Character::Linear, "{rule}: {report:?}");
             assert!(report.growing >= 0.5 && (0.8..1.2).contains(&report.growth), "{rule}: {report:?}");

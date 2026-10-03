@@ -118,11 +118,11 @@ pub fn random(count: usize, seed: u64) -> Vec<BlockRule> {
 }
 
 /// One rule for each set of rules that differ only in how one looks at them
-/// ([`BlockRule::representative`]), in the order they first come up.
+/// ([`BlockRule::canonical`]), in the order they first come up.
 pub fn distinct(rules: impl IntoIterator<Item = BlockRule>) -> Vec<BlockRule> {
     let mut seen = HashSet::new();
-    let representatives = rules.into_iter().map(|rule| rule.representative());
-    representatives.filter(|rule| seen.insert(rule.clone())).collect()
+    let canonical = rules.into_iter().map(|rule| rule.canonical());
+    canonical.filter(|rule| seen.insert(rule.clone())).collect()
 }
 
 /// Every order the items can be put in.
@@ -158,7 +158,7 @@ mod tests {
         // rule begun a generation later.
         let distinct_turning = distinct(turning);
         assert_eq!(distinct_turning.len(), 584);
-        assert!(distinct_turning.iter().all(|rule| rule.representative() == *rule));
+        assert!(distinct_turning.iter().all(|rule| rule.canonical() == *rule));
 
         for transform in [rotate_180, mirror] {
             let family = symmetric_under(transform);
@@ -200,7 +200,7 @@ mod tests {
         let rule: BlockRule = "0,8,2,1,4,10,12,14,6,3,5,7,9,11,13,15".parse().unwrap();
         assert_eq!((rule.table()[8], rule.table()[3]), (6, 1));
         assert_eq!(rule.conserved_weights(), Some([1, 1, 1, 2]));
-        assert!(weighted.contains(&rule.representative()));
+        assert!(weighted.contains(&rule.canonical()));
         // Most rules keep no weight at all.
         assert_eq!("espca-0925bf".parse::<BlockRule>().unwrap().conserved_weights(), None);
         assert_eq!("critters".parse::<BlockRule>().unwrap().conserved_weights(), Some([1; 4]));

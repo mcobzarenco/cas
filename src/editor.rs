@@ -363,23 +363,23 @@ pub fn editor_panel() -> impl Scene {
                         })
                     ),
                     (
-                        // The rule that stands for all that make the same world: the least
-                        // table among its turns and mirrors, the generations of its vacuum's
-                        // cycle it could begin at, and the vacuum's flickering away.
-                        #RuleRepresentative
+                        // The canonical form: the least table among the rule's turns and
+                        // mirrors, the generations of its vacuum's cycle it could begin at,
+                        // and the vacuum's flickering away.
+                        #RuleCanonical
                         @FeathersButton {
-                            @caption: bsn! { Text("Representative") ThemedText }
+                            @caption: bsn! { Text("Canonical") ThemedText }
                         }
                         Node { flex_grow: 1.0 }
                         on(|_: On<Activate>,
                             mut universe: ResMut<Universe>,
                             mut editor: ResMut<RuleEditor>| {
-                            let representative = universe.rule().representative();
-                            if representative == *universe.rule() {
-                                editor.say("This table already represents its world: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
+                            let canonical = universe.rule().canonical();
+                            if canonical == *universe.rule() {
+                                editor.say("This table is already canonical: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
                             } else {
-                                universe.set_rule(representative);
-                                editor.say("The same world under the table that represents it: the first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
+                                universe.set_rule(canonical);
+                                editor.say("The same world in canonical form: the first table, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.", universe.rule());
                             }
                         })
                     ),

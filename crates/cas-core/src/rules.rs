@@ -585,11 +585,11 @@ impl BlockRule {
         BlockRule::new(table).expect("a permutation relabelled is a permutation")
     }
 
-    /// One rule to stand for all that differ from this one only in how one looks at them:
-    /// turned or mirrored, begun at another generation of the vacuum's cycle, or with a
-    /// vacuum that flickers and changes nothing else. Of those it is the one whose table
-    /// comes first.
-    pub fn representative(&self) -> BlockRule {
+    /// The canonical form of the rule: of all the rules that differ from this one only in how
+    /// one looks at them, turned or mirrored, begun at another generation of the vacuum's
+    /// cycle, or with a vacuum that flickers and changes nothing else, the one whose table
+    /// comes first. One table to stand for them all.
+    pub fn canonical(&self) -> BlockRule {
         // A rule that is its own complement acts on what differs from its vacuum in one
         // way at every generation: that way is the rule to look at.
         let relative = self.relative_to_vacuum();
@@ -1087,7 +1087,7 @@ mod tests {
         // None of them is a rule of the literature, or another of them, seen another way.
         for found in PRESETS.iter().filter(|preset| preset.source == Source::Search) {
             for other in PRESETS.iter().filter(|other| other.id != found.id) {
-                let (a, b) = (found.rule().representative(), other.rule().representative());
+                let (a, b) = (found.rule().canonical(), other.rule().canonical());
                 assert_ne!(a, b, "{} and {}", found.id, other.id);
             }
         }
@@ -1152,32 +1152,32 @@ mod tests {
     fn one_rule_stands_for_all_that_only_look_different() {
         // A mirror image, a quarter turn of a rule without that symmetry, and the rule itself.
         let rule = BlockRule::from_espca("01caef").unwrap();
-        let representative = rule.representative();
-        assert_eq!(mirrored(&rule).representative(), representative);
-        assert_eq!(preset("double-rotation").representative(), representative);
-        assert_eq!(representative.representative(), representative);
+        let canonical = rule.canonical();
+        assert_eq!(mirrored(&rule).canonical(), canonical);
+        assert_eq!(preset("double-rotation").canonical(), canonical);
+        assert_eq!(canonical.canonical(), canonical);
         let mut lopsided = BlockRule::identity();
         lopsided.swap_outcomes(1, 3);
         for transform in TURNS_AND_MIRRORS {
-            assert_eq!(lopsided.seen_through(transform).representative(), lopsided.representative());
+            assert_eq!(lopsided.seen_through(transform).canonical(), lopsided.canonical());
         }
         assert_eq!(rule.seen_through(rotate_cw), rule, "it looks the same after a quarter turn");
         // ESPCA-fb3510 is its own complement, and its vacuum only flickers: it is ESPCA-04caef.
         let flickering = BlockRule::from_espca("fb3510").unwrap();
         let plain = BlockRule::from_espca("04caef").unwrap();
-        assert_eq!(flickering.representative(), plain.representative());
-        assert_eq!(flickering.representative().vacuum_cycle(), [0]);
+        assert_eq!(flickering.canonical(), plain.canonical());
+        assert_eq!(flickering.canonical().vacuum_cycle(), [0]);
         // Critters is not: there the two generations differ. It is one world with the rule
         // that has dead and alive exchanged, which is Critters begun a generation later,
         // and that one's table comes first.
         let critters = preset("critters");
         let exchanged = from_fn(|b| complement(critters.table()[complement(b) as usize]));
         assert_eq!(critters.begun_later(), [critters.clone(), exchanged.clone()]);
-        assert_eq!(critters.representative(), exchanged);
-        assert_eq!(exchanged.representative(), exchanged);
+        assert_eq!(critters.canonical(), exchanged);
+        assert_eq!(exchanged.canonical(), exchanged);
         // So are two guns of the search: ESPCA-f6b580 and ESPCA-fd1560.
         let gun = BlockRule::from_espca("f6b580").unwrap();
-        assert_eq!(BlockRule::from_espca("fd1560").unwrap().representative(), gun.representative());
+        assert_eq!(BlockRule::from_espca("fd1560").unwrap().canonical(), gun.canonical());
     }
 
     #[test]
@@ -1197,7 +1197,7 @@ mod tests {
                 let mut expected = relative.clone();
                 expected.rotate_left(generation);
                 assert_eq!(later.relative_to_vacuum(), expected, "{rule} from generation {generation}");
-                assert_eq!(later.representative(), rule.representative(), "{rule} from generation {generation}");
+                assert_eq!(later.canonical(), rule.canonical(), "{rule} from generation {generation}");
             }
         }
     }

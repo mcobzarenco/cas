@@ -300,10 +300,11 @@ once, also while the simulation runs. As soon as the table differs from all pres
 shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule back.
 
 * **Identity**, **Inverse** (the rule that undoes the current one) and **Random** replace the table.
-  **Representative** replaces it with the table that stands for every rule making the same world:
-  the least among its turns and mirrors and the generations of its vacuum's cycle it could begin at,
-  which is the one the search measures. A preset is not always its own: Critters' is Critters
-  turned, so the menu then says *Custom* of the same world.
+  **Canonical** replaces it with the rule's canonical form, the one table that stands for every
+  rule making the same world: the least among its turns and mirrors and the generations of its
+  vacuum's cycle it could begin at, which is the one the search measures. A preset is not always
+  in canonical form: Critters' is Critters turned, so the menu then says *Custom* of the same
+  world.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The

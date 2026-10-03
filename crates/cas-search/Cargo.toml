@@ -2,6 +2,8 @@
 name = "cas-search"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Looks for interesting reversible block cellular automata"
 
 [dependencies]

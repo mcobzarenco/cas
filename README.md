@@ -399,7 +399,8 @@ What left or was caught is gone: stepping backwards does not bring it back.
 
 **Analyse** (or `a`, which opens the panel) and a drag around some cells of the grid studies them
 on their own: the pattern is run on an unbounded plane until it is back in its starting shape, as
-the catcher does with what reaches the edge, and the *Analysis* panel says what it is.
+the catcher does with what reaches the edge, and the *Analysis* panel says what it is, a tile to
+each finding, as the rule editor shows the properties of a rule.
 
 * A **still life**, an **oscillator** or a **spaceship**, with its period, how far it moves in
   one, and its speed; whether it is one of its own turns or mirrors sooner than that (a glider is
@@ -415,14 +416,18 @@ the catcher does with what reaches the edge, and the *Analysis* panel says what 
 * Or a pattern that **grows**, along lines as a gun does or over the plane, that **flies apart**,
   or that had not repeated when the study ended. What it had become by then is taken apart into
   the pieces that go their own ways, and each is followed alone.
-* What its **pieces** are, for a pattern that came apart or is several that never meet: under
-  their line of the findings there is a line to each sort, with how many spaceships there are
-  and of which kinds, how many oscillators and of which periods, how many still lifes, and what
-  else became of pieces. A click on the line lists them kind by kind instead: the spaceships as
-  the spaceship list shows them, each kind with the ways it flies, and under them what stays
-  where it is, the oscillators and the still lifes. Another click folds the list away again.
-* For any pattern: how many cells and how much room it takes, its symmetry as it sits on the
-  blocks, and its run-length encoded text.
+* For any pattern: how many cells and how much room it takes, drawn to scale within the most
+  room it came to take; its symmetry as it sits on the blocks, drawn as the editor draws a
+  rule's, a point with its images and the axes of the mirrors; and its run-length encoded text.
+  The sign of a spaceship points the way it flies.
+* What its **pieces** are, for a pattern that came apart or is several that never meet. They
+  come last, under the buttons: a line to each sort, with how many spaceships there are and of
+  which speeds, how many oscillators and of which periods, how many still lifes, and what else
+  became of pieces. A click on their line lists them kind by kind instead, under a heading for
+  the spaceships, one for the oscillators and one for the still lifes. A kind is shown as the
+  spaceship list shows one, by the form it is filed under, whichever way its pieces lie; a
+  small dial next to a spaceship has the ways its ships fly lit. Another click folds the list
+  away again.
 
 Every pattern is followed as far: for 131 072 generations, unless it is back in its shape before,
 or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small
@@ -453,7 +458,7 @@ the drag does nothing. `a` puts the panel away, as
 `e` and `s` do theirs, and brings it back choosing.
 
 <p align="center">
-  <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and what the study found: a spaceship of period 15 moving one cell diagonally at c/15, 5 cells, no symmetry, one piece.">
+  <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and under it what the study found, a tile to each finding: a spaceship flying down and to the right at c/15, of period 15, with 5 cells of which 7.2 change in a generation, 3×3 and up to 5×5, without symmetry.">
 </p>
 
 ## Searching for rules

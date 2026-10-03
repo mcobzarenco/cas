@@ -22,14 +22,15 @@ release left; wait 20
 # The choosing stays on for the next pattern.
 expect_text SelectHint drag over it · Escape cancels
 expect_text AnalysisNote Drag over another pattern, or Place picks this one up to be put down on the grid where you click.
-until expect_text StudyWhat Spaceship
-expect_text StudyPeriod 12 generations, moving (2, 0)
-expect_text StudySpeed c/6 orthogonal →
-expect_text StudyCells 4
-expect_text StudySize 2×3, up to 3×5
-expect_text StudySymmetry a mirror
-expect_text StudyPieces one piece
-expect_shown PiecesList off
+# What was found is in tiles, each with its name, what it says, and a line more where there
+# is more to say. A pattern of one piece has no pieces to tell of.
+until expect_text StudyWhat WHAT Spaceship c/6 orthogonal →
+expect_text StudyPeriod PERIOD 12 generations moving (2, 0)
+expect_text StudyCells CELLS 4
+expect_text StudyChanges CHANGES 5.3 cells a generation
+expect_text StudySize SIZE 2×3 up to 3×5
+expect_text StudySymmetry SYMMETRY a mirror
+expect_shown StudyPieces off; expect_shown PiecesList off
 expect_text StudyText $2o2$2o
 expect_text SmallCaption 42×32 cells, 10 generations a second
 shot analysis-3-spaceship
@@ -37,7 +38,7 @@ shot analysis-3-spaceship
 # A band with nothing in it says so.
 drag Grid -200 -200; wait 10
 expect_text AnalysisNote No live cells in there.
-expect_text StudyWhat Spaceship
+expect_text StudyWhat WHAT Spaceship c/6 orthogonal →
 # Nor does a band drawn beside the grid hold anything: here above it, over a cell of the top
 # row.
 paint 128 0
@@ -57,8 +58,7 @@ click Analyse; wait 3
 # into account: it is the same ship.
 step 1; wait 2
 drag Grid 60 60; wait 20
-until expect_text StudyWhat Spaceship
-expect_text StudySpeed c/6 orthogonal →
+until expect_text StudyWhat WHAT Spaceship c/6 orthogonal →
 
 # The small world runs on its own clock; Pause holds it, and Restart takes it back to the
 # pattern as it set out, where it stands still until Play.
@@ -73,13 +73,11 @@ expect_text AnalysisPause Pause
 # oscillator: it turns about, a cell at a time, where the other partition cuts it in four.)
 clear; place 2o$2o 100 101
 drag Grid -120 -120; wait 20
-until expect_text StudyWhat Still life
-expect_text StudyPeriod 1 generation
-# A line with nothing to say is not there: a still life has no speed.
-expect_shown StudySpeed off
-expect_text StudyCells 4
-expect_text StudyChanges none
-expect_text StudySymmetry mirrors both ways, so a half turn
+until expect_text StudyWhat WHAT Still life
+expect_text StudyPeriod PERIOD 1 generation
+expect_text StudyCells CELLS 4
+expect_text StudyChanges CHANGES none
+expect_text StudySymmetry SYMMETRY mirrors both ways and so a half turn
 shot analysis-4-still-life
 
 # Copy puts the pattern on the clipboard as text; Place picks it up to be put down on the
@@ -99,11 +97,10 @@ expect_text AnalysisNote Place picks the pattern up, to be put down on the grid 
 clear; place $2o2$2o 240 120
 click Catching; wait 3; step 120; wait 10; expect_caught 1 1
 click AnalyseKind0; wait 20
-until expect_text StudyWhat Spaceship
+until expect_text StudyWhat WHAT Spaceship c/6 orthogonal →
 # The click went to the button alone: the row did not pick the pattern up.
 expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
 expect_text StudyText b2o2$b2o
-expect_text StudySpeed c/6 orthogonal →
 shot analysis-5-from-the-list
 
 # The study stays when the rule changes, under the rule named next to the title; Place puts
@@ -119,9 +116,12 @@ key Escape; wait 3; expect_rule critters
 rule single-rotation; clear
 place 2o$2o 90 101; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o 120 100
 click Analyse; wait 3; drag Grid -100 -100; wait 20
-until expect_text StudyWhat Flies apart: 513 cells across after 2 882 generations
-# Under the line of the pieces there is a line to each sort of them: how many, what, and the
-# kinds among them.
+# A tile with nothing to say is not there: what does not come back has no period.
+until expect_text StudyWhat WHAT Flies apart 513 cells across after 2 882 generations
+expect_shown StudyPeriod off; expect_shown StudyChanges off
+expect_text StudySize SIZE 32×5 up to 513×196
+# The pieces come last, under the buttons. Under their line there is a line to each sort of
+# them: how many, what, and the kinds among them.
 expect_text StudyPieces 4 pieces
 expect_text PieceSort0 3 spaceships c/15, c/6, c/184
 expect_text PieceSort1 1 still life
@@ -149,7 +149,7 @@ click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2
 # (The choosing is still on from the last band.)
 rule four-way-gun; wait 2; clear; paint 128 128
 drag Grid 20 20; wait 20
-until expect_text StudyWhat Grows along lines, as a gun does: 575 cells after 766 generations
+until expect_text StudyWhat WHAT Grows along lines, as a gun does 575 cells after 766 generations
 # The ships of the four streams are one kind, flying four ways.
 expect_text StudyPieces 190 pieces
 expect_text PieceSort0 189 spaceships c/3
@@ -164,8 +164,8 @@ click PiecesToggle; wait 3
 # cell alone (4 generations), two side by side (16) and three in a corner (36).
 rule single-rotation; wait 2; clear; place o9b2o9b2o$20bo 100 110
 drag Grid -130 -90; wait 20
-until expect_text StudyWhat Oscillator
-expect_text StudyPeriod 144 generations, when all its pieces are back at once
+until expect_text StudyWhat WHAT Oscillator of 3 pieces that never meet
+expect_text StudyPeriod PERIOD 144 generations until all its pieces are back at once
 expect_text StudyPieces 3 that never meet
 expect_text PieceSort0 3 oscillators periods 4, 16, 36
 expect_text StudyText o9b2o9b2o$20bo
@@ -183,10 +183,10 @@ expect_text SubjectRule Critters
 rule single-rotation; wait 2
 clipboard 41bo2$31bo4$36bo6$59bo$44bo5$48bo8bo5$67bo2$59bo6bo2$87bo$62bobo$54bo22bo$72bo29bo2$85bo22bo$61bo$14bo$35bo47b3o$63b2o4bo11bo25bo$36bo$19bo2$46bo$23bo28bo$69bo$27bo5bo3bo12bo$97bo$14bo40bo32bo8bo$52bo20bo$18bo23bo44bo$5bo$102bo$21bo64bo14bo5bo$50bo$51b2o5bo23bo15bo$5bo17bo5bo20b3o33bo5bo$6bo21bobo18bobo$49b2o11b2o$22bo39b2o50bo$11bo3bo3bo28bo31b2o18bo4bo$37bo50bo7bo8bo$24bo15b2o74bo$5bo18bo15b2o16bo40bo9bo$62bo$12bo48bo15b2o$bo25bo31bo17b2o41bo$63bo13bo6bo$49bo6b2o5bo2b2o8bo7bo5b2o$2bo8bo44b3o7b2o8bo13b2o$57b2o18bobo$6bo2bo22bo44b2o21bo$o11bo50bo15b3o35bo$11bo7bobo27b2o10bo18b2o21bo21bo$6bo28bo8bo4b2o49bo$24bo73bo$o17bo12bo81bo$43b2o15bo15bo27bo$40bo2b2o74bo$2bo8bo$36bo77bo$33bo67bo$34bobo4bo45bo$2bo55bo$7bo10bo28bo$28bo22b2o33bo20bo9bo$20bo30b2o3bo2bo44bo11bo$7bo12bo12bo9bo27bo18bo$o21bo3bo4bo48b2o25b2o7bo$21bo58b2o$78b2o16bo3bo$32bo28bo12bo3b2obo41bo$32b2o42bo18bo$32b2o31b4o20bo31bo$65bo2bo28bo14bo$65b3o17bo17bo$90bo$11bo65bo$60b2o31bo$16bo30b2o11bobo13bo$9bo4bo11bo2bo31b2o10bo38bo$18bo52bo$65bo15bo$6bo64b2o$41bo29b2o7bo22bo$99bo$11bo21bo50bo29bo2$53bo45bo28bo$18bo37bo18bo29bo$50bo40bo8bo8bo$54bo22bo13bo$48bo53bo$28bo3bo$38bo26bo4bo36bo$94bo$32bo$25bo22bo34b2o12bo$83b2o25bo$79bo4bo13bo18bo2b2o2$21bo16bo2bo3bo17bo2bo18bo3bo$57bo$19bo37bo26bo18bo9bo$47bo24bo$17bo43bo15bo26bo$22bo13bo37bo32bo2bo$28bo20bo8bo$42bo37b2o18bo11bo$109bo$97bo$21bo73bo$28bo17bo26bo$37bo25bo39bo$56bo$78bo4bo$28bobo14b2o$61bo$60bo34bo$53bo2$107bo$32bo65bo$92bo4bo$99bo2$66bo4bo2$29bo5bo$38bo9bo$45bo25bo$51bo$27bo$40bo$72bo2$23bo3bo
 key Ctrl+a; key Ctrl+v; wait 10
-until expect_text StudyWhat Oscillator
-expect_text StudyPeriod 69 481 732 320 generations, when all its pieces are back at once
-expect_text StudyCells 415
-expect_text StudyChanges 592.2 cells a generation, 92 never change
+until expect_text StudyWhat WHAT Oscillator of 271 pieces that never meet
+expect_text StudyPeriod PERIOD 69 481 732 320 generations until all its pieces are back at once
+expect_text StudyCells CELLS 415
+expect_text StudyChanges CHANGES 592.2 cells a generation 92 never change
 expect_text StudyPieces 271 that never meet
 expect_text PieceSort0 261 oscillators periods 4 ×215, 16 ×22, 8 ×8 and 11 more
 expect_text PieceSort1 10 still lifes
@@ -194,8 +194,7 @@ shot analysis-8-pasted
 # Typed, a text is studied as soon as it spells a pattern. What does not spell one is said,
 # and Escape leaves the field with the text of the pattern on display, and the choosing on.
 key Ctrl+a; type 3o$o$bo; wait 10
-until expect_text StudyWhat Spaceship
-expect_text StudySpeed c/15 diagonal ↘
+until expect_text StudyWhat WHAT Spaceship c/15 diagonal ↘
 type x; wait 5
 expect_text AnalysisNote 'x' does not belong in a run-length encoded pattern.
 shot analysis-8-typed
@@ -222,10 +221,10 @@ expect_text SelectHint drag over it · Escape cancels
 rule single-rotation; click GridSize; wait 4; click GridSize:1024; wait 6
 clear; paint 150 512; paint 850 512
 move Grid -130 -20; press left; move Grid 130 20; wait 2; release left
-until expect_text StudyWhat Oscillator
+until expect_text StudyWhat WHAT Oscillator of 2 pieces that never meet
 expect_text StudyPieces 2 that never meet
 expect_text PieceSort0 2 oscillators period 4
-expect_text StudySize 701×1
+expect_text StudySize SIZE 701×1
 
 # A study that takes long shows how far it has got, and does not hold up the frames: a
 # thousand cells each way of soup would be followed for hours. Stop takes what is known by

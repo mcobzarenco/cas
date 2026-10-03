@@ -43,8 +43,11 @@ use crate::{
     catcher::{CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, heading as column_title, mono, number, picture},
     icons,
     sim::{Settings, SimSystems},
-    ui::{Aspect, caption, field_frame, group_digits, panel_title, side_panel},
-    view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
+    ui::{
+        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, group_digits, panel_title, side_panel, tile, tile_label,
+        tile_value,
+    },
+    view::{ALIVE, DEAD, Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
 };
 
 pub const ANALYSIS_WIDTH: f32 = 396.0;
@@ -87,6 +90,9 @@ const NAME_GAP: f32 = 10.0;
 const KINDS_LISTED: usize = 8;
 /// In the lines that sum the pieces up: the width of how many there are, and of what they are.
 const SORT_COLUMNS: (f32, f32) = (24.0, 62.0);
+/// The findings are in tiles, two to a row: a tile is so wide at least, and takes a row to
+/// itself when it has much to say.
+const TILE: f32 = 170.0;
 /// The side of the dial that shows which ways the ships of a kind fly.
 const DIAL: f32 = 30.0;
 /// The eight ways there are on the grid, clockwise from straight up; `y` points down.
@@ -322,13 +328,23 @@ enum Finding {
     #[default]
     What,
     Period,
-    Speed,
     Cells,
     Changes,
     Size,
     Symmetry,
     Pieces,
 }
+
+/// The tile of a finding, which is not there while the finding has nothing to say; the box in
+/// it where the finding is drawn; and the second line of what it says.
+#[derive(Component, Default, Clone, Copy)]
+struct Tile(Finding);
+
+#[derive(Component, Default, Clone, Copy)]
+struct Drawn(Finding);
+
+#[derive(Component, Default, Clone, Copy)]
+struct More(Finding);
 
 /// The field with the pattern as text: what is on display, or what is typed or pasted there
 /// to be studied.
@@ -370,12 +386,12 @@ impl During {
     }
 }
 
-/// A line of the findings, which is not there while it has nothing to say.
+/// The line of the pieces, which is not there while there are none to speak of.
 #[derive(Component, Default, Clone)]
 struct Row;
 
-/// Where the pieces a pattern came apart into are listed, kind by kind, and the mark on
-/// their line of the findings that turns as the list opens.
+/// Where the pieces of a pattern are summed up, or listed kind by kind, and the mark on their
+/// line that turns as the list opens.
 #[derive(Component, Default, Clone)]
 struct PiecesList;
 
@@ -428,6 +444,7 @@ impl Plugin for AnalysisPlugin {
                     draw_small_world,
                     sync_text,
                     sync_panel,
+                    sync_facts,
                     list_pieces,
                     show_status,
                     label_pause,
@@ -586,30 +603,24 @@ pub fn analysis_panel() -> impl Scene {
                             template_value(During::PatternOrStudy)
                         ),
                         (
+                            // What the study found, a tile to each finding, two to a row.
+                            #AnalysisFacts
                             Node {
                                 display: Display::None,
-                                flex_direction: FlexDirection::Column,
-                                row_gap: px(5),
+                                flex_direction: FlexDirection::Row,
+                                flex_wrap: FlexWrap::Wrap,
+                                column_gap: px(6),
+                                row_gap: px(6),
+                                flex_shrink: 0.0,
                             }
                             template_value(During::Pattern)
                             Children [
-                                line("WHAT", Finding::What),
-                                line("PERIOD", Finding::Period),
-                                line("SPEED", Finding::Speed),
-                                line("CELLS", Finding::Cells),
-                                line("CHANGES", Finding::Changes),
-                                line("SIZE", Finding::Size),
-                                line("SYMMETRY", Finding::Symmetry),
-                                pieces_line(),
-                                (
-                                    #PiecesList
-                                    Node {
-                                        display: Display::None,
-                                        flex_direction: FlexDirection::Column,
-                                        row_gap: px(4),
-                                    }
-                                    PiecesList
-                                ),
+                                fact_tile("WHAT", Finding::What),
+                                fact_tile("PERIOD", Finding::Period),
+                                fact_tile("CELLS", Finding::Cells),
+                                fact_tile("CHANGES", Finding::Changes),
+                                fact_tile("SIZE", Finding::Size),
+                                fact_tile("SYMMETRY", Finding::Symmetry),
                             ]
                         ),
                         (
@@ -661,6 +672,29 @@ pub fn analysis_panel() -> impl Scene {
                             ]
                         ),
                         (#AnalysisNote caption("") Note),
+                        (
+                            // The pieces come last: their list may be long, and what is above
+                            // it, the buttons too, stays where it is when the list opens.
+                            Node {
+                                display: Display::None,
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(5),
+                                flex_shrink: 0.0,
+                            }
+                            template_value(During::Pattern)
+                            Children [
+                                pieces_line(),
+                                (
+                                    #PiecesList
+                                    Node {
+                                        display: Display::None,
+                                        flex_direction: FlexDirection::Column,
+                                        row_gap: px(4),
+                                    }
+                                    PiecesList
+                                ),
+                            ]
+                        ),
                         ]
                     ),
                     (
@@ -684,54 +718,59 @@ pub fn analysis_panel() -> impl Scene {
     }
 }
 
-/// One finding: its name and, next to it, what was found.
-fn line(label: &'static str, finding: Finding) -> impl Scene {
+/// A finding in a tile, as the rule editor shows a property of a rule: a picture of it, its
+/// name, and what was found in a line or two.
+fn fact_tile(label: &'static str, finding: Finding) -> impl Scene {
     let name = Name::new(format!("Study{finding:?}"));
+    let (this, drawn, more) = (Tile(finding), Drawn(finding), More(finding));
     bsn! {
+        tile()
         Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
-            column_gap: px(NAME_GAP),
+            display: Display::None,
+            flex_grow: 1.0,
+            flex_basis: px(TILE),
+            min_width: px(0),
         }
-        Row
+        template_value(name)
+        template_value(this)
         Children [
             (
-                Text(label)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                    font_size: FontSize::Px(10.0),
-                    weight: FontWeight::BOLD,
-                }
-                ThemeTextColor(tokens::TEXT_DIM)
                 Node {
-                    width: px(NAME_COLUMN),
+                    width: px(GLYPH),
+                    height: px(GLYPH),
                     flex_shrink: 0.0,
-                    // Level with the first line of what was found, which is set larger.
-                    margin: UiRect::top(px(3)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border_radius: px(4),
                 }
+                BackgroundColor(DEAD)
+                template_value(drawn)
             ),
             (
-                Text("—")
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::REGULAR),
-                    font_size: FontSize::Px(VALUE_SIZE),
-                    weight: FontWeight::NORMAL,
-                }
-                ThemeTextColor(tokens::TEXT_MAIN)
                 Node {
                     flex_grow: 1.0,
                     flex_basis: px(0),
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
                 }
-                template_value(name)
-                template_value(finding)
+                Children [
+                    tile_label(label),
+                    (tile_value("") template_value(finding)),
+                    (
+                        tile_value("")
+                        TextColor(palette::LIGHT_GRAY_2)
+                        Node { display: Display::None }
+                        template_value(more)
+                    ),
+                ]
             ),
         ]
     }
 }
 
-/// The line of the findings about the pieces: its name, with the mark that turns as the list
-/// under it opens, and how many pieces there are. A click on the line opens the list or folds
-/// it away.
+/// The line of the pieces: its name, with the mark that turns as the list under it opens, and
+/// how many pieces there are. A click on the line opens the list or folds it away.
 fn pieces_line() -> impl Scene {
     let name = Name::new("StudyPieces");
     bsn! {
@@ -1185,18 +1224,12 @@ fn sync_panel(
     panel: Single<Entity, With<AnalysisPanel>>,
     parts: Query<(Entity, &During)>,
     mut nodes: Query<&mut Node>,
-    mut findings: Query<(Entity, &Finding, &mut Text, &TextColor, &ChildOf)>,
-    assets: Res<AssetServer>,
-    mut captions: Query<&mut Text, (With<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>)>,
-    mut rule_name: Single<
-        &mut Text,
-        (With<SubjectRule>, Without<SmallCaption>, Without<Finding>, Without<Note>, Without<SelectHint>),
-    >,
-    mut note: Single<(Entity, &mut Text), (With<Note>, Without<Finding>, Without<SelectHint>)>,
-    mut hint: Single<&mut Text, (With<SelectHint>, Without<Finding>, Without<Note>)>,
+    mut captions: Query<&mut Text, (With<SmallCaption>, Without<Note>, Without<SelectHint>)>,
+    mut rule_name: Single<&mut Text, (With<SubjectRule>, Without<SmallCaption>, Without<Note>, Without<SelectHint>)>,
+    mut note: Single<(Entity, &mut Text), (With<Note>, Without<SelectHint>)>,
+    mut hint: Single<&mut Text, (With<SelectHint>, Without<Note>)>,
     mut mark: Single<&mut BorderColor, With<ChoosingMark>>,
     mut shown: Local<Option<Shown>>,
-    mut commands: Commands,
 ) {
     let mut show = |entity: Entity, shown: bool| {
         let display = if shown { Display::Flex } else { Display::None };
@@ -1226,22 +1259,6 @@ fn sync_panel(
     let subject = analysis.shown();
     for (part, during) in &parts {
         show(part, during.is_now(subject.is_some(), busy.is_some()));
-    }
-    for (line, finding, mut text, color, row) in &mut findings {
-        let content = subject.map_or("—".to_string(), |subject| found(*finding, subject));
-        // A line with nothing to say is not there.
-        show(row.parent(), content != "—");
-        // The arrows in a line are set in the face that has them all: what comes after the
-        // first run of text goes into spans of its own.
-        let mut runs = runs(&content);
-        let first = if runs.first().is_some_and(|(_, arrows)| !arrows) { runs.remove(0).0 } else { String::new() };
-        text.set_if_neq(Text(first));
-        commands.entity(line).despawn_related::<Children>();
-        for (run, arrows) in runs {
-            let font = FontSource::Handle(assets.load(if arrows { fonts::MONO } else { fonts::REGULAR }));
-            let font = TextFont { font, font_size: FontSize::Px(VALUE_SIZE), ..default() };
-            commands.entity(line).with_child((TextSpan::new(run), font, *color));
-        }
     }
     for mut text in &mut captions {
         let content = match (subject, busy) {
@@ -1320,95 +1337,279 @@ fn label_pause(analysis: Res<Analysis>, mut label: Single<&mut Text, With<PauseL
     label.set_if_neq(Text(if paused { "Play" } else { "Pause" }.to_string()));
 }
 
-/// What the study says, in words.
-fn found(finding: Finding, subject: &Subject) -> String {
+/// Keeps the findings in step with the pattern on display: what each says, and the picture of
+/// it. A tile with nothing to say is not there, and neither is the line of the pieces.
+fn sync_facts(
+    analysis: Res<Analysis>,
+    tiles: Query<(Entity, &Tile)>,
+    pictures: Query<(Entity, &Drawn)>,
+    mut values: Query<(Entity, &Finding, &mut Text, &TextColor, &ChildOf), Without<More>>,
+    mut mores: Query<(Entity, &More, &mut Text, &TextColor), Without<Finding>>,
+    rows: Query<(), With<Row>>,
+    mut nodes: Query<&mut Node>,
+    assets: Res<AssetServer>,
+    mut shown: Local<Option<Option<u64>>>,
+    mut commands: Commands,
+) {
+    let subject = analysis.shown();
+    let now = subject.map(|subject| subject.number);
+    if shown.replace(now) == Some(now) {
+        return;
+    }
+    let said = |finding: Finding| subject.and_then(|subject| fact(finding, subject));
+    let mut show = |entity: Entity, shown: bool, basis: Option<Val>| {
+        let display = if shown { Display::Flex } else { Display::None };
+        if let Ok(mut node) = nodes.get_mut(entity) {
+            if node.display != display {
+                node.display = display;
+            }
+            if let Some(basis) = basis.filter(|&basis| node.flex_basis != basis) {
+                node.flex_basis = basis;
+            }
+        }
+    };
+    // The arrows in a line are set in the face that has them all: what comes after the first
+    // run of text goes into spans of its own.
+    let mut write = |line: Entity, text: &mut Mut<Text>, color: TextColor, content: &str| {
+        let mut runs = runs(content);
+        let first = if runs.first().is_some_and(|(_, arrows)| !arrows) { runs.remove(0).0 } else { String::new() };
+        text.set_if_neq(Text(first));
+        commands.entity(line).despawn_related::<Children>();
+        for (run, arrows) in runs {
+            let font = FontSource::Handle(assets.load(if arrows { fonts::MONO } else { fonts::REGULAR }));
+            let font = TextFont { font, font_size: FontSize::Px(VALUE_SIZE), ..default() };
+            commands.entity(line).with_child((TextSpan::new(run), font, color));
+        }
+    };
+    for (tile, &Tile(finding)) in &tiles {
+        let fact = said(finding);
+        // A tile with much to say has a row to itself.
+        let basis = if fact.as_ref().is_some_and(|fact| fact.wide) { percent(100) } else { px(TILE) };
+        show(tile, fact.is_some(), Some(basis));
+    }
+    for (line, &finding, mut text, color, parent) in &mut values {
+        let fact = said(finding);
+        if rows.contains(parent.parent()) {
+            show(parent.parent(), fact.is_some(), None);
+        }
+        write(line, &mut text, *color, fact.as_ref().map_or("", |fact| &fact.value));
+    }
+    for (line, &More(finding), mut text, color) in &mut mores {
+        let more = said(finding).map_or(String::new(), |fact| fact.more);
+        show(line, !more.is_empty(), None);
+        write(line, &mut text, *color, &more);
+    }
+    for (frame, &Drawn(finding)) in &pictures {
+        commands.entity(frame).despawn_related::<Children>();
+        if let Some(subject) = subject {
+            let picture = draw(finding, subject, &mut commands);
+            commands.entity(frame).add_children(&picture);
+        }
+    }
+}
+
+/// What a finding says: in a word or two, with a line more where there is more to say; and
+/// whether that is so much that its tile takes a row to itself.
+#[derive(Debug, Default, PartialEq)]
+struct Fact {
+    value: String,
+    more: String,
+    wide: bool,
+}
+
+/// What the study says of one thing, in words; nothing where that does not apply.
+fn fact(finding: Finding, subject: &Subject) -> Option<Fact> {
     let study = &subject.study;
     let motion = study.motion.as_ref();
     let travels = motion.is_some_and(|motion| motion.heading() != Heading::Still);
+    let said = |value: String, more: String| Some(Fact { value, more, wide: false });
+    // What does not come back has more to say about how far it got, and less besides.
+    let wide = |value: &str, more: String| Some(Fact { value: value.to_string(), more, wide: true });
     match finding {
-        Finding::What => match (study.still, travels, study.fate) {
-            (true, ..) => "Still life".to_string(),
-            (_, true, _) => "Spaceship".to_string(),
-            (_, _, Fate::Returns { .. }) => "Oscillator".to_string(),
-            // Known by its pieces to come back, though it was not followed until it did.
-            _ if study.period.is_some() => "Oscillator".to_string(),
+        Finding::What => match (study.still, motion, study.fate) {
+            (true, ..) => said("Still life".to_string(), String::new()),
+            // The motion is that of the form it is filed under; the way it goes is as it lies.
+            (_, Some(motion), Fate::Returns { displacement: (dx, dy), .. }) if travels => {
+                said("Spaceship".to_string(), format!("{} {} {}", speed(motion), heading(motion), arrow(dx, dy)))
+            }
+            // Followed until it was back, or known by its pieces to come back.
+            _ if study.period.is_some() => match study.parts {
+                0 | 1 => said("Oscillator".to_string(), String::new()),
+                parts => said("Oscillator".to_string(), format!("of {} pieces that never meet", count(parts))),
+            },
             // A gun's streams get too wide before they are too many cells: what grows while
             // it flies apart grows.
             (_, _, Fate::Grows | Fate::Scatters) if study.growth.is_some_and(|growth| growth >= GROWING) => {
                 let how = if study.growth >= Some(SPREADING) { "over the plane" } else { "along lines, as a gun does" };
-                format!("Grows {how}: {} cells after {}", count(study.cells.1), generations(study.generations))
+                let far = format!("{} cells after {}", count(study.cells.1), generations(study.generations));
+                wide(&format!("Grows {how}"), far)
             }
             (_, _, Fate::Grows) => {
-                format!("Grows: {} cells after {}", count(study.cells.1), generations(study.generations))
+                wide("Grows", format!("{} cells after {}", count(study.cells.1), generations(study.generations)))
             }
-            (_, _, Fate::Scatters) => format!(
-                "Flies apart: {} cells across after {}",
-                study.extent.0.max(study.extent.1),
-                generations(study.generations)
-            ),
-            (_, _, Fate::Undecided) => format!("Undecided after {}", generations(study.generations)),
+            (_, _, Fate::Scatters) => {
+                let across = study.extent.0.max(study.extent.1);
+                wide("Flies apart", format!("{across} cells across after {}", generations(study.generations)))
+            }
+            _ => wide("Undecided", format!("after {}", generations(study.generations))),
         },
         Finding::Period => {
             let sooner = match study.recurs {
-                Some((after, turn)) if !study.still => format!(" ({} after {after})", turned(turn)),
+                Some((after, turn)) if !study.still => format!("{} after {after}", turned(turn)),
                 _ => String::new(),
             };
-            match (study.still, study.fate, study.period) {
-                (true, ..) => generations(1u32),
-                (false, Fate::Returns { period, displacement: (dx, dy) }, _) if travels => {
-                    format!("{}{sooner}, moving ({dx}, {dy})", generations(period))
+            match (study.still, study.fate, study.period?) {
+                (true, ..) => said(generations(1u32), String::new()),
+                (false, Fate::Returns { displacement: (dx, dy), .. }, period) if travels => {
+                    let moving = format!("moving ({dx}, {dy})");
+                    said(generations(period), if sooner.is_empty() { moving } else { format!("{moving}, {sooner}") })
                 }
-                (false, Fate::Returns { period, .. }, _) => format!("{}{sooner}", generations(period)),
-                (false, _, Some(period)) => format!("{}, when all its pieces are back at once", generations(period)),
-                _ => "—".to_string(),
+                (false, Fate::Returns { .. }, period) => said(generations(period), sooner),
+                // Longer than it was followed for: all its pieces have to be back at once.
+                (false, _, period) => Some(Fact {
+                    value: generations(period),
+                    more: "until all its pieces are back at once".to_string(),
+                    wide: true,
+                }),
             }
         }
-        Finding::Speed => match (motion, study.fate) {
-            // The motion is that of the canonical form; the way it goes is as it lies.
-            (Some(motion), Fate::Returns { displacement: (dx, dy), .. }) if travels => {
-                format!("{} {} {}", speed(motion), heading(motion), arrow(dx, dy))
-            }
-            _ => "—".to_string(),
-        },
         Finding::Cells => match study.cells {
-            (fewest, most) if fewest == most => count(fewest),
-            (fewest, most) => format!("{} to {}", count(fewest), count(most)),
+            (fewest, most) if fewest == most => said(count(fewest), String::new()),
+            (fewest, most) => said(format!("{} to {}", count(fewest), count(most)), String::new()),
         },
-        Finding::Changes => match study.period {
-            _ if study.still => "none".to_string(),
-            Some(_) if !travels && study.stator > 0 => {
-                format!("{:.1} cells a generation, {} never change", study.heat, study.stator)
+        Finding::Changes => {
+            // In a narrow tile the line breaks after the cells, not before the last word.
+            let heat = format!("{:.1} cells a\u{a0}generation", study.heat);
+            match study.period? {
+                _ if study.still => said("none".to_string(), String::new()),
+                _ if !travels && study.stator > 0 => said(heat, format!("{} never change", count(study.stator))),
+                _ => said(heat, String::new()),
             }
-            Some(_) => format!("{:.1} cells a generation", study.heat),
-            None => "—".to_string(),
-        },
+        }
         Finding::Size => {
             let (width, height) = bounding_box(&study.start);
-            if (width, height) == study.extent {
-                format!("{width}×{height}")
-            } else {
-                format!("{width}×{height}, up to {}×{}", study.extent.0, study.extent.1)
-            }
+            let grown = (width, height) != study.extent;
+            let most = if grown { format!("up to {}×{}", study.extent.0, study.extent.1) } else { String::new() };
+            said(format!("{width}×{height}"), most)
         }
-        Finding::Symmetry => match study.symmetry {
-            Symmetry::None => "none",
-            Symmetry::Mirror => "a mirror",
-            Symmetry::DiagonalMirror => "a mirror across a diagonal",
-            Symmetry::HalfTurn => "a half turn",
-            Symmetry::TwoMirrors => "mirrors both ways, so a half turn",
-            Symmetry::TwoDiagonalMirrors => "mirrors across both diagonals, so a half turn",
-            Symmetry::QuarterTurn => "a quarter turn",
-            Symmetry::All => "every turn and mirror",
+        Finding::Symmetry => {
+            let (which, so) = match study.symmetry {
+                Symmetry::None => ("none", ""),
+                Symmetry::Mirror => ("a mirror", ""),
+                Symmetry::DiagonalMirror => ("a mirror across a diagonal", ""),
+                Symmetry::HalfTurn => ("a half turn", ""),
+                Symmetry::TwoMirrors => ("mirrors both ways", "and so a half turn"),
+                Symmetry::TwoDiagonalMirrors => ("mirrors across both diagonals", "and so a half turn"),
+                Symmetry::QuarterTurn => ("a quarter turn", ""),
+                Symmetry::All => ("every turn and mirror", ""),
+            };
+            said(which.to_string(), so.to_string())
         }
-        .to_string(),
-        // How many there are; what they are is said underneath, sort by sort or kind by kind.
+        // How many there are, where there are several; what they are is said underneath, sort
+        // by sort or kind by kind.
         Finding::Pieces => match (study.period, study.parts, study.pieces.len() + study.more_pieces) {
-            (Some(_), 1, _) | (None, _, 1) => "one piece".to_string(),
-            (Some(_), parts, _) => format!("{} that never meet", count(parts)),
-            (None, _, 0) => "—".to_string(),
-            (None, _, total) => format!("{} pieces", count(total)),
+            (Some(_), parts, _) if parts > 1 => said(format!("{} that never meet", count(parts)), String::new()),
+            (None, _, total) if total > 1 => said(format!("{} pieces", count(total)), String::new()),
+            _ => None,
         },
     }
+}
+
+/// The picture of a finding, to go into the box of its tile: a sign for what the pattern is,
+/// which for a spaceship points the way it flies; signs for its period, its cells and what
+/// changes; its size as it set out, within the most it got to; and its symmetry as the rule
+/// editor draws a rule's, a point with its images and the axes of the mirrors.
+fn draw(finding: Finding, subject: &Subject, commands: &mut Commands) -> Vec<Entity> {
+    let study = &subject.study;
+    let ink = Aspect::Pattern.color();
+    let mut sign = |glyph: &'static str, color: Color, turned: f32| {
+        let turned = UiTransform::from_rotation(Rot2::degrees(turned));
+        commands.spawn_scene(bsn! { icons::icon(glyph, 26.0, color) template_value(turned) }).id()
+    };
+    match finding {
+        Finding::What => {
+            let travels = study.motion.as_ref().is_some_and(|motion| motion.heading() != Heading::Still);
+            let (glyph, turned) = match study.fate {
+                _ if study.still => (icons::STILL, 0.0),
+                Fate::Returns { displacement: (dx, dy), .. } if travels => (icons::SHIP, 45.0 * eighths(dx, dy) as f32),
+                _ if study.period.is_some() => (icons::OSCILLATES, 0.0),
+                Fate::Grows => (icons::GROWS, 0.0),
+                Fate::Scatters if study.growth.is_some_and(|growth| growth >= GROWING) => (icons::GROWS, 0.0),
+                Fate::Scatters => (icons::APART, 0.0),
+                _ => (icons::UNDECIDED, 0.0),
+            };
+            vec![sign(glyph, ink, turned)]
+        }
+        Finding::Period => vec![sign(icons::PERIOD, palette::LIGHT_GRAY_2, 0.0)],
+        Finding::Cells => vec![sign(icons::CELLS, palette::LIGHT_GRAY_2, 0.0)],
+        Finding::Changes => vec![sign(icons::CHANGES, palette::LIGHT_GRAY_2, 0.0)],
+        Finding::Size => {
+            // To scale: the most it got to as an outline, and in it the pattern as it set out.
+            let (width, height) = bounding_box(&study.start);
+            let scale = (GLYPH - 12.0) / study.extent.0.max(study.extent.1).max(1) as f32;
+            let mut frame = |(width, height): (i32, i32), filled: bool| {
+                let (width, height) = ((width as f32 * scale).max(2.0), (height as f32 * scale).max(2.0));
+                let (fill, line) = if filled { (ALIVE, ALIVE) } else { (Color::NONE, palette::LIGHT_GRAY_2) };
+                let frame = bsn! {
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px((GLYPH - width) / 2.0),
+                        top: px((GLYPH - height) / 2.0),
+                        width: px(width),
+                        height: px(height),
+                        border: px(1),
+                    }
+                    BackgroundColor(fill)
+                    BorderColor::all(line)
+                };
+                commands.spawn_scene(frame).id()
+            };
+            vec![frame(study.extent, false), frame((width, height), true)]
+        }
+        Finding::Symmetry => {
+            let middle = GLYPH / 2.0;
+            let mut parts = Vec::new();
+            for (element, degrees) in AXES {
+                if study.symmetries[element] {
+                    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
+                    let axis = bsn! {
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(2),
+                            top: px(middle - 0.5),
+                            width: px(GLYPH - 4.0),
+                            height: px(1),
+                        }
+                        BackgroundColor(ink)
+                        template_value(turned)
+                    };
+                    parts.push(commands.spawn_scene(axis).id());
+                }
+            }
+            for (element, (x, y)) in ORBIT.into_iter().enumerate() {
+                let color = if study.symmetries[element] { palette::WHITE } else { palette::GRAY_3 };
+                let dot = bsn! {
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(middle + x - 2.5),
+                        top: px(middle + y - 2.5),
+                        width: px(5),
+                        height: px(5),
+                        border_radius: BorderRadius::MAX,
+                    }
+                    BackgroundColor(color)
+                };
+                parts.push(commands.spawn_scene(dot).id());
+            }
+            parts
+        }
+        Finding::Pieces => Vec::new(),
+    }
+}
+
+/// How many eighths of a turn, clockwise from straight up, the way of a displacement is.
+fn eighths(dx: i32, dy: i32) -> usize {
+    WAYS.iter().position(|&way| way == (dx.signum(), dy.signum())).unwrap_or(0)
 }
 
 /// A line taken apart into what is text and what is arrows, in order. The face of the panel
@@ -1715,11 +1916,6 @@ fn left_so_far(subject: &Subject) -> Option<String> {
         said.push_str(&format!(", {} that were none", others));
     }
     Some(format!("{said}, {} cells in it now", count(subject.world.population())))
-}
-
-/// How many eighths of a turn, clockwise from straight up, the way of a displacement is.
-fn eighths(dx: i32, dy: i32) -> usize {
-    WAYS.iter().position(|&way| way == (dx.signum(), dy.signum())).unwrap_or(0)
 }
 
 /// Which way a displacement points.

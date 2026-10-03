@@ -40,6 +40,18 @@ pub const OPENS: &str = "\u{e13a}";
 pub const LESS: &str = "\u{e32a}";
 pub const MORE: &str = "\u{e3d4}";
 
+/// What a pattern is: one that keeps still, one that goes round, one that flies (its nose
+/// up, to be turned the way the pattern goes), one that grows, one that flies apart, and one
+/// that had not made up its mind.
+pub const STILL: &str = "\u{e5aa}";
+pub const OSCILLATES: &str = "\u{ea9a}";
+pub const SHIP: &str = "\u{e3fc}";
+pub const GROWS: &str = "\u{e4ae}";
+pub const APART: &str = "\u{e0a4}";
+pub const UNDECIDED: &str = "\u{e2b2}";
+/// How long a pattern takes to be back, and how much of it changes on the way.
+pub const PERIOD: &str = "\u{e492}";
+pub const CHANGES: &str = "\u{e2de}";
 /// A way to go: up, to be turned.
 pub const WAY: &str = "\u{e08e}";
 

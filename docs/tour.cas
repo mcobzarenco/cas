@@ -13,8 +13,9 @@
 #   oxipng -o max --strip safe docs/*.png
 wait 25
 
-# A close look: the cells, and the blocks the next step rewrites. Spaceships are leaving a
-# blob of Single rotation.
+# A close look: the cells, and the blocks the next step rewrites, whose outline is off until
+# asked for. Spaceships are leaving a blob of Single rotation.
+key p; wait 2
 step 720; wait 3
 scroll Grid 4; wait 6
 drag Grid -196 38 right; wait 6

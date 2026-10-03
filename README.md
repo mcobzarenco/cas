@@ -257,7 +257,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | generations per frame, i.e. "render every Nth step" (1 – 512) | *Generations per frame* slider (drag, click, or wheel) | `,` / `.` |
 | hide vacuum fluctuations | *View* checkbox | `v` |
 | cell grid | *Cell grid* | `g` |
-| outline the current partition: the 2×2 blocks the next forward step rewrites | *2×2 blocks of the next step* | `p` |
+| outline the current partition: the 2×2 blocks the next forward step rewrites (off to begin with) | *2×2 blocks of the next step* | `p` |
 | zoom about the pointer | | mouse wheel, `+` / `−` |
 | pan | | right- or middle-drag |
 | fit the grid to the window | **Fit** | `f` |

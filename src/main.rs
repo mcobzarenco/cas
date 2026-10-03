@@ -179,7 +179,8 @@ fn main() -> AppExit {
             .density
             .clamp(Settings::MIN_DENSITY, Settings::MAX_DENSITY),
         show_grid: true,
-        show_blocks: true,
+        // The outline of the blocks is for a closer look: off until asked for.
+        show_blocks: false,
     })
     .add_plugins((
         icons::IconsPlugin,

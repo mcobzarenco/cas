@@ -46,6 +46,8 @@ shot controls-4-sliders
 expect_checked Reverse off; click Reverse; wait 3; expect_checked Reverse on
 key r; wait 3; expect_checked Reverse off
 expect_checked ShowGrid on; key g; wait 3; expect_checked ShowGrid off; click ShowGrid; wait 3; expect_checked ShowGrid on
+# The outline of the blocks is off until asked for.
+expect_checked ShowBlocks off; key p; wait 3; expect_checked ShowBlocks on; click ShowBlocks; wait 3; expect_checked ShowBlocks off
 
 # The view: the wheel zooms about the pointer, right-drag pans, a click paints under the pointer.
 # Fitted, 256 cells take 0.94 of the 900 px height; two notches zoom in by 1.44.

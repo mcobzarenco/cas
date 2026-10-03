@@ -35,7 +35,8 @@ for script in rig/*.cas; do cargo run --release -- --script-file $script || brea
 | `scroll NAME LINES` | turn the wheel over the node |
 | `key KEY` | press and release a key or chord: `Space`, `ArrowLeft`, `r`, `[`, `=`, `Ctrl+a`, ... |
 | `press KEY`, `release KEY` | hold a key across other commands: `press Shift; drag Grid 60 0; release Shift`; or a mouse button (`left`, `right`, `middle`) where the pointer last was: `move Grid 0 0; press left; move Grid 60 60; shot band; release left` |
-| `type TEXT` | type text into whatever has keyboard focus |
+| `type TEXT` | type text into whatever has keyboard focus, a character a frame |
+| `clipboard TEXT` | put text on the clipboard, as copying it elsewhere would: with `key Ctrl+v`, a long text goes into a field in one go |
 | `paint X Y [on\|off]` | set a cell |
 | `place RLE X Y` | put a run-length encoded pattern with its corner at (X, Y) |
 | `fit` | fit the view |

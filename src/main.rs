@@ -8,6 +8,7 @@ mod actions;
 mod analysis;
 mod catcher;
 mod editor;
+mod icons;
 mod rig;
 mod sampler;
 mod sim;
@@ -181,6 +182,7 @@ fn main() -> AppExit {
         show_blocks: true,
     })
     .add_plugins((
+        icons::IconsPlugin,
         sim::SimPlugin,
         view::ViewPlugin,
         actions::ActionsPlugin,

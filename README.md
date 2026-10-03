@@ -269,7 +269,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
-| choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or ◎ in a row of the spaceship list | left-drag |
+| choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list | left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
@@ -326,8 +326,9 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
     corner of the block says. The diagram shows where the blocks go by their number of cells,
     before across and after upwards: a rule that conserves cells lights the diagonal. For a rule
     that keeps a weighted count it shows the four weights in a block instead.
-  * *Backwards*: how the rule run backwards relates to the rule: the same (=), its mirror image
-    (◧◨), with the two states exchanged (■□), both, or none of it (≠).
+  * *Backwards*: how the rule run backwards relates to the rule: the same (an equals sign), its
+    mirror image (the two triangles of a mirror), with the two states exchanged (the half-filled
+    circle), both, or none of it (the sign for unequal).
   * *Blocks*: how many of the sixteen blocks the rule changes, lit in a small copy of the cases
     above, and whether each only becomes a turn of itself, as under Single Rotation.
   * *Momentum*: whether patterns keep their momentum, taking a cell's corner of its block for
@@ -405,8 +406,8 @@ The panel shows the pattern living in a small world of its own, a torus just big
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it
 set out. A pattern that never repeats would fill that world, so it has an open border instead, and
 what leaves through it is caught and counted, as on the grid: a gun's output, kind by kind.
-**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text. ◎ in a
-row of the spaceship list sends that kind over. The study is a record: it stays when the rule
+**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text. The
+magnifying glass in a row of the spaceship list sends that kind over. The study is a record: it stays when the rule
 changes, under the rule named next to the title, and **Place** then puts the same cells down under
 the rule now set.
 
@@ -560,3 +561,7 @@ Licensed under either of the [Apache License, Version 2.0](LICENSE-APACHE) or th
 [MIT license](LICENSE-MIT), at your option. Unless you explicitly state otherwise, any
 contribution intentionally submitted for inclusion in the work by you, as defined in the
 Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+The icons are [Phosphor's](https://phosphoricons.com) (bold), under the
+[MIT license](assets/fonts/Phosphor-LICENSE); the font is in `assets/fonts` and is built into
+the program.

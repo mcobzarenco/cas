@@ -35,6 +35,7 @@ use cas_core::{
 use crate::{
     actions::Toggle,
     analysis::Analysis,
+    icons,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
     view::{ALIVE, BLOCKS, DEAD, Stamp},
@@ -432,17 +433,9 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                         template_value(caught)
                     ),
                     (
-                        // Sends the kind to the analysis panel: a target, in the mono font that has it.
+                        // Sends the kind to the analysis panel, for a closer look.
                         @FeathersButton {
-                            @caption: bsn! {
-                                Text("◎")
-                                TextFont {
-                                    font: FontSourceTemplate::Handle(fonts::MONO),
-                                    font_size: FontSize::Px(14.0),
-                                    weight: FontWeight::NORMAL,
-                                }
-                                TextColor(palette::LIGHT_GRAY_1)
-                            }
+                            @caption: bsn! { icons::icon(icons::LOOK, 14.0, palette::LIGHT_GRAY_1) }
                         }
                         Node {
                             width: px(ANALYSE_COLUMN),

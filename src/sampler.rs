@@ -35,6 +35,7 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
+    icons,
     sim::SimSystems,
     ui::{Aspect, caption, checkbox, group_digits},
 };
@@ -48,36 +49,45 @@ const KEPT: usize = 300_000;
 const TRIES: usize = 20;
 
 /// A property that may be asked for, as the flow shows it: the name the rig knows it by, its
-/// sign in the mono font, and a word or two (none where the sign says it all).
+/// sign, and a word or two (none where the sign says it all).
 struct Chip {
     name: &'static str,
     constraint: Constraint,
-    sign: &'static str,
+    sign: Sign,
     label: &'static str,
 }
 
-const fn chip(name: &'static str, constraint: Constraint, sign: &'static str, label: &'static str) -> Chip {
+/// What a chip is known by: an icon, an icon turned by so many degrees, or a few characters.
+#[derive(Clone, Copy)]
+enum Sign {
+    Icon(&'static str),
+    Turned(&'static str, f32),
+    Written(&'static str),
+}
+
+const fn chip(name: &'static str, constraint: Constraint, sign: Sign, label: &'static str) -> Chip {
     Chip { name, constraint, sign, label }
 }
 
-/// The chips, group by group: the turns, the mirrors, what patterns keep, the table.
+/// The chips, group by group: the turns, the mirrors, what patterns keep, the table. The
+/// mirrors across the diagonals are the mirror's icon, turned to lie along them.
 const CHIPS: [Chip; 16] = [
-    chip("quarter-turn", Constraint::Symmetric(Turn::Quarter), "90°", ""),
-    chip("half-turn", Constraint::Symmetric(Turn::Half), "180°", ""),
-    chip("mirror", Constraint::Symmetric(Turn::Mirror), "│", ""),
-    chip("flip", Constraint::Symmetric(Turn::Flip), "─", ""),
-    chip("diagonal", Constraint::Symmetric(Turn::Diagonal), "╲", ""),
-    chip("anti-diagonal", Constraint::Symmetric(Turn::AntiDiagonal), "╱", ""),
-    chip("conserving", Constraint::Conserving, "Σ■", "cells"),
-    chip("weighted", Constraint::Weighted(None), "Σw", "a weight"),
-    chip("parity", Constraint::Parity, "±", "parity"),
-    chip("momentum", Constraint::Momentum, "Σ→", "momentum"),
-    chip("turning", Constraint::Turning, "◧→◨", "turns blocks"),
-    chip("linear", Constraint::Linear, "A+B", "linear"),
-    chip("involution", Constraint::Involution, "←→", "own inverse"),
-    chip("complement", Constraint::Complement, "■↔□", "states alike"),
-    chip("stable-vacuum", Constraint::StableVacuum, "□→□", "empty stays empty"),
-    chip("sparse", Constraint::Sparse(4), "≤4", "blocks change"),
+    chip("quarter-turn", Constraint::Symmetric(Turn::Quarter), Sign::Written("90°"), ""),
+    chip("half-turn", Constraint::Symmetric(Turn::Half), Sign::Written("180°"), ""),
+    chip("mirror", Constraint::Symmetric(Turn::Mirror), Sign::Icon(icons::MIRROR), ""),
+    chip("flip", Constraint::Symmetric(Turn::Flip), Sign::Icon(icons::FLIP), ""),
+    chip("diagonal", Constraint::Symmetric(Turn::Diagonal), Sign::Turned(icons::MIRROR, -45.0), ""),
+    chip("anti-diagonal", Constraint::Symmetric(Turn::AntiDiagonal), Sign::Turned(icons::MIRROR, 45.0), ""),
+    chip("conserving", Constraint::Conserving, Sign::Icon(icons::CELLS), "cells"),
+    chip("weighted", Constraint::Weighted(None), Sign::Icon(icons::WEIGHT), "a weight"),
+    chip("parity", Constraint::Parity, Sign::Icon(icons::PARITY), "parity"),
+    chip("momentum", Constraint::Momentum, Sign::Icon(icons::MOMENTUM), "momentum"),
+    chip("turning", Constraint::Turning, Sign::Icon(icons::TURN), "turns blocks"),
+    chip("linear", Constraint::Linear, Sign::Icon(icons::LINEAR), "linear"),
+    chip("involution", Constraint::Involution, Sign::Icon(icons::INVERSE), "own inverse"),
+    chip("complement", Constraint::Complement, Sign::Icon(icons::STATES), "states alike"),
+    chip("stable-vacuum", Constraint::StableVacuum, Sign::Icon(icons::EMPTY), "empty stays empty"),
+    chip("sparse", Constraint::Sparse(4), Sign::Written("≤4"), "blocks change"),
 ];
 const TURNS: std::ops::Range<usize> = 0..2;
 const MIRRORS: std::ops::Range<usize> = 2..6;
@@ -241,13 +251,7 @@ pub fn sampler_section() -> impl Scene {
                         on(|_: On<Pointer<Click>>, mut sampler: ResMut<Sampler>| sampler.open = !sampler.open)
                         Children [
                             (
-                                Text("›")
-                                TextFont {
-                                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                                    font_size: FontSize::Px(14.0),
-                                    weight: FontWeight::BOLD,
-                                }
-                                ThemeTextColor(tokens::TEXT_DIM)
+                                icons::icon(icons::OPENS, 12.0, palette::LIGHT_GRAY_2)
                                 UiTransform
                                 Chevron
                                 template_value(Pickable::IGNORE)
@@ -306,8 +310,8 @@ pub fn sampler_section() -> impl Scene {
                         row()
                         Children [
                             { table },
-                            step("SparseLess", "−", -1),
-                            step("SparseMore", "+", 1),
+                            step("SparseLess", icons::LESS, -1),
+                            step("SparseMore", icons::MORE, 1),
                         ]
                     ),
                     (
@@ -394,6 +398,12 @@ fn chip_scene(index: usize) -> impl Scene {
     let (want, sign) = (Want(index), WantSign(index));
     // A sign alone needs no word next to it, and less room around it.
     let (label, sides) = if chip.label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
+    let (glyph, font, size, degrees): (_, _, f32, f32) = match chip.sign {
+        Sign::Icon(glyph) => (glyph, icons::FONT, 15.0, 0.0),
+        Sign::Turned(glyph, degrees) => (glyph, icons::FONT, 15.0, degrees),
+        Sign::Written(text) => (text, fonts::MONO, 13.0, 0.0),
+    };
+    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
     bsn! {
         chip_box()
         Node { padding: UiRect::axes(px(sides), px(3)) }
@@ -407,13 +417,14 @@ fn chip_scene(index: usize) -> impl Scene {
         })
         Children [
             (
-                Text({chip.sign})
+                Text(glyph)
                 TextFont {
-                    font: FontSourceTemplate::Handle(fonts::MONO),
-                    font_size: FontSize::Px(13.0),
+                    font: FontSourceTemplate::Handle(font),
+                    font_size: FontSize::Px(size),
                     weight: FontWeight::NORMAL,
                 }
                 TextColor(palette::LIGHT_GRAY_2)
+                template_value(turned)
                 template_value(sign)
                 template_value(Pickable::IGNORE)
             ),
@@ -448,13 +459,7 @@ fn step(name: &'static str, sign: &'static str, by: i8) -> impl Scene {
             }
         })
         Children [(
-            Text(sign)
-            TextFont {
-                font: FontSourceTemplate::Handle(fonts::MONO),
-                font_size: FontSize::Px(12.0),
-                weight: FontWeight::NORMAL,
-            }
-            TextColor(palette::LIGHT_GRAY_1)
+            icons::icon(sign, 12.0, palette::LIGHT_GRAY_1)
             template_value(Pickable::IGNORE)
         )]
     }

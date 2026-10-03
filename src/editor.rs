@@ -37,6 +37,7 @@ use cas_core::{
 };
 
 use crate::{
+    icons,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, panel_title, section, side_panel},
@@ -145,9 +146,8 @@ struct Status;
 enum Finding {
     #[default]
     Symmetry,
-    /// Whether dead and alive are interchangeable, in words and as a formula.
+    /// Whether dead and alive are interchangeable.
     States,
-    StatesFormula,
     CellCount,
     /// The weight of one corner of a block, for a rule that keeps a weighted count.
     Weight(u8),
@@ -306,15 +306,15 @@ fn kept(kept: bool) -> &'static str {
     if kept { "kept" } else { "not kept" }
 }
 
-/// The relation of the rule run backwards to the rule, in signs: the same, a mirror image
-/// (two halves facing each other), the two states exchanged, both, or none of it.
-fn reversed_formula(rule: &BlockRule) -> &'static str {
+/// The relation of the rule run backwards to the rule, in icons: the same, a mirror image,
+/// the two states exchanged, both, or none of it.
+fn reversed_formula(rule: &BlockRule) -> String {
     match rule.reversed() {
-        Reversed::SameRule => "=",
-        Reversed::Transformed => "◧◨",
-        Reversed::Complemented => "■□",
-        Reversed::TransformedAndComplemented => "◧◨\n■□",
-        Reversed::DifferentRule => "≠",
+        Reversed::SameRule => icons::EQUAL.to_string(),
+        Reversed::Transformed => icons::MIRROR.to_string(),
+        Reversed::Complemented => icons::STATES.to_string(),
+        Reversed::TransformedAndComplemented => format!("{}{}", icons::MIRROR, icons::STATES),
+        Reversed::DifferentRule => icons::UNEQUAL.to_string(),
     }
 }
 
@@ -520,7 +520,8 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
 
 /// What analysis says about the rule: each finding in words, next to a picture of it.
 fn findings() -> impl Scene {
-    let formula = |finding: Finding, color: Color| bsn_list![(mono("", 19.0, color) template_value(finding))];
+    // An icon or two that say how the rule run backwards relates to the rule.
+    let formula = |finding: Finding, color: Color| bsn_list![(icons::icon("", 20.0, color) template_value(finding))];
     let tiles: Vec<_> = (0..16).map(vacuum_tile).collect();
     section("PROPERTIES", bsn_list![
         (
@@ -530,7 +531,7 @@ fn findings() -> impl Scene {
             }
             Children [
                 finding("SYMMETRY", Finding::Symmetry, symmetry_picture()),
-                finding("DEAD AND ALIVE", Finding::States, formula(Finding::StatesFormula, ALIVE)),
+                finding("DEAD AND ALIVE", Finding::States, sign(icons::STATES, Constraint::Complement)),
             ]
         ),
         (
@@ -550,7 +551,7 @@ fn findings() -> impl Scene {
             }
             Children [
                 finding("BLOCKS", Finding::Blocks, blocks_picture()),
-                finding("MOMENTUM", Finding::Momentum, sign("Σ→", Constraint::Momentum)),
+                finding("MOMENTUM", Finding::Momentum, sign(icons::MOMENTUM, Constraint::Momentum)),
             ]
         ),
         (
@@ -559,8 +560,8 @@ fn findings() -> impl Scene {
                 column_gap: px(6),
             }
             Children [
-                finding("PARITY", Finding::Parity, sign("±", Constraint::Parity)),
-                finding("SUPERPOSITION", Finding::Linear, sign("A+B", Constraint::Linear)),
+                finding("PARITY", Finding::Parity, sign(icons::PARITY, Constraint::Parity)),
+                finding("SUPERPOSITION", Finding::Linear, sign(icons::LINEAR, Constraint::Linear)),
             ]
         ),
         (
@@ -765,10 +766,10 @@ fn blocks_picture() -> impl SceneList {
     bsn_list![{ squares }]
 }
 
-/// The sign a property goes by, bright when the rule has it.
+/// The icon a property goes by, bright when the rule has it.
 fn sign(sign: &'static str, property: Constraint) -> impl SceneList {
     let lamp = Lamp::Has(property);
-    bsn_list![(mono(sign, 19.0, palette::GRAY_3) template_value(lamp))]
+    bsn_list![(icons::icon(sign, 26.0, palette::GRAY_3) template_value(lamp))]
 }
 
 /// Where the blocks go, by their number of cells: before across, after upwards. A rule that
@@ -959,12 +960,10 @@ fn sync_findings(
         let content = match finding {
             Finding::Symmetry => symmetry(rule).to_string(),
             Finding::States => states(rule).to_string(),
-            Finding::StatesFormula if rule.is_complement_symmetric() => "■↔□".to_string(),
-            Finding::StatesFormula => "■≠□".to_string(),
             Finding::CellCount => population(rule),
             Finding::Weight(corner) => weights.map_or(String::new(), |weights| weights[*corner as usize].to_string()),
             Finding::Reversed => reversed(rule).to_string(),
-            Finding::ReversedFormula => reversed_formula(rule).to_string(),
+            Finding::ReversedFormula => reversed_formula(rule),
             Finding::Vacuum => vacuum_words(rule),
             Finding::Blocks => blocks(rule),
             Finding::Momentum => kept(Constraint::Momentum.holds(rule)).to_string(),
@@ -1354,9 +1353,9 @@ mod tests {
         let growing = flow(&rule("espca-0945df"));
         assert_eq!((growing[1][2], growing[2][1], growing[2][2]), (1.0, 4.0 / 6.0, 2.0 / 6.0));
 
-        assert_eq!(reversed_formula(&rule("bbm")), "=");
-        assert_eq!(reversed_formula(&rule("single-rotation")), "◧◨");
-        assert_eq!(reversed_formula(&rule("critters")), "■□");
+        assert_eq!(reversed_formula(&rule("bbm")), icons::EQUAL);
+        assert_eq!(reversed_formula(&rule("single-rotation")), icons::MIRROR);
+        assert_eq!(reversed_formula(&rule("critters")), icons::STATES);
         assert_eq!((states(&rule("hpp-gas")), states(&rule("critters"))), ("interchangeable", "not interchangeable"));
         assert_eq!(vacuum_words(&rule("critters")), "repeats every 2 generations");
     }

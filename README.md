@@ -15,7 +15,7 @@ and the same rule brings it back, cell for cell.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/spaceships.png" width="100%" alt="The list of spaceships caught under Single rotation: 107 of 7 kinds. Each row shows the ship, its speed and direction, its period, its number of cells and how often it was caught.">
+      <img src="docs/spaceships.png" width="100%" alt="The list of spaceships caught under Single rotation: 107 of 7 kinds. Each row shows the ship, its speed, a dial of the ways its ships were flying, its period, its number of cells and how often it was caught.">
       <p><b>Spaceships are caught and classified.</b> Small patterns that reach the edge of the
       grid are taken out and run on their own until they repeat, which gives their period,
       speed and direction. Every rule keeps a list of its kinds.</p>
@@ -381,10 +381,17 @@ border lets everything else pass. The grid is then outlined in the colour of the
   in reading order).
 
 **Spaceships** (`s`) opens the list for the current rule; every rule has a list of its own. A row
-shows the pattern, its speed as a fraction of *c* (a cell per generation) with its direction, its
-period, its number of cells, how often it was caught, and as a bar its share of all catches. The
-picture shows the blocks the pattern lies on: how a pattern sits on the blocks is part of what it
-is, and the same cells one block over are another pattern.
+shows the pattern, its speed as a fraction of *c* (a cell per generation), the ways its ships were
+flying, its period, its number of cells, how often it was caught, and as a bar its share of all
+catches. The picture shows the blocks the pattern lies on: how a pattern sits on the blocks is
+part of what it is, and the same cells one block over are another pattern.
+
+The picture is of the form the kind is filed under, which flies right or down. The ways its
+ships were going when they were caught are on the small dial next to the speed: a way is lit
+once a ship of the kind went it, and the brighter the more of them did. A kind goes only the ways
+the rule's own symmetry turns it: all four of its sort under a rule that looks the same after a
+quarter turn, two under one with only a half turn, and a single one under a rule with no
+symmetry, where the same shape flying another way is another pattern, if it flies at all.
 
 A click on a row picks the pattern up. It follows the pointer over the grid as a ghost, on the
 blocks of the current partition, and a click puts it down there, as often as you like; `Escape`
@@ -426,8 +433,8 @@ each finding, as the rule editor shows the properties of a rule.
   became of pieces. A click on their line lists them kind by kind instead, under a heading for
   the spaceships, one for the oscillators and one for the still lifes. A kind is shown as the
   spaceship list shows one, by the form it is filed under, whichever way its pieces lie; a
-  small dial next to a spaceship has the ways its ships fly lit. Another click folds the list
-  away again.
+  small dial next to a spaceship has the ways its ships fly lit, as in the spaceship list.
+  Another click folds the list away again.
 
 Every pattern is followed as far: for 131 072 generations, unless it is back in its shape before,
 or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small

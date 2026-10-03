@@ -168,6 +168,20 @@ impl Analyser {
         self.run(cells, phase, |_| {})
     }
 
+    /// A pattern filed at the start of the tables' cycle, as it is at every generation of the
+    /// cycle: the forms to put on a grid whose vacuum is that far into its own cycle, each
+    /// relative to a corner of the blocks the next step rewrites. For a rule whose vacuum
+    /// stands still there is only the one.
+    pub fn forms(&self, cells: &[Cell]) -> Vec<Vec<Cell>> {
+        let mut pattern = settled(cells);
+        let mut forms = Vec::with_capacity(self.tables.len());
+        for table in &self.tables {
+            forms.push(pattern.clone());
+            advance(&mut pattern, table.table());
+        }
+        forms
+    }
+
     /// Runs the pattern until it is back in its starting shape, as it lies, or until it is
     /// given up. Along the way `seen` gets its form every time the tables start over, the
     /// first time included.
@@ -578,6 +592,40 @@ mod tests {
         }
         // Critters is not its own complement: there the two generations differ.
         assert_eq!(Analyser::new(&rule("critters")).tables.len(), 2);
+    }
+
+    #[test]
+    fn a_pattern_has_a_form_for_every_generation_of_the_vacuum() {
+        // Under Single rotation the vacuum stands still: the one form is the pattern itself.
+        let ship = from_rle("b2o2$b2o").unwrap();
+        assert_eq!(Analyser::new(&rule("single-rotation")).forms(&ship), [settled(&ship)]);
+
+        // Critters' glider, found at generation 0, as a world at generation 1 has it: the
+        // forms put on a grid at those phases fly on as the glider does.
+        let critters = rule("critters");
+        let analyser = Analyser::new(&critters);
+        let glider = from_rle("$bo$2bo$2bo$bo").unwrap();
+        let forms = analyser.forms(&glider);
+        assert_eq!(forms.len(), 2);
+        assert_eq!(forms[0], settled(&glider));
+        assert_ne!(forms[1], forms[0]);
+        for (phase, form) in forms.iter().enumerate() {
+            let mut universe = Universe::new(32, 32, critters.clone());
+            universe.step_by(phase as i64);
+            let offset = universe.partition_offset() as i32;
+            for &(x, y) in form {
+                universe.set((8 + offset + x) as usize, (8 + offset + y) as usize, true);
+            }
+            let before = universe.population();
+            let cells = |universe: &Universe| -> Vec<(usize, usize)> {
+                (0..32).flat_map(|y| (0..32).map(move |x| (x, y))).filter(|&(x, y)| universe.get(x, y)).collect()
+            };
+            let start = cells(&universe);
+            universe.step_by(4);
+            assert_eq!(universe.population(), before, "phase {phase}: the glider came apart");
+            let moved: Vec<(usize, usize)> = start.iter().map(|&(x, y)| (x + 2, y)).collect();
+            assert_eq!(cells(&universe), moved, "phase {phase}: not the glider");
+        }
     }
 
     #[test]

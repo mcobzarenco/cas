@@ -3,7 +3,7 @@
 //! While the universe is catching ([`Universe::catching`]), the small patterns that reach its
 //! edge are taken out of the world and handed over as [`Departure`]s. Here they are identified
 //! and counted by kind ([`Census`]), a little every frame, and listed. Every rule has a haul of
-//! its own.
+//! its own. A click on a kind picks it up, to be put back on the grid ([`Stamp`]).
 
 use std::collections::{HashMap, VecDeque};
 
@@ -27,7 +27,7 @@ use bevy::{
 
 use cas_core::{
     census::{Census, Kind},
-    pattern::{Cell, Heading, to_rle},
+    pattern::{Analyser, Cell, Heading, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
 };
@@ -36,7 +36,7 @@ use crate::{
     actions::Toggle,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
-    view::{ALIVE, DEAD},
+    view::{ALIVE, BLOCKS, DEAD, Stamp},
 };
 
 pub const CATCHER_WIDTH: f32 = 396.0;
@@ -376,16 +376,18 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(6),
-            padding: UiRect::axes(px(8), px(6)),
+            padding: UiRect::axes(px(7), px(5)),
+            border: px(1),
             border_radius: px(5),
             flex_shrink: 0.0,
         }
         BackgroundColor(palette::GRAY_2)
+        BorderColor::all(Color::NONE)
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
         template_value(name)
         template_value(row)
-        on(copy_kind)
+        on(pick_kind)
         Children [
             (
                 Node {
@@ -448,12 +450,19 @@ fn number(text: String, column: f32, color: Color) -> impl Scene {
     }
 }
 
-/// The pattern drawn small: one square per cell, as large as fits the box.
+/// The pattern drawn small: one square per cell, as large as fits the box, on the blocks it
+/// lies on. The cells are given relative to a corner of the blocks the next step rewrites, so
+/// the picture is cut at block boundaries and shows them, as the grid does: how a pattern sits
+/// on the blocks is part of what it is.
 fn picture(cells: &[Cell]) -> impl Scene {
-    let left = cells.iter().map(|cell| cell.0).min().unwrap_or(0);
-    let top = cells.iter().map(|cell| cell.1).min().unwrap_or(0);
-    let width = cells.iter().map(|cell| cell.0 - left + 1).max().unwrap_or(1) as f32;
-    let height = cells.iter().map(|cell| cell.1 - top + 1).max().unwrap_or(1) as f32;
+    // Whole blocks: the bounding box widened to even coordinates on the left and the top (a
+    // settled pattern starts at 0 or 1 either way) and to odd ones on the right and the bottom.
+    let span = |axis: fn(&Cell) -> i32| {
+        let (min, max) = cells.iter().map(axis).fold((0, 0), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        (min & !1, max | 1)
+    };
+    let ((left, right), (top, bottom)) = (span(|cell| cell.0), span(|cell| cell.1));
+    let (width, height) = ((right - left + 1) as f32, (bottom - top + 1) as f32);
     let side = ((PICTURE.0 - 12.0) / width)
         .min((PICTURE.1 - 12.0) / height)
         .floor()
@@ -476,6 +485,27 @@ fn picture(cells: &[Cell]) -> impl Scene {
             }
         })
         .collect();
+    // The block boundaries, in the hairlines between the squares.
+    let line_color = BLOCKS.0.with_alpha(BLOCKS.1);
+    let lines: Vec<_> = (0..=(width as i32) / 2)
+        .map(|k| (true, k))
+        .chain((0..=(height as i32) / 2).map(|k| (false, k)))
+        .map(|(vertical, k)| {
+            let at = 2.0 * k as f32 * side - 1.0;
+            let (left, top) = if vertical { (at, -1.0) } else { (-1.0, at) };
+            let (w, h) = if vertical { (1.0, height * side + 1.0) } else { (width * side + 1.0, 1.0) };
+            bsn! {
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(left),
+                    top: px(top),
+                    width: px(w),
+                    height: px(h),
+                }
+                BackgroundColor(line_color)
+            }
+        })
+        .collect();
     bsn! {
         Node {
             width: px(PICTURE.0),
@@ -492,40 +522,69 @@ fn picture(cells: &[Cell]) -> impl Scene {
                 width: px(width * side),
                 height: px(height * side),
             }
-            Children [ { squares } ]
+            Children [ { squares }, { lines } ]
         )]
     }
 }
 
-/// A click on a row puts the pattern on the clipboard as text.
-fn copy_kind(
+/// A click on a row picks the pattern up, to be put on the grid; on the row of the pattern
+/// held, it lets go of it. With shift, the click puts the pattern on the clipboard as text.
+fn pick_kind(
     click: On<Pointer<Click>>,
     rows: Query<&KindRow>,
+    keys: Res<ButtonInput<KeyCode>>,
     universe: Res<Universe>,
     mut clipboard: ResMut<Clipboard>,
     mut catcher: ResMut<Catcher>,
+    mut stamp: ResMut<Stamp>,
 ) {
     let Ok(&KindRow(index)) = rows.get(click.entity) else {
         return;
     };
-    let Some(kind) = catcher
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let Some((haul, kind)) = catcher
         .hauls
         .get(universe.rule())
-        .and_then(|haul| haul.census.kinds().get(index))
+        .and_then(|haul| Some((haul.number, haul.census.kinds().get(index)?)))
     else {
         return;
     };
-    let rle = to_rle(&kind.motion.canonical);
-    catcher.note = Some(match clipboard.set_text(rle.as_str()) {
-        Ok(()) => format!("Copied {rle}"),
-        Err(error) => format!("The clipboard is not available ({error:?})."),
-    });
+    if keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]) {
+        let rle = to_rle(&kind.motion.canonical);
+        catcher.note = Some(match clipboard.set_text(rle.as_str()) {
+            Ok(()) => format!("Copied {rle}"),
+            Err(error) => format!("The clipboard is not available ({error:?})."),
+        });
+    } else if stamp.kind == Some((haul, index)) {
+        stamp.let_go();
+    } else {
+        let forms = Analyser::new(universe.rule()).forms(&kind.motion.canonical);
+        stamp.pick_up(forms, universe.rule(), (haul, index));
+        catcher.note = None;
+    }
 }
 
-/// A row lights up under the pointer: a click on it does something.
-fn light_rows(mut rows: Query<(&Hovered, &mut BackgroundColor), (With<KindRow>, Changed<Hovered>)>) {
-    for (hovered, mut background) in &mut rows {
-        background.0 = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
+/// A row lights up under the pointer, since a click on it does something, and the row of the
+/// pattern picked up is outlined in the pattern's colour.
+fn light_rows(
+    stamp: Res<Stamp>,
+    catcher: Res<Catcher>,
+    universe: Res<Universe>,
+    mut rows: Query<(&KindRow, &Hovered, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    let haul = catcher.hauls.get(universe.rule()).map(|haul| haul.number);
+    for (&KindRow(index), hovered, mut background, mut border) in &mut rows {
+        let held = haul.is_some_and(|haul| stamp.kind == Some((haul, index)));
+        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
+        if background.0 != color {
+            background.0 = color;
+        }
+        let outline = BorderColor::all(if held { Aspect::Pattern.color() } else { Color::NONE });
+        if *border != outline {
+            *border = outline;
+        }
     }
 }
 
@@ -554,6 +613,7 @@ struct Shown {
     caught: u64,
     kinds: usize,
     catching: bool,
+    held: Option<(u64, usize)>,
     note: Option<String>,
 }
 
@@ -562,6 +622,7 @@ struct Shown {
 fn sync_list(
     catcher: Res<Catcher>,
     universe: Res<Universe>,
+    stamp: Res<Stamp>,
     time: Res<Time<Real>>,
     list: Single<(Entity, Option<&Children>), With<KindList>>,
     rows: Query<(Entity, &KindRow)>,
@@ -583,16 +644,18 @@ fn sync_list(
         caught: census.map_or(0, |census| census.ships() + census.others()),
         kinds: census.map_or(0, |census| census.kinds().len()),
         catching: universe.catching,
+        held: stamp.kind,
         note: catcher.note.clone(),
     };
     let same_haul = shown.as_ref().is_some_and(|shown| shown.haul == now.haul);
     if shown.as_ref() == Some(&now) || (*wait > 0.0 && same_haul) {
         return;
     }
-    let hint = match (now.kinds, now.catching) {
-        (0, false) => "Catching is off.",
-        (0, true) => "No spaceships yet: let a blob run.",
-        _ => "Click a pattern to copy it as text.",
+    let hint = match (now.held.is_some(), now.kinds, now.catching) {
+        (true, ..) => "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.",
+        (false, 0, false) => "Catching is off.",
+        (false, 0, true) => "No spaceships yet: let a blob run.",
+        _ => "Click a pattern to pick it up, or shift-click it to copy it as text.",
     };
     *shown = Some(now);
     *wait = REFRESH;

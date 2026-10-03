@@ -29,6 +29,12 @@ struct GridParams {
     block_color: vec4<f32>,
     // The outline of the grid.
     edge_color: vec4<f32>,
+    // A pattern about to be placed, shown as a ghost: its colour, where its origin is, how
+    // many cells it has, and the cells, two to a vector.
+    stamp_color: vec4<f32>,
+    stamp_origin: vec2<i32>,
+    stamp_count: u32,
+    stamp: array<vec4<i32>, 32>,
 };
 
 @group(1) @binding(0) var<uniform> params: GridParams;
@@ -74,6 +80,23 @@ fn stroke(distance: f32, width: f32) -> f32 {
     return clamp(0.5 * width + 0.5 - distance, 0.0, 1.0);
 }
 
+// 1 if the cell containing `c` is a cell of the stamp, which may reach round the torus.
+fn stamp_at(c: vec2<f32>) -> f32 {
+    if params.stamp_count == 0u {
+        return 0.0;
+    }
+    let grid = vec2<i32>(params.grid_size);
+    let rel = ((vec2<i32>(floor(c)) - params.stamp_origin) % grid + grid) % grid;
+    for (var i = 0u; i < params.stamp_count; i++) {
+        let pair = params.stamp[i / 2u];
+        let cell = select(pair.zw, pair.xy, (i & 1u) == 0u);
+        if all(cell == rel) {
+            return 1.0;
+        }
+    }
+    return 0.0;
+}
+
 @fragment
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     // Physical pixels from the centre of the node, then cell coordinates.
@@ -85,6 +108,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let outside = max(q.x, q.y);
 
     var color = mix(params.dead.rgb, params.alive.rgb, coverage_at(c));
+    color = mix(color, params.stamp_color.rgb, params.stamp_color.a * stamp_at(c));
 
     // Cell grid: a line on every integer coordinate.
     let to_cell_edge = abs(fract(c + 0.5) - 0.5) * params.scale;

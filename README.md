@@ -266,6 +266,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | open border: what reaches the edge of the grid leaves the world, instead of coming back on the other side | *Open border* | `o` |
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
+| pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
 Sliders jump to where you click and then follow the pointer; the wheel over a slider steps it to
@@ -340,10 +341,16 @@ border lets everything else pass. The grid is then outlined in the colour of the
 
 **Spaceships** (`s`) opens the list for the current rule; every rule has a list of its own. A row
 shows the pattern, its speed as a fraction of *c* (a cell per generation) with its direction, its
-period, its number of cells, how often it was caught, and as a bar its share of all catches. A
-click on a row copies the pattern as run-length encoded text (`b2o2$b2o`: `b` dead, `o` alive, `$`
-next row, written from a corner of the blocks the next step rewrites). **Clear list** forgets what
-was caught under the current rule.
+period, its number of cells, how often it was caught, and as a bar its share of all catches. The
+picture shows the blocks the pattern lies on: how a pattern sits on the blocks is part of what it
+is, and the same cells one block over are another pattern.
+
+A click on a row picks the pattern up. It follows the pointer over the grid as a ghost, on the
+blocks of the current partition, and a click puts it down there, as often as you like; `Escape`
+or a right click lets go of it. Under a rule whose empty space flickers, what is put down is the
+pattern as it is at that generation. Shift-click copies the pattern as run-length encoded text
+instead (`b2o2$b2o`: `b` dead, `o` alive, `$` next row, written from a corner of the blocks the
+next step rewrites). **Clear list** forgets what was caught under the current rule.
 
 What left or was caught is gone: stepping backwards does not bring it back.
 

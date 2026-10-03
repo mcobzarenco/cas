@@ -6,7 +6,8 @@
 //! 2×2 block partition. Zooming, panning and the overlays therefore cost nothing on the CPU.
 //!
 //! Interaction goes through picking events on the grid node: the wheel zooms about the pointer,
-//! right- or middle-drag pans, left-drag paints.
+//! right- or middle-drag pans, left-drag paints. A pattern picked up from the spaceship list
+//! ([`Stamp`]) follows the pointer as a ghost, snapped to the blocks, and a click puts it down.
 
 use bevy::{
     asset::{AssetEventSystems, RenderAssetUsages, embedded_asset},
@@ -20,7 +21,7 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
-use cas_core::universe::Universe;
+use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
 
 use crate::{
     sim::{Settings, SimSystems},
@@ -35,7 +36,11 @@ pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
 const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
 /// The blocks are what the rule rewrites.
-const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.3);
+pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.3);
+/// A pattern about to be placed shows through at this opacity.
+const GHOST: f32 = 0.55;
+/// So many cells of a stamp are shown as a ghost; a larger one is placed whole all the same.
+const GHOST_CELLS: usize = 64;
 
 /// Largest zoom, in logical pixels per cell (more when a tiny grid needs it to fit).
 const MAX_ZOOM: f32 = 64.0;
@@ -135,6 +140,68 @@ struct Stroke {
     /// What the stroke draws, decided by the first cell it touches.
     alive: Option<bool>,
     last: Option<IVec2>,
+    /// The right button has dragged since it was pressed: that was a pan, not a click.
+    panned: bool,
+}
+
+/// A pattern picked up to be put on the grid, as often as one likes, until it is let go of.
+#[derive(Resource, Default)]
+pub struct Stamp {
+    /// The pattern through the vacuum's cycle, one form per generation of it, each relative
+    /// to a corner of the blocks the next step rewrites ([`Analyser::forms`]). Empty while
+    /// nothing is picked up.
+    forms: Vec<Vec<Cell>>,
+    /// The rule the pattern is a pattern of.
+    rule: Option<BlockRule>,
+    /// Which spaceship it is: the number of the haul and the kind's place in it.
+    pub kind: Option<(u64, usize)>,
+    /// The cell under the pointer, while the pointer is over the grid.
+    hover: Option<IVec2>,
+}
+
+impl Stamp {
+    pub fn pick_up(&mut self, forms: Vec<Vec<Cell>>, rule: &BlockRule, kind: (u64, usize)) {
+        self.forms = forms;
+        self.rule = Some(rule.clone());
+        self.kind = Some(kind);
+    }
+
+    pub fn let_go(&mut self) {
+        self.forms.clear();
+        self.rule = None;
+        self.kind = None;
+    }
+
+    pub fn is_held(&self) -> bool {
+        !self.forms.is_empty()
+    }
+
+    /// The form for the universe as it is now.
+    fn form(&self, universe: &Universe) -> &[Cell] {
+        &self.forms[universe.phase() % self.forms.len()]
+    }
+
+    /// Where the pattern goes for a pointer over `cell`: under the pointer, as near as the
+    /// blocks allow. Its origin has to be a corner of the blocks the next step rewrites, or
+    /// it would be another pattern.
+    fn origin(&self, universe: &Universe, cell: IVec2) -> IVec2 {
+        let form = self.form(universe);
+        let extent = |axis: fn(&Cell) -> i32| {
+            let (min, max) = form.iter().map(axis).fold((i32::MAX, i32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            (min + max) / 2
+        };
+        let middle = IVec2::new(extent(|cell| cell.0), extent(|cell| cell.1));
+        let offset = universe.partition_offset() as i32;
+        let corner = |v: i32| v - ((v - offset) & 1);
+        let anchor = cell - middle;
+        IVec2::new(corner(anchor.x), corner(anchor.y))
+    }
+
+    /// Where the pattern would go now, and its cells: nothing while the pointer is elsewhere.
+    fn placement(&self, universe: &Universe) -> Option<(IVec2, &[Cell])> {
+        let cell = self.hover.filter(|_| self.is_held())?;
+        Some((self.origin(universe, cell), self.form(universe)))
+    }
 }
 
 #[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
@@ -169,6 +236,12 @@ struct GridParams {
     grid_color: Vec4,
     block_color: Vec4,
     edge_color: Vec4,
+    /// The ghost of the stamp: its colour, where its origin is, how many cells it has, and
+    /// the cells, two to a vector.
+    stamp_color: Vec4,
+    stamp_origin: IVec2,
+    stamp_count: u32,
+    stamp: [IVec4; GHOST_CELLS / 2],
 }
 
 /// Needs the [`Universe`] to exist: the cell texture takes its size.
@@ -181,7 +254,9 @@ impl Plugin for ViewPlugin {
             .init_resource::<GridAssets>()
             .init_resource::<ViewState>()
             .init_resource::<Stroke>()
+            .init_resource::<Stamp>()
             .add_observer(attach_material)
+            .add_systems(Update, let_go_of_stamp.in_set(SimSystems::Input))
             .add_systems(Update, upload_cells.in_set(SimSystems::Present))
             // After layout, so that the fit follows this frame's viewport, and before asset
             // changes are collected for rendering.
@@ -207,6 +282,9 @@ pub fn grid_view() -> impl Scene {
         EntityCursor::System(SystemCursorIcon::Crosshair)
         on(on_press)
         on(on_drag)
+        on(on_click)
+        on(on_move)
+        on(on_out)
         on(on_scroll)
     }
 }
@@ -274,11 +352,18 @@ fn update_material(
     view: Res<ViewState>,
     settings: Res<Settings>,
     universe: Res<Universe>,
+    stamp: Res<Stamp>,
     assets: Res<GridAssets>,
     node: Single<&ComputedNode, With<GridView>>,
     mut materials: ResMut<Assets<GridMaterial>>,
 ) {
     let pixel_ratio = 1.0 / node.inverse_scale_factor;
+    let (stamp_origin, stamp_cells) = stamp.placement(&universe).unwrap_or((IVec2::ZERO, &[]));
+    let mut ghost = [IVec4::ZERO; GHOST_CELLS / 2];
+    for (i, &(x, y)) in stamp_cells.iter().take(GHOST_CELLS).enumerate() {
+        let slot = &mut ghost[i / 2];
+        *slot = if i % 2 == 0 { IVec4::new(x, y, slot.z, slot.w) } else { IVec4::new(slot.x, slot.y, x, y) };
+    }
     let params = GridParams {
         center: view.center,
         grid_size: Vec2::new(universe.width as f32, universe.height as f32),
@@ -300,6 +385,10 @@ fn update_material(
             let (color, alpha) = if universe.catching { CATCHING_EDGE } else { EDGE };
             linear(color, alpha)
         },
+        stamp_color: linear(ALIVE, GHOST),
+        stamp_origin,
+        stamp_count: stamp_cells.len().min(GHOST_CELLS) as u32,
+        stamp: ghost,
     };
     // Writing to the asset re-prepares its bind group; reading it does not.
     if let Some(mut material) = materials.get_mut(&assets.material)
@@ -357,17 +446,36 @@ struct Canvas<'w, 's> {
     view: ResMut<'w, ViewState>,
     universe: ResMut<'w, Universe>,
     stroke: ResMut<'w, Stroke>,
+    stamp: ResMut<'w, Stamp>,
 }
 
 impl Canvas<'_, '_> {
+    /// The cell under a pointer position (logical window coordinates) over the grid node.
+    fn cell_under(&self, grid: Entity, pointer: Vec2) -> Option<IVec2> {
+        let (node, transform) = self.nodes.get(grid).ok()?;
+        let offset = offset_in(node, transform, pointer);
+        Some((self.view.center + offset / self.view.zoom).floor().as_ivec2())
+    }
+
+    /// Puts the stamp down where it hovers. The grid is a torus, so a pattern that reaches
+    /// past an edge comes round the other side.
+    fn place_stamp(&mut self) {
+        let Some((origin, form)) = self.stamp.placement(&self.universe) else {
+            return;
+        };
+        let (width, height) = (self.universe.width as i32, self.universe.height as i32);
+        for &(x, y) in form {
+            let (x, y) = ((origin.x + x).rem_euclid(width), (origin.y + y).rem_euclid(height));
+            self.universe.set(x as usize, y as usize, true);
+        }
+    }
+
     /// Continues the stroke to the cell under the pointer. The first cell it touches decides
     /// what it draws: the opposite of what is there, or nothing but dead cells when erasing.
     fn stroke_to(&mut self, grid: Entity, pointer: Vec2) {
-        let Ok((node, transform)) = self.nodes.get(grid) else {
+        let Some(cell) = self.cell_under(grid, pointer) else {
             return;
         };
-        let offset = offset_in(node, transform, pointer);
-        let cell = (self.view.center + offset / self.view.zoom).floor().as_ivec2();
         let alive = match (self.stroke.alive, in_grid(cell, &self.universe)) {
             (Some(alive), _) => alive,
             (None, Some((x, y))) => !self.stroke.erase && !self.universe.get(x, y),
@@ -386,9 +494,16 @@ impl Canvas<'_, '_> {
     }
 }
 
-/// A left press starts a stroke; shift makes it an eraser.
+/// A left press puts the stamp down if one is held, and otherwise starts a stroke; shift
+/// makes the stroke an eraser.
 fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canvas: Canvas) {
     if press.button != PointerButton::Primary {
+        canvas.stroke.panned = false;
+        return;
+    }
+    if canvas.stamp.is_held() {
+        canvas.stamp.hover = canvas.cell_under(press.entity, press.pointer_location.position);
+        canvas.place_stamp();
         return;
     }
     *canvas.stroke = Stroke {
@@ -401,11 +516,44 @@ fn on_press(press: On<Pointer<Press>>, keys: Res<ButtonInput<KeyCode>>, mut canv
 /// Left-drag continues the stroke; right- or middle-drag pans.
 fn on_drag(drag: On<Pointer<Drag>>, mut canvas: Canvas) {
     if drag.button == PointerButton::Primary {
-        canvas.stroke_to(drag.entity, drag.pointer_location.position);
+        if !canvas.stamp.is_held() {
+            canvas.stroke_to(drag.entity, drag.pointer_location.position);
+        }
     } else {
         let zoom = canvas.view.zoom;
         canvas.view.center -= drag.delta / zoom;
         canvas.view.fit = false;
+        canvas.stroke.panned = true;
+    }
+}
+
+/// A right click, as opposed to a right drag, lets go of the stamp.
+fn on_click(click: On<Pointer<Click>>, mut canvas: Canvas) {
+    if click.button == PointerButton::Secondary && !canvas.stroke.panned && canvas.stamp.is_held() {
+        canvas.stamp.let_go();
+    }
+}
+
+/// The stamp follows the pointer over the grid.
+fn on_move(moved: On<Pointer<Move>>, mut canvas: Canvas) {
+    if canvas.stamp.is_held() {
+        let cell = canvas.cell_under(moved.entity, moved.pointer_location.position);
+        if canvas.stamp.hover != cell {
+            canvas.stamp.hover = cell;
+        }
+    }
+}
+
+fn on_out(_: On<Pointer<Out>>, mut stamp: ResMut<Stamp>) {
+    if stamp.hover.is_some() {
+        stamp.hover = None;
+    }
+}
+
+/// Escape lets go of the stamp, and so does a change of rule: the pattern was that rule's.
+fn let_go_of_stamp(keys: Res<ButtonInput<KeyCode>>, universe: Res<Universe>, mut stamp: ResMut<Stamp>) {
+    if stamp.is_held() && (keys.just_pressed(KeyCode::Escape) || stamp.rule.as_ref() != Some(universe.rule())) {
+        stamp.let_go();
     }
 }
 

@@ -69,10 +69,10 @@ of Bevy; the app at the root and the search program are built on it.
 | `crates/cas-core/examples/figures.rs` | draws the figures of the README |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
-| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, and shows the panel |
+| `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, shows the panel, and hands a kind to the stamp when its row is clicked |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
-| `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events |
-| `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays |
+| `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material, painting and navigation via picking events, and the stamp: a pattern picked up from the spaceship list, shown as a ghost and put down with a click |
+| `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays, the ghost of the stamp |
 | `src/ui.rs` | the control panel as cards, one per aspect, and the aspects' colours (Bevy UI + `bevy_feathers` dark theme, `bsn!` scenes); sliders and checkboxes on the headless widgets, widget↔state sync |
 | `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the properties with their diagrams, the rule string and clipboard |
 | `src/rig.rs`, `rig/*.cas` | the script-driven test rig and the scripts that exercise the app |

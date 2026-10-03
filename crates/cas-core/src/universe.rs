@@ -162,6 +162,11 @@ impl Universe {
         self.vacuum[self.phase]
     }
 
+    /// How far the vacuum is into its cycle.
+    pub fn phase(&self) -> usize {
+        self.phase
+    }
+
     /// The cells, row by row, one `0`/`1` byte each.
     pub fn cells(&self) -> &[u8] {
         &self.cells

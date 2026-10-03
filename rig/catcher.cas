@@ -17,7 +17,7 @@ shot catcher-1-armed
 # border is closed, and still they are taken out where they would have wrapped around.
 step 120; wait 10; expect_caught 1 1; expect_population 5
 step 400; wait 20; expect_caught 2 2; expect_population 0
-expect_text CatcherNote Click a pattern to copy it as text.
+expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
 shot catcher-2-two-kinds
 
 # Without catching, a closed border lets a ship come round again and an open one lets it
@@ -29,14 +29,28 @@ key o; wait 3; expect_checked OpenBorder on
 step 1600; wait 10; expect_population 0; expect_caught 2 2
 
 # A blob, left to evaporate through the open border. The rows stay put while the list grows,
-# so a click lands also while the catches come in: it copies the pattern as text.
+# so a click lands also while the catches come in: with shift, it copies the pattern as text.
 key k; wait 3
 blob; speed 240; stride 32; play; wait 200
-click Kind0; wait 3; expect_clipboard b2o2$b2o
+press Shift; click Kind0; release Shift; wait 3; expect_clipboard b2o2$b2o
 wait 200; pause; wait 20
 shot catcher-3-haul
 
+# A click picks the pattern up; a click on the grid puts it down, on the blocks of the current
+# partition, so that it flies: the lightest ship, two cells to the right every 12 generations.
+clear; wait 2; expect_population 0
+click Kind0; wait 3
+expect_text CatcherNote Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.
+move Grid 0 0; wait 3; shot catcher-4-ghost
+click Grid 0 0; wait 3; expect_population 4
+expect_cell 127 126 on; expect_cell 128 128 on
+step 120; wait 2; expect_population 4; expect_cell 147 126 on; expect_cell 148 128 on
+# It stays picked up until Escape; a click on its row would let go of it as well.
+click Grid -100 60; wait 3; expect_population 8
+key Escape; wait 3; expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
+click Grid 100 -60; wait 3; expect_population 9
+
 # Forgetting empties the list of this rule; the key closes the panel.
 click CatcherForget; wait 20; expect_caught 0 0
-key s; wait 4; shot catcher-4-closed
+key s; wait 4; shot catcher-5-closed
 quit

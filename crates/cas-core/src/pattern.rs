@@ -11,6 +11,7 @@
 
 use std::{
     cmp::Reverse,
+    collections::{HashMap, HashSet},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -53,7 +54,13 @@ pub struct Study {
     /// found later in the cycle is taken there first.
     pub start: Vec<Cell>,
     pub fate: Fate,
-    /// How it moves, if it came back to its shape.
+    /// After how many generations it is back in its shape, if it is known to be: as it was
+    /// seen to, or as its pieces say. Several patterns that never meet, each back where it
+    /// was after a period of its own, are all back at once after the least common multiple
+    /// of those periods. That is soon more generations than anything is followed for: the
+    /// fate of such a pattern is undecided, and it is an oscillator all the same.
+    pub period: Option<u128>,
+    /// How it moves, if it was followed until it was back in its shape.
     pub motion: Option<Motion>,
     /// Whether every generation finds the same cells in the same places. (Its period is
     /// still that of the tables, two at least where the vacuum flips.)
@@ -63,9 +70,10 @@ pub struct Study {
     /// The widest and the highest its bounding box got.
     pub extent: (i32, i32),
     /// How many patterns it is that never meet: one, for a pattern of a piece. Known only for
-    /// one that came back to its shape; 0 otherwise.
+    /// one that comes back to its shape; 0 otherwise.
     pub parts: usize,
-    /// For how many generations it was followed.
+    /// For how many generations it was followed: one known by its pieces, for as long as the
+    /// slowest of them takes to be back.
     pub generations: u32,
     /// The turns and mirrors of the square under which the pattern, as it set out, is itself.
     pub symmetry: Symmetry,
@@ -83,9 +91,9 @@ pub struct Study {
     /// before they are too many cells, so its fate is that it flies apart; its growth tells it
     /// from a few ships parting.)
     pub growth: Option<f32>,
-    /// For a pattern that did not come back to its shape: what it had become, taken apart
+    /// For a pattern that does not come back to its shape: what it had become, taken apart
     /// into the pieces that go their own ways, the largest first, each followed on its own;
-    /// and how many pieces beyond those were not looked at. For a pattern that came back as
+    /// and how many pieces beyond those were not looked at. For a pattern that comes back as
     /// several that never meet: those. None for a pattern of a piece.
     pub pieces: Vec<Piece>,
     pub more_pieces: usize,
@@ -152,7 +160,8 @@ pub enum PieceKind {
 /// piece is the gun and not its whole stream); the pieces that do not are then followed on
 /// their own, the largest first, each for so many generations and so far beyond its own
 /// width, until so much work (cells times generations) has been spent on them; a piece with
-/// more cells than this is not followed.
+/// more cells than this is not followed. A pattern is looked at by its pieces before it is
+/// followed, too ([`Analyser::apart`]), with as much work allowed.
 const PIECE_WINDOW: u32 = 64;
 const PIECE_GENERATIONS: u32 = 512;
 const PIECE_WORK: u64 = 4_000_000;
@@ -246,6 +255,27 @@ impl Watch {
     }
 }
 
+/// A block as a pattern comes by it: at an odd generation or at an even one, when the blocks
+/// lie a cell further along both ways; and which of those blocks it is, row first.
+type Block = (bool, (i32, i32));
+
+/// Some cells of a pattern followed on their own: back where they were after `period`
+/// generations, having come by `blocks` on the way.
+struct Unit {
+    cells: Vec<Cell>,
+    period: u32,
+    blocks: HashSet<Block>,
+}
+
+/// What a pattern is known to be by its pieces ([`Analyser::apart`]): the patterns that never
+/// meet, as [`Analyser::parts`] gives them; after how many generations all of them are back at
+/// once; and after how many the slowest of them is.
+struct Apart {
+    parts: Vec<Vec<Cell>>,
+    period: u128,
+    slowest: u32,
+}
+
 /// Recognises patterns of one rule.
 #[derive(Clone)]
 pub struct Analyser {
@@ -337,6 +367,11 @@ impl Analyser {
             return None;
         }
         let start = self.start(cells, phase);
+        // What is known by its pieces is followed for as long as the slowest of them takes to
+        // be back: by then all of it has been seen, if not all of it at once.
+        let apart = self.apart(&start);
+        let patience = apart.as_ref().map_or(self.max_generations, |apart| apart.slowest);
+        let follower = Analyser { max_generations: patience, ..self.clone() };
         let cycle = self.tables.len() as u32;
         let (mut fewest, mut most) = (start.len(), start.len());
         let (mut widest, mut highest) = extent(&start);
@@ -350,7 +385,7 @@ impl Analyser {
         let mut populations = Vec::new();
         let mut last = start.clone();
         let (mut recurs, mut cycles) = (None, 0);
-        let fate = self.run(
+        let fate = follower.run(
             cells,
             phase,
             |form| {
@@ -386,21 +421,27 @@ impl Analyser {
             Fate::Returns { .. } => unwatched.analyse(cells, phase),
             _ => None,
         };
-        let parts = match fate {
-            Fate::Returns { period, .. } => self.parts(&start, 0, period),
+        let period = match (fate, &apart) {
+            (Fate::Returns { period, .. }, _) => Some(period as u128),
+            (_, Some(apart)) => Some(apart.period),
+            _ => None,
+        };
+        let parts = match (fate, apart) {
+            (_, Some(apart)) => apart.parts,
+            (Fate::Returns { period, .. }, None) => self.parts(&start, 0, period),
             _ => Vec::new(),
         };
-        let growth = match fate {
-            Fate::Returns { .. } => None,
-            _ => Some(growth_of(&populations)),
+        let growth = match period {
+            Some(_) => None,
+            None => Some(growth_of(&populations)),
         };
-        // What spreads over the plane is one thing, not pieces.
-        let (pieces, more_pieces) = match fate {
+        let (pieces, more_pieces) = match period {
             // Parts that never meet come back each on its own, when the whole does at the latest.
-            Fate::Returns { .. } if parts.len() > 1 => (parts.iter().map(|part| unwatched.piece(part).0).collect(), 0),
-            Fate::Returns { .. } => (Vec::new(), 0),
-            _ if growth.is_some_and(|growth| growth >= SPREADING) => (Vec::new(), 0),
-            _ => {
+            Some(_) if parts.len() > 1 => (parts.iter().map(|part| unwatched.piece(part).0).collect(), 0),
+            Some(_) => (Vec::new(), 0),
+            // What spreads over the plane is one thing, not pieces.
+            None if growth.is_some_and(|growth| growth >= SPREADING) => (Vec::new(), 0),
+            None => {
                 if let Some(watch) = &self.watch {
                     watch.apart.store(true, Ordering::Relaxed);
                 }
@@ -409,6 +450,7 @@ impl Analyser {
         };
         Some(Study {
             fate,
+            period,
             motion,
             still,
             cells: (fewest, most),
@@ -478,14 +520,6 @@ impl Analyser {
             }
         }
         all.sort_by_key(|(_, piece)| Reverse(piece.len()));
-        let mut analyser = Analyser {
-            tables: self.tables.clone(),
-            orientations: self.orientations.clone(),
-            max_generations: PIECE_GENERATIONS,
-            max_cells: 0,
-            max_extent: PIECE_EXTENT,
-            watch: None,
-        };
         let mut work = PIECE_WORK;
         let mut pieces = Vec::new();
         for (_, piece) in &all {
@@ -496,15 +530,137 @@ impl Analyser {
                 pieces.push(Piece { cells: piece.len(), kind: PieceKind::Unexamined, form: Vec::new() });
                 continue;
             }
-            analyser.max_cells = (4 * piece.len()).max(64);
-            let (width, height) = extent(piece);
-            analyser.max_extent = PIECE_EXTENT.max(width.max(height) + PIECE_EXTENT / 2);
-            let (piece, generations) = analyser.piece(piece);
+            let (piece, generations) = self.for_piece(piece, PIECE_GENERATIONS).piece(piece);
             work = work.saturating_sub(piece.cells as u64 * generations as u64);
             pieces.push(piece);
         }
         let more = all.len() - pieces.len();
         (pieces, more)
+    }
+
+    /// An analyser for a piece of something larger: it follows for so many generations, to
+    /// four times the piece's cells and some way beyond its width, and nobody watches it.
+    fn for_piece(&self, cells: &[Cell], generations: u32) -> Analyser {
+        let (width, height) = extent(cells);
+        Analyser {
+            max_generations: generations,
+            max_cells: (4 * cells.len()).max(64),
+            max_extent: PIECE_EXTENT.max(width.max(height) + PIECE_EXTENT / 2),
+            watch: None,
+            ..self.clone()
+        }
+    }
+
+    /// The pattern as several that never meet, if each of them is back where it was after a
+    /// period of its own. Such a pattern is back when all of them are at once, after the
+    /// least common multiple of their periods: what a blob leaves behind is a field of small
+    /// oscillators that is back after billions of generations. There is no following it
+    /// there, and it is known by its pieces instead.
+    ///
+    /// That pieces never meet is not seen by following them either. Each is followed on its
+    /// own through its period, and the blocks it comes by are noted. Pieces that come by no
+    /// block in common cannot meet, nor can one be found where the other was: all of them
+    /// are back when each is, and no sooner. Pieces that do come by the same block are
+    /// followed as one, which settles what they do to each other.
+    ///
+    /// None for a pattern of one piece; for one with a piece that is not back where it was
+    /// within the work allowed ([`PIECE_WORK`]), because it travels, or grows, or takes
+    /// long; and for one that is back later than there is counting.
+    fn apart(&self, start: &[Cell]) -> Option<Apart> {
+        let window = (PIECE_WINDOW as usize).next_multiple_of(self.tables.len());
+        let mut work = PIECE_WORK.checked_sub((start.len() * window) as u64)?;
+        // Cells that meet soon are one piece from the outset.
+        let mut groups: Vec<usize> = (0..start.len()).collect();
+        let mut pattern: Vec<(Cell, usize)> = start.iter().copied().zip(0..).collect();
+        let mut count = start.len();
+        for table in self.tables.iter().cycle().take(window) {
+            if count < 2 || self.stopped() {
+                return None;
+            }
+            count -= advance_groups(&mut pattern, table.table(), &mut groups);
+        }
+        if count < 2 {
+            return None;
+        }
+        let mut fresh = grouped(start, &mut groups);
+        let mut units: Vec<Unit> = Vec::new();
+        while !fresh.is_empty() {
+            for cells in fresh.drain(..) {
+                if self.stopped() {
+                    return None;
+                }
+                units.push(self.in_place(cells, &mut work)?);
+            }
+            // The units that come by a block in common, by way of others too, become one.
+            let mut first: HashMap<Block, usize> = HashMap::new();
+            let mut joined: Vec<usize> = (0..units.len()).collect();
+            for (index, unit) in units.iter().enumerate() {
+                for &block in &unit.blocks {
+                    let other = root(&mut joined, *first.entry(block).or_insert(index));
+                    let own = root(&mut joined, index);
+                    joined[own] = other;
+                }
+            }
+            let mut sizes = vec![0; units.len()];
+            for index in 0..units.len() {
+                sizes[root(&mut joined, index)] += 1;
+            }
+            let mut together: Vec<Vec<Cell>> = vec![Vec::new(); units.len()];
+            let mut alone = Vec::new();
+            for (index, unit) in units.into_iter().enumerate() {
+                match root(&mut joined, index) {
+                    group if sizes[group] > 1 => together[group].extend(unit.cells),
+                    _ => alone.push(unit),
+                }
+            }
+            units = alone;
+            fresh = together.into_iter().filter(|cells| !cells.is_empty()).collect();
+            for cells in &mut fresh {
+                cells.sort_unstable_by_key(|&(x, y)| (y, x));
+            }
+        }
+        if units.len() < 2 {
+            return None;
+        }
+        let (mut period, mut slowest) = (1u128, 0);
+        let mut parts = Vec::new();
+        for unit in &units {
+            let common = gcd(unit.period, (period % unit.period as u128) as u32);
+            period = period.checked_mul((unit.period / common) as u128)?;
+            slowest = slowest.max(unit.period);
+            // Units that were followed as one may never have met, for all that.
+            parts.extend(self.parts(&unit.cells, 0, unit.period));
+        }
+        parts.sort_unstable_by_key(|part| (part[0].1, part[0].0));
+        Some(Apart { parts, period, slowest })
+    }
+
+    /// Follows some cells of a pattern on their own until they are back where they were, for
+    /// no more than the work that is left, which is counted in cells times generations. None
+    /// if they are not back by then, or back somewhere else.
+    fn in_place(&self, cells: Vec<Cell>, work: &mut u64) -> Option<Unit> {
+        let generations = (*work / cells.len() as u64).min(self.max_generations as u64) as u32;
+        // The cells are followed from next to the origin, an even way from where they are.
+        let mut settled = cells.clone();
+        let origin = settle(&mut settled);
+        let mut blocks = HashSet::new();
+        let mut generation = 0;
+        let fate = self.for_piece(&cells, generations).run(
+            &settled,
+            0,
+            |_| {},
+            |_, pattern, moved| {
+                generation += 1;
+                let odd = generation & 1;
+                let (dx, dy) = (moved.0 + origin.0 - odd, moved.1 + origin.1 - odd);
+                blocks.extend(pattern.iter().map(|&(x, y)| (odd == 1, place(&(x + dx, y + dy)).0)));
+            },
+        );
+        *work = work.saturating_sub(cells.len() as u64 * generation as u64);
+        match fate {
+            Fate::Returns { period, displacement: (0, 0) } => Some(Unit { cells, period, blocks }),
+            _ => None,
+        }
     }
 
     /// What some cells do on their own, as a piece of something larger, and for how many
@@ -634,19 +790,31 @@ impl Analyser {
             let before = count;
             for table in tables.by_ref().take(period as usize) {
                 count -= advance_groups(&mut pattern, table.table(), &mut groups);
+                // All of a piece: there is nothing more to find out.
+                if count == 1 {
+                    break;
+                }
             }
             quiet = count == before;
         }
-        let mut parts: Vec<(usize, Vec<Cell>)> = Vec::new();
-        for (index, &cell) in cells.iter().enumerate() {
-            let group = root(&mut groups, index);
-            match parts.iter_mut().find(|part| part.0 == group) {
-                Some(part) => part.1.push(cell),
-                None => parts.push((group, vec![cell])),
-            }
-        }
-        parts.into_iter().map(|part| part.1).collect()
+        grouped(cells, &mut groups)
     }
+}
+
+/// The cells of a pattern group by group, where each cell's group is that of its index: the
+/// groups in the order their first cells come in, and the cells of each in theirs.
+fn grouped(cells: &[Cell], groups: &mut [usize]) -> Vec<Vec<Cell>> {
+    let mut parts: Vec<Vec<Cell>> = Vec::new();
+    let mut part_of = vec![usize::MAX; cells.len()];
+    for (index, &cell) in cells.iter().enumerate() {
+        let group = root(groups, index);
+        if part_of[group] == usize::MAX {
+            part_of[group] = parts.len();
+            parts.push(Vec::new());
+        }
+        parts[part_of[group]].push(cell);
+    }
+    parts
 }
 
 /// The pattern next to the origin, cells in reading order: equal shapes on equal footing with
@@ -1162,6 +1330,117 @@ mod tests {
         let study = analyser.study(&ship, 0).unwrap();
         assert_eq!((study.fate, study.generations), (Fate::Undecided, 1));
         assert!(study.motion.is_none() && study.pieces.is_empty());
+    }
+
+    /// What a blob left behind under Single rotation, after two million generations inside
+    /// an open border: all that could leave has left.
+    const LEFT_BEHIND: &str = "\
+        41bo2$31bo4$36bo6$59bo$44bo5$48bo8bo5$67bo2$59bo6bo2$87bo$62bobo$54bo22bo$72bo29bo2$85bo22bo$61bo$14bo$\
+        35bo47b3o$63b2o4bo11bo25bo$36bo$19bo2$46bo$23bo28bo$69bo$27bo5bo3bo12bo$97bo$14bo40bo32bo8bo$52bo20bo$\
+        18bo23bo44bo$5bo$102bo$21bo64bo14bo5bo$50bo$51b2o5bo23bo15bo$5bo17bo5bo20b3o33bo5bo$6bo21bobo18bobo$\
+        49b2o11b2o$22bo39b2o50bo$11bo3bo3bo28bo31b2o18bo4bo$37bo50bo7bo8bo$24bo15b2o74bo$\
+        5bo18bo15b2o16bo40bo9bo$62bo$12bo48bo15b2o$bo25bo31bo17b2o41bo$63bo13bo6bo$49bo6b2o5bo2b2o8bo7bo5b2o$\
+        2bo8bo44b3o7b2o8bo13b2o$57b2o18bobo$6bo2bo22bo44b2o21bo$o11bo50bo15b3o35bo$\
+        11bo7bobo27b2o10bo18b2o21bo21bo$6bo28bo8bo4b2o49bo$24bo73bo$o17bo12bo81bo$43b2o15bo15bo27bo$\
+        40bo2b2o74bo$2bo8bo$36bo77bo$33bo67bo$34bobo4bo45bo$2bo55bo$7bo10bo28bo$28bo22b2o33bo20bo9bo$\
+        20bo30b2o3bo2bo44bo11bo$7bo12bo12bo9bo27bo18bo$o21bo3bo4bo48b2o25b2o7bo$21bo58b2o$78b2o16bo3bo$\
+        32bo28bo12bo3b2obo41bo$32b2o42bo18bo$32b2o31b4o20bo31bo$65bo2bo28bo14bo$65b3o17bo17bo$90bo$11bo65bo$\
+        60b2o31bo$16bo30b2o11bobo13bo$9bo4bo11bo2bo31b2o10bo38bo$18bo52bo$65bo15bo$6bo64b2o$41bo29b2o7bo22bo$\
+        99bo$11bo21bo50bo29bo2$53bo45bo28bo$18bo37bo18bo29bo$50bo40bo8bo8bo$54bo22bo13bo$48bo53bo$28bo3bo$\
+        38bo26bo4bo36bo$94bo$32bo$25bo22bo34b2o12bo$83b2o25bo$79bo4bo13bo18bo2b2o2$21bo16bo2bo3bo17bo2bo18bo3bo$\
+        57bo$19bo37bo26bo18bo9bo$47bo24bo$17bo43bo15bo26bo$22bo13bo37bo32bo2bo$28bo20bo8bo$42bo37b2o18bo11bo$\
+        109bo$97bo$21bo73bo$28bo17bo26bo$37bo25bo39bo$56bo$78bo4bo$28bobo14b2o$61bo$60bo34bo$53bo2$107bo$\
+        32bo65bo$92bo4bo$99bo2$66bo4bo2$29bo5bo$38bo9bo$45bo25bo$51bo$27bo$40bo$72bo2$23bo3bo";
+
+    #[test]
+    fn what_a_blob_leaves_behind_is_known_by_its_pieces() {
+        let cells = from_rle(LEFT_BEHIND).unwrap();
+        let mut analyser = Analyser::new(&rule("single-rotation"));
+        (analyser.max_cells, analyser.max_extent) = (4 * cells.len(), 512);
+        // Followed as it lies, it is not back after eight thousand generations, nor would it
+        // be after a billion.
+        assert_eq!(analyser.fate(&cells, 0), Fate::Undecided);
+        // It is 271 patterns that never meet: ten that keep still, and 261 that go round in
+        // periods of their own, from the lone cell's 4 to 590. All of them are back at once
+        // after the least common multiple of those, 2⁵·3²·5·7·11·13·19·43·59 generations.
+        // It was followed for as long as the slowest of them takes.
+        let study = analyser.study(&cells, 0).unwrap();
+        assert_eq!(study.period, Some(69_481_732_320));
+        assert_eq!((study.fate, study.generations), (Fate::Undecided, 590));
+        assert_eq!((study.parts, study.pieces.len(), study.more_pieces), (271, 271, 0));
+        let mut periods: Vec<(u32, usize)> = Vec::new();
+        let mut still = 0;
+        for piece in &study.pieces {
+            assert!(!piece.form.is_empty());
+            match piece.kind {
+                PieceKind::StillLife => still += 1,
+                PieceKind::Oscillator { period } => match periods.iter_mut().find(|(known, _)| *known == period) {
+                    Some((_, count)) => *count += 1,
+                    None => periods.push((period, 1)),
+                },
+                kind => panic!("a piece that is {kind:?}"),
+            }
+        }
+        periods.sort_unstable();
+        let expected = [
+            (4, 215),
+            (8, 8),
+            (16, 22),
+            (24, 1),
+            (28, 4),
+            (36, 2),
+            (40, 1),
+            (52, 2),
+            (76, 1),
+            (104, 1),
+            (176, 1),
+            (288, 1),
+            (344, 1),
+            (590, 1),
+        ];
+        assert_eq!((periods.as_slice(), still), (&expected[..], 10));
+        assert_eq!((study.cells, study.extent, study.stator), ((415, 415), (129, 155), 92));
+        assert!(study.motion.is_none() && study.growth.is_none() && !study.still);
+    }
+
+    /// What its pieces say of a pattern is what following it finds, where it can be followed
+    /// that far.
+    #[test]
+    fn the_pieces_say_what_following_finds() {
+        let mut rng = Rng::new(11);
+        let mut rules: Vec<BlockRule> = PRESETS.iter().map(|preset| preset.rule()).collect();
+        rules.extend((0..30).map(|_| BlockRule::random(|| rng.next_u64())));
+        // Patterns that came back, and those among them known by their pieces alone.
+        let (mut back, mut by_pieces) = (0, 0);
+        for rule in rules {
+            let analyser = Analyser::new(&rule);
+            for _ in 0..40 {
+                // A few clumps of cells, some near enough to meet or to come by the same places.
+                let mut cells: Vec<Cell> = Vec::new();
+                for _ in 0..2 + rng.next_u64() % 4 {
+                    let (x0, y0) = ((rng.next_u64() % 24) as i32, (rng.next_u64() % 24) as i32);
+                    for _ in 0..1 + rng.next_u64() % 3 {
+                        cells.push((x0 + (rng.next_u64() % 3) as i32, y0 + (rng.next_u64() % 3) as i32));
+                    }
+                }
+                cells.sort_unstable();
+                cells.dedup();
+                let study = analyser.study(&cells, 0).unwrap();
+                match analyser.fate(&cells, 0) {
+                    Fate::Returns { period, .. } => {
+                        assert_eq!(study.period, Some(period as u128), "{rule}: {cells:?}");
+                        let parts = analyser.parts(&settled(&cells), 0, period);
+                        assert_eq!(study.parts, parts.len(), "{rule}: {cells:?}");
+                        back += 1;
+                        by_pieces += (study.fate == Fate::Undecided) as usize;
+                    }
+                    // Back later than it is followed for, if at all.
+                    Fate::Undecided => assert!(study.period.is_none_or(|period| period > 8192), "{rule}: {cells:?}"),
+                    _ => assert_eq!(study.period, None, "{rule}: {cells:?}"),
+                }
+            }
+        }
+        assert!(back > 300 && by_pieces > 50, "{back} came back, {by_pieces} known by their pieces");
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::{
     cmp::Reverse,
     collections::HashSet,
     ffi::OsStr,
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -39,7 +39,7 @@ struct Args {
     #[arg(long = "rule")]
     rules: Vec<BlockRule>,
     /// Measure the rules of a table that an earlier search wrote instead of a family, its best
-    /// first. With --limit and more seeds or generations: a closer look at the best of it.
+    /// first. With --limit and more seeds or generations: a closer look at so many of its best.
     #[arg(long)]
     from: Option<PathBuf>,
     /// The seed the rules of a family too big to go through are drawn with.
@@ -55,7 +55,8 @@ struct Args {
     #[arg(long, default_value_t = Effort::default().blob)]
     blob: i64,
     /// Write one tab-separated line per rule to this file. Rules already in it are skipped,
-    /// so a search that was interrupted is taken up where it stopped.
+    /// so a search that was interrupted is taken up where it stopped. The file says in its
+    /// first line how hard its rules were looked at, and takes no rules looked at otherwise.
     #[arg(long)]
     out: Option<PathBuf>,
     /// Measure at most this many rules now. Those of a family are taken in a shuffled order,
@@ -142,17 +143,58 @@ fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
     ]
 }
 
-/// The lines of a table written earlier; none if there is no such file.
-fn table(path: &Path) -> Vec<Vec<String>> {
+/// The line a table begins with: how hard its rules were looked at. Kinds and periods are
+/// counts that grow with the effort, so rows measured unalike do not belong in one table.
+fn measured_with(effort: &Effort) -> String {
+    format!("# measured with --seeds {} --generations {} --blob {}", effort.seeds, effort.generations, effort.blob)
+}
+
+/// A table written earlier: the line that says how its rules were measured, if it has one,
+/// and its lines. Neither if there is no such file.
+fn table(path: &Path) -> Result<(Option<String>, Vec<Vec<String>>), String> {
     let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
+        return Ok((None, Vec::new()));
     };
+    let (notes, lines): (Vec<&str>, Vec<&str>) = text.lines().partition(|line| line.starts_with('#'));
     let split = |line: &str| line.split('\t').map(str::to_string).collect::<Vec<_>>();
-    let mut lines = text.lines().map(split);
+    let mut lines = lines.into_iter().map(split);
     if lines.next().is_some_and(|header| header != COLUMNS) {
-        fail(&format!("{} has other columns than this version writes: name another file", path.display()));
+        return Err(format!("{} has other columns than this version writes: name another file", path.display()));
     }
-    lines.filter(|line| line.len() == COLUMNS.len()).collect()
+    let measured = notes.into_iter().find(|note| note.starts_with("# measured with")).map(str::to_string);
+    Ok((measured, lines.filter(|line| line.len() == COLUMNS.len()).collect()))
+}
+
+/// Opens a table to add to, with the lines it has already. A new one is made, with the folder
+/// it is to lie in if need be, and a new or empty one gets its first two lines: how its rules
+/// are measured, and the names of the columns. A table measured otherwise is not added to.
+fn open(path: &Path, effort: &Effort) -> Result<(File, Vec<Vec<String>>), String> {
+    let (then, lines) = table(path)?;
+    let now = measured_with(effort);
+    let flags = |line: &str| line.trim_start_matches("# measured with ").to_string();
+    match then {
+        Some(then) if then != now => {
+            return Err(format!(
+                "the rules in {} were measured with {}, and these would be with {}: name another file, or measure alike",
+                path.display(),
+                flags(&then),
+                flags(&now)
+            ));
+        }
+        None if !lines.is_empty() => {
+            eprintln!("{} does not say how its rules were measured: taken to be as now", path.display());
+        }
+        _ => {}
+    }
+    let cannot = |error: std::io::Error| format!("cannot write {}: {error}", path.display());
+    if let Some(folder) = path.parent().filter(|folder| !folder.as_os_str().is_empty()) {
+        std::fs::create_dir_all(folder).map_err(cannot)?;
+    }
+    let mut file = OpenOptions::new().create(true).append(true).open(path).map_err(cannot)?;
+    if file.metadata().map_err(cannot)?.len() == 0 {
+        writeln!(file, "{now}\n{}", COLUMNS.join("\t")).map_err(cannot)?;
+    }
+    Ok((file, lines))
 }
 
 /// What makes a rule a find, the more the better. First the worlds with things that travel
@@ -178,15 +220,26 @@ fn main() {
         generations: args.generations,
         blob: args.blob,
     };
+    // The table first: if it cannot be written, or holds rules measured otherwise, there is
+    // no point in going through a family. Lines of an earlier run count as done.
+    let (file, mut lines) = match &args.out {
+        Some(path) => {
+            let (file, lines) = open(path, &effort).unwrap_or_else(|error| fail(&error));
+            (Some(file), lines)
+        }
+        None => (None, Vec::new()),
+    };
     let chosen = !args.rules.is_empty() || args.from.is_some();
     let rules = if !args.rules.is_empty() {
         args.rules.clone()
     } else if let Some(path) = &args.from {
-        let mut lines = table(path);
+        let (_, mut lines) = table(path).unwrap_or_else(|error| fail(&error));
         if lines.is_empty() {
             fail(&format!("no table of rules in {}", path.display()));
         }
         lines.sort_by_key(|line| Reverse(merit(line)));
+        // The best so many of the table, whichever of them an earlier run got to.
+        lines.truncate(args.limit.unwrap_or(lines.len()));
         let rule = |line: &Vec<String>| line[0].parse().unwrap_or_else(|error: String| fail(&error));
         lines.iter().map(rule).collect()
     } else {
@@ -209,8 +262,6 @@ fn main() {
         families::distinct(rules)
     };
 
-    // Lines of an earlier run count as done.
-    let mut lines = args.out.as_deref().map(table).unwrap_or_default();
     let done: HashSet<&str> = lines.iter().map(|line| line[0].as_str()).collect();
     let mut todo: Vec<BlockRule> = rules.into_iter().filter(|rule| !done.contains(rule.to_string().as_str())).collect();
     let left = todo.len();
@@ -219,19 +270,6 @@ fn main() {
     }
     todo.truncate(args.limit.unwrap_or(left));
     eprintln!("{} rules to measure of {left}, {} already in the table", todo.len(), lines.len());
-
-    let file = args.out.as_ref().map(|path| {
-        let fresh = !path.exists();
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .unwrap_or_else(|error| fail(&format!("cannot write {}: {error}", path.display())));
-        if fresh {
-            writeln!(file, "{}", COLUMNS.join("\t")).unwrap_or_else(|error| fail(&error.to_string()));
-        }
-        file
-    });
 
     let started = Instant::now();
     // The table, the lines of this run, and when progress was last reported.
@@ -242,7 +280,10 @@ fn main() {
         let (file, measured, reported) = &mut *progress;
         if let Some(file) = file {
             // One write for the whole line: a search that is cut short leaves no half lines.
-            let _ = file.write_all(format!("{}\n", line.join("\t")).as_bytes());
+            // A line that cannot be written ends the search: its rules would be lost.
+            if let Err(error) = file.write_all(format!("{}\n", line.join("\t")).as_bytes()) {
+                fail(&format!("cannot write the table: {error}"));
+            }
         }
         measured.push(line);
         if reported.elapsed() >= Duration::from_secs(2) {
@@ -319,4 +360,86 @@ fn clock(seconds: f64) -> String {
 fn fail(message: &str) -> ! {
     eprintln!("cas-search: {message}");
     std::process::exit(2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A place for the tables of one test.
+    fn folder(test: &str) -> PathBuf {
+        let folder = std::env::temp_dir().join(format!("cas-search-{}-{test}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        folder
+    }
+
+    fn row(rule: &str) -> String {
+        let mut cells = vec![String::new(); COLUMNS.len()];
+        cells[0] = rule.to_string();
+        cells.join("\t")
+    }
+
+    #[test]
+    fn a_table_says_how_it_was_measured_and_takes_nothing_else() {
+        let folder = folder("measured");
+        // The folder is made along with the table.
+        let path = folder.join("deep").join("table.tsv");
+        let effort = Effort::default();
+        let (mut file, lines) = open(&path, &effort).unwrap();
+        assert!(lines.is_empty());
+        writeln!(file, "{}", row("a rule")).unwrap();
+        drop(file);
+        let text = std::fs::read_to_string(&path).unwrap();
+        let first: Vec<&str> = text.lines().take(2).collect();
+        assert_eq!(first, ["# measured with --seeds 400 --generations 3000 --blob 8000", &COLUMNS.join("\t")]);
+        // Taken up again, it has its line, and no second heading.
+        let (file, lines) = open(&path, &effort).unwrap();
+        drop(file);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0][0], "a rule");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+        // Rules looked at harder belong in another table.
+        let closer = Effort { seeds: 1600, ..Effort::default() };
+        let refusal = open(&path, &closer).unwrap_err();
+        assert!(refusal.contains("--seeds 400") && refusal.contains("--seeds 1600"), "{refusal}");
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn an_empty_file_and_an_older_table_are_taken_up() {
+        let folder = folder("older");
+        std::fs::create_dir_all(&folder).unwrap();
+        // An empty file is a table yet to be begun.
+        let empty = folder.join("empty.tsv");
+        std::fs::write(&empty, "").unwrap();
+        drop(open(&empty, &Effort::default()).unwrap());
+        assert_eq!(std::fs::read_to_string(&empty).unwrap().lines().count(), 2);
+        // A table from before the first line was written has its columns and its rows.
+        let older = folder.join("older.tsv");
+        std::fs::write(&older, format!("{}\n{}\n", COLUMNS.join("\t"), row("an old rule"))).unwrap();
+        let (file, lines) = open(&older, &Effort::default()).unwrap();
+        drop(file);
+        assert_eq!(lines.len(), 1);
+        // Other columns are another version's table.
+        let other = folder.join("other.tsv");
+        std::fs::write(&other, "rule\tsomething\n").unwrap();
+        assert!(open(&other, &Effort::default()).unwrap_err().contains("other columns"));
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn worlds_with_things_that_travel_and_things_that_stay_come_first() {
+        let line = |character: &str, spaceships: u64, periods: u64| {
+            let mut cells = vec![String::new(); COLUMNS.len()];
+            cells[column("character")] = character.to_string();
+            cells[column("spaceships")] = spaceships.to_string();
+            cells[column("periods")] = periods.to_string();
+            cells
+        };
+        // By the lesser of kinds and periods; then guns by their kinds; the rest is no find.
+        assert!(merit(&line("spaceships", 8, 40)) > merit(&line("spaceships", 30, 2)));
+        assert!(merit(&line("spaceships", 1, 1)) > merit(&line("linear", 9, 0)));
+        assert!(merit(&line("linear", 2, 0)) > merit(&line("linear", 1, 5)));
+        assert_eq!(merit(&line("linear", 0, 3)), merit(&line("explosive", 5, 5)));
+    }
 }

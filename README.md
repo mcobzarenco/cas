@@ -452,7 +452,9 @@ cargo run --release -p cas-search -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,
 
 A run ends by saying how many rules of each character are in the table, and by listing the best.
 The table is tab-separated under a line of column names, so `sort`, `awk` or a spreadsheet take
-it from there.
+it from there. Its first line, a comment, says how hard its rules were looked at (`--seeds`,
+`--generations`, `--blob`): a table takes no rules looked at otherwise, since their counts
+would not compare.
 
 The trials, and the columns they fill:
 

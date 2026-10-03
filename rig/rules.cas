@@ -86,7 +86,7 @@ expect_text RandomFamily any rule there is
 expect_text RandomCount 16! rules
 click Want:quarter-turn; click Want:mirror; click Want:conserving; click Want:stable-vacuum; wait 30
 expect_text RandomFamily quarter-turn + mirror + conserving + stable-vacuum
-expect_text RandomCount 16 rules, 16 worlds
+expect_text RandomCount 16 rules · 16 canonical
 click RuleRandom; wait 3
 expect_text FindingSymmetry all rotations and mirrors
 expect_text FindingCellCount conserved
@@ -94,7 +94,7 @@ expect_text FindingVacuum stable
 shot rules-10-random
 # In canonical form, there is nothing left for the Canonical button to do.
 click RandomCanonical; wait 3; expect_checked RandomCanonical on
-expect_text RandomCount 16 worlds, of 16 rules
+expect_text RandomCount 16 canonical rules
 click RuleRandom; wait 3; click RuleCanonical; wait 3
 expect_text EditorNote This table is already canonical: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.
 click RandomCanonical; wait 3; expect_checked RandomCanonical off
@@ -112,10 +112,10 @@ expect_text EditorNote No rule has all of this.
 click Want:weighted; click Want:half-turn; wait 3
 # The rules that change few blocks, and how few: the steps change the number.
 click Want:sparse; wait 60
-expect_text RandomCount 17 621 rules, 2 351 worlds
+expect_text RandomCount 17 621 rules · 2 351 canonical
 click SparseLess; wait 60
 expect_text RandomFamily sparse=3
-expect_text RandomCount 1 241 rules, 190 worlds
+expect_text RandomCount 1 241 rules · 190 canonical
 click RuleRandom; wait 3; expect_text EditorNote A random rule that is sparse=3.
 # A family too big to count is said to be so, and drawn from all the same.
 click Want:sparse; click Want:involution; wait 60

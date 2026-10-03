@@ -312,10 +312,10 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
   a weight in their place, the parity of their number, their momentum), and the form of the
   table (it only turns blocks, is linear, is its own inverse, treats the two states alike,
   leaves the empty world empty, changes at most so many blocks). Under the chips it says how
-  many rules have all that is asked for and how many different worlds they make, counted up to
-  two million; some properties have nothing in common, and then no rule is drawn. A rule is
-  drawn evenly among the rules; *In canonical form* draws evenly among the worlds instead, and
-  gives the rule in its canonical form.
+  many rules have all that is asked for and how many of them are canonical, one for every world
+  they make, counted up to two million; some properties have nothing in common, and then no
+  rule is drawn. A rule is drawn evenly among the rules; *In canonical form* draws evenly among
+  the canonical ones instead.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The

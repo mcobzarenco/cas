@@ -334,6 +334,7 @@ pub fn sampler_section() -> impl Scene {
                             (#RandomCount caption("") Counted),
                         ]
                     ),
+                    caption("A rule turned, mirrored or begun later in its vacuum's cycle is another table; the canonical form is the first of them."),
                 ]
             ),
         ]
@@ -573,11 +574,11 @@ fn show(
         _ if family.constraints().is_empty() => "16! rules".to_string(),
         Count::Counting => "counting…".to_string(),
         Count::Known { rules, .. } if rules.is_empty() => "no rule has all of this".to_string(),
-        // In canonical form it is the worlds that are drawn from.
-        Count::Known { rules, worlds } if sampler.canonical => {
-            format!("{}, of {}", so_many(worlds.len(), "world"), so_many(rules.len(), "rule"))
+        // In canonical form it is the canonical rules that are drawn from.
+        Count::Known { worlds, .. } if sampler.canonical => so_many(worlds.len(), "canonical rule"),
+        Count::Known { rules, worlds } => {
+            format!("{} · {} canonical", so_many(rules.len(), "rule"), group_digits(worlds.len() as i64))
         }
-        Count::Known { rules, worlds } => format!("{}, {}", so_many(rules.len(), "rule"), so_many(worlds.len(), "world")),
         Count::Many => format!("more than {} rules", group_digits(COUNTED as i64)),
     };
     counted.set_if_neq(Text(count));

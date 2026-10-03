@@ -4,6 +4,7 @@
 use std::{
     cmp::Reverse,
     collections::HashSet,
+    ffi::OsStr,
     fs::OpenOptions,
     io::Write,
     path::{Path, PathBuf},
@@ -17,30 +18,23 @@ use cas_core::{
     search::{self, Effort, Report},
     universe::Rng,
 };
-use clap::Parser;
+use clap::{
+    Arg, Command, Parser,
+    builder::{PossibleValue, TypedValueParser},
+    error::ErrorKind,
+};
 
 /// Looks for interesting reversible block cellular automata.
 #[derive(Parser, Debug)]
 #[command(name = "cas-search", version, about)]
 struct Args {
     /// The rules to measure: those with all of the properties named, joined by `+`, as in
-    /// `mirror+conserving`. Rules that make the same world are measured once.
+    /// `mirror+conserving`.
     ///
-    /// Turns and mirrors the rule looks the same under: `quarter-turn` (Morita's 1536 ESPCAs),
-    /// `half-turn`, `mirror` (left to right), `flip` (top to bottom), `diagonal`,
-    /// `anti-diagonal`. What patterns keep: `conserving` (their number of cells), `weighted`
-    /// (a weighted number and not the number; `weights=1,2,4,1` for the weights of the corners
-    /// top-left, top-right, bottom-left, bottom-right), `parity` (whether it is odd), `momentum`
-    /// (a cell's corner taken for the way it is going). The table: `turning` (every block
-    /// becomes a turn or mirror of itself), `sparse=N` (at most N of the 16 blocks change),
-    /// `linear` (patterns superpose), `involution` (the rule is its own inverse), `complement`
-    /// (dead and alive are interchangeable), `stable-vacuum`. `random` requires nothing: every
-    /// rule there is.
-    ///
-    /// A family of more than eight million rules is not gone through but sampled, `--limit`
-    /// rules of it drawn with `--seed`.
-    #[arg(long, default_value = "quarter-turn", verbatim_doc_comment)]
-    family: Vec<String>,
+    /// Rules that make the same world are measured once. A family of more than eight million
+    /// rules is not gone through but sampled: `--limit` rules of it, drawn with `--seed`.
+    #[arg(long, value_parser = FamilyParser, default_value = "quarter-turn")]
+    family: Vec<Family>,
     /// Measure these rules instead of a family: presets, ESPCA numbers or tables.
     #[arg(long = "rule")]
     rules: Vec<BlockRule>,
@@ -79,6 +73,24 @@ struct Args {
 
 /// So many rules are drawn of a family too big to go through, unless `--limit` says.
 const DRAWN: usize = 1000;
+
+/// Reads a family, and tells the help what may be written for one.
+#[derive(Clone)]
+struct FamilyParser;
+
+impl TypedValueParser for FamilyParser {
+    type Value = Family;
+
+    fn parse_ref(&self, command: &Command, _: Option<&Arg>, value: &OsStr) -> Result<Family, clap::Error> {
+        let family = value.to_str().ok_or("not text".to_string()).and_then(Family::parse);
+        family.map_err(|error| clap::Error::raw(ErrorKind::InvalidValue, format!("{error}\n")).with_cmd(command))
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        let values = families::catalogue().into_iter().map(|(name, about)| PossibleValue::new(name).help(about));
+        Some(Box::new(values))
+    }
+}
 
 fn default_threads() -> usize {
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -178,7 +190,7 @@ fn main() {
         let rule = |line: &Vec<String>| line[0].parse().unwrap_or_else(|error: String| fail(&error));
         lines.iter().map(rule).collect()
     } else {
-        let family = Family::parse(&args.family.join("+")).unwrap_or_else(|error| fail(&error));
+        let family = Family::new(args.family.iter().flat_map(|family| family.constraints().iter().copied()));
         let named = match family.constraints() {
             [] => "every rule there is".to_string(),
             constraints => constraints.iter().map(|constraint| constraint.to_string()).collect::<Vec<_>>().join("+"),

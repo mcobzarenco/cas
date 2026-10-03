@@ -82,33 +82,78 @@ pub enum Constraint {
     Linear,
 }
 
-/// The names the constraints go by, [`Constraint::Weighted`] with weights and
-/// [`Constraint::Sparse`] taking a number after `=`.
-const NAMES: [(&str, Constraint); 16] = [
-    ("quarter-turn", Constraint::Symmetric(Turn::Quarter)),
-    ("half-turn", Constraint::Symmetric(Turn::Half)),
-    ("mirror", Constraint::Symmetric(Turn::Mirror)),
-    ("flip", Constraint::Symmetric(Turn::Flip)),
-    ("diagonal", Constraint::Symmetric(Turn::Diagonal)),
-    ("anti-diagonal", Constraint::Symmetric(Turn::AntiDiagonal)),
-    ("conserving", Constraint::Conserving),
-    ("weighted", Constraint::Weighted(None)),
-    ("parity", Constraint::Parity),
-    ("momentum", Constraint::Momentum),
-    ("complement", Constraint::Complement),
-    ("involution", Constraint::Involution),
-    ("stable-vacuum", Constraint::StableVacuum),
-    ("turning", Constraint::Turning),
-    ("sparse", Constraint::Sparse(4)),
-    ("linear", Constraint::Linear),
+/// The names the constraints go by, and what each says of its rules. [`Constraint::Weighted`]
+/// with weights and [`Constraint::Sparse`] take a value after `=`.
+const NAMES: [(&str, Constraint, &str); 16] = [
+    (
+        "quarter-turn",
+        Constraint::Symmetric(Turn::Quarter),
+        "The 1536 rules that look the same after a quarter turn: Morita's ESPCAs",
+    ),
+    ("half-turn", Constraint::Symmetric(Turn::Half), "The 1 105 920 rules that look the same after a half turn"),
+    ("mirror", Constraint::Symmetric(Turn::Mirror), "The 1 105 920 rules that look the same in a mirror, left to right"),
+    (
+        "flip",
+        Constraint::Symmetric(Turn::Flip),
+        "The rules that look the same in a mirror, top to bottom: the worlds of `mirror`, turned",
+    ),
+    (
+        "diagonal",
+        Constraint::Symmetric(Turn::Diagonal),
+        "The 15 482 880 rules that look the same in a mirror across the diagonal from the top-left",
+    ),
+    (
+        "anti-diagonal",
+        Constraint::Symmetric(Turn::AntiDiagonal),
+        "The rules that look the same in a mirror across the other diagonal: the worlds of `diagonal`, turned",
+    ),
+    (
+        "conserving",
+        Constraint::Conserving,
+        "The 845 040 rules under which patterns keep their number of cells, as seen against the vacuum: Critters is one",
+    ),
+    (
+        "weighted",
+        Constraint::Weighted(None),
+        "The 216 480 rules under which patterns keep a weighted number of cells and not their number: cells are made \
+         and unmade, yet nothing can explode",
+    ),
+    ("parity", Constraint::Parity, "The rules under which patterns keep the parity of their number of cells"),
+    (
+        "momentum",
+        Constraint::Momentum,
+        "The 228 rules under which patterns keep their momentum, a cell's corner being the way it is going",
+    ),
+    ("complement", Constraint::Complement, "The rules for which dead and alive are interchangeable"),
+    ("involution", Constraint::Involution, "The rules that are their own inverse"),
+    ("stable-vacuum", Constraint::StableVacuum, "The rules that leave the empty world empty"),
+    ("turning", Constraint::Turning, "The 27 648 rules that make every block a turn or a mirror of itself"),
+    ("sparse", Constraint::Sparse(4), "The rules that change at most N of the 16 blocks; 4 unless said"),
+    ("linear", Constraint::Linear, "The 322 560 rules under which patterns superpose"),
 ];
 
-impl Constraint {
-    /// Every constraint by name, as the help of a program may list them.
-    pub fn names() -> impl Iterator<Item = &'static str> {
-        NAMES.iter().map(|(name, _)| *name)
+/// What may be written for a family, as the help of a program lists it: every constraint as
+/// it is typed, with what it says of its rules.
+pub fn catalogue() -> Vec<(&'static str, &'static str)> {
+    let mut catalogue = Vec::new();
+    for (name, constraint, about) in NAMES {
+        match constraint {
+            Constraint::Sparse(_) => catalogue.push(("sparse=N", about)),
+            _ => catalogue.push((name, about)),
+        }
+        if constraint == Constraint::Weighted(None) {
+            catalogue.push((
+                "weights=A,B,C,D",
+                "The rules under which patterns keep their cells weighted so: a cell counts A in the top-left corner \
+                 of its block, B top-right, C bottom-left, D bottom-right",
+            ));
+        }
     }
+    catalogue.push(("random", "Every rule there is: nothing is required"));
+    catalogue
+}
 
+impl Constraint {
     /// Does the rule have the property? The truth, whatever the search guessed on the way.
     pub fn holds(&self, rule: &BlockRule) -> bool {
         let relative = || rule.relative_to_vacuum();
@@ -145,7 +190,7 @@ impl fmt::Display for Constraint {
             Constraint::Weighted(Some(w)) => write!(f, "weights={},{},{},{}", w[0], w[1], w[2], w[3]),
             Constraint::Sparse(most) => write!(f, "sparse={most}"),
             other => {
-                let (name, _) = NAMES.iter().find(|(_, known)| *known == other).expect("every constraint has a name");
+                let (name, ..) = NAMES.iter().find(|(_, known, _)| *known == other).expect("every constraint has a name");
                 f.write_str(name)
             }
         }
@@ -180,11 +225,11 @@ impl FromStr for Constraint {
         }
         NAMES
             .iter()
-            .find(|(name, _)| *name == text)
-            .map(|(_, constraint)| *constraint)
+            .find(|(name, ..)| *name == text)
+            .map(|(_, constraint, _)| *constraint)
             .ok_or_else(|| {
-                let names: Vec<&str> = Constraint::names().collect();
-                format!("unknown constraint {text:?}; the constraints are {}, sparse=N and weights=A,B,C,D", names.join(", "))
+                let names: Vec<&str> = catalogue().into_iter().map(|(name, _)| name).collect();
+                format!("no property of rules is called {text:?}; there are {}", names.join(", "))
             })
     }
 }
@@ -665,10 +710,16 @@ mod tests {
         assert_eq!(family("mirror+mirror"), family("mirror"));
         assert_eq!(family(" sparse=5 + weights=1,2,4,1 ").constraints(), [Constraint::Sparse(5), Constraint::Weighted(Some([1, 2, 4, 1]))]);
         assert!(Family::parse("mirrored").is_err() && Family::parse("sparse=17").is_err() && Family::parse("weights=1,2").is_err());
-        for constraint in NAMES.map(|(_, constraint)| constraint) {
+        for constraint in NAMES.map(|(_, constraint, _)| constraint) {
             assert_eq!(constraint.to_string().parse::<Constraint>(), Ok(constraint));
         }
         assert_eq!(Constraint::Weighted(Some([1, 2, 4, 1])).to_string(), "weights=1,2,4,1");
+        // What the help lists can be typed as it stands, with numbers for the letters.
+        for (name, _) in catalogue() {
+            let typed = name.replace("A,B,C,D", "1,2,4,1").replace('N', "5");
+            assert!(Family::parse(&typed).is_ok(), "{name}");
+        }
+        assert_eq!(catalogue().len(), NAMES.len() + 2);
         // Every rule there is: not to be counted, only sampled.
         assert_eq!(Family::default().count(ENUMERABLE), None);
         assert_eq!(Family::default().sample(5, 1), Family::default().sample(5, 1));

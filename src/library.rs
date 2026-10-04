@@ -9,12 +9,7 @@
 use std::path::PathBuf;
 
 use bevy::{
-    feathers::{
-        constants::fonts,
-        controls::{FeathersButton, FeathersTextInput},
-        palette,
-        theme::ThemedText,
-    },
+    feathers::{constants::fonts, controls::FeathersTextInput, palette},
     input_focus::{FocusCause, InputFocus},
     picking::hover::Hovered,
     prelude::*,
@@ -32,8 +27,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        Aspect, Scrolls, caption, check, chip_box, field_frame, heading, icons, list_row, panel_title, scrolling,
-        side_panel,
+        Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
+        panel_title, scrolling, side_panel,
     },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
@@ -408,9 +403,7 @@ pub fn library_panel() -> impl Scene {
                     panel_title(Aspect::Rule, "Rule library"),
                     (
                         #LibraryClose
-                        @FeathersButton {
-                            @caption: bsn! { Text("Close") ThemedText }
-                        }
+                        button("Close")
                         on(|_: On<Activate>, mut library: ResMut<RuleLibrary>| library.toggle())
                     ),
                 ]
@@ -494,17 +487,8 @@ fn on_the_grid() -> impl Scene {
                 Children [
                     (
                         #LibraryPin
-                        @FeathersButton {
-                            @caption: bsn! { icons::icon(icons::PIN, 14.0, palette::LIGHT_GRAY_2) CardPin }
-                        }
-                        Node {
-                            display: Display::None,
-                            width: px(26),
-                            min_width: px(26),
-                            padding: px(0),
-                            justify_content: JustifyContent::Center,
-                            flex_shrink: 0.0,
-                        }
+                        icon_button_marked(icons::PIN, palette::LIGHT_GRAY_2, CardPin)
+                        Node { display: Display::None, width: px(26), min_width: px(26) }
                         template_value(When::Listed)
                         on(pin_this)
                     ),
@@ -529,9 +513,7 @@ fn on_the_grid() -> impl Scene {
                     ),
                     (
                         #LibraryKeep
-                        @FeathersButton {
-                            @caption: bsn! { Text("Keep") ThemedText }
-                        }
+                        button("Keep")
                         Node { display: Display::None, flex_shrink: 0.0 }
                         template_value(When::Loose)
                         on(|_: On<Activate>, universe: Res<Universe>, mut library: ResMut<RuleLibrary>| {
@@ -540,9 +522,7 @@ fn on_the_grid() -> impl Scene {
                     ),
                     (
                         #LibraryForget
-                        @FeathersButton {
-                            @caption: bsn! { Text("Forget") ThemedText }
-                        }
+                        button("Forget")
                         Node { display: Display::None, flex_shrink: 0.0 }
                         template_value(When::Kept)
                         on(forget_this)

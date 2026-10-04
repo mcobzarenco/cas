@@ -8,11 +8,7 @@
 
 use std::path::PathBuf;
 
-use bevy::{
-    feathers::{controls::FeathersButton, palette, theme::ThemedText},
-    prelude::*,
-    ui_widgets::Activate,
-};
+use bevy::{feathers::palette, prelude::*, ui_widgets::Activate};
 
 use cas_core::{
     collection::{Collection, Kept, Sort},
@@ -24,8 +20,8 @@ use cas_core::{
 use crate::{
     analysis::{self, Analysis},
     kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
-        list_row, mono, number, panel_title, picture, scrolling, side_panel,
+        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, heading, icon_button,
+        icons, list_row, mono, number, panel_title, picture, scrolling, side_panel,
     },
     library::LOOKS_EVERY,
     sim::SimSystems,
@@ -206,9 +202,7 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
                 Children [
                     panel_title(Aspect::Pattern, title),
                     (
-                        @FeathersButton {
-                            @caption: bsn! { Text("Close") ThemedText }
-                        }
+                        button("Close")
                         template_value(close)
                         template_value(closes)
                         on(|activate: On<Activate>, buttons: Query<&KeptClose>, mut collected: ResMut<Collected>| {

@@ -11,14 +11,7 @@ use std::sync::{
 };
 
 use bevy::{
-    feathers::{
-        constants::fonts,
-        controls::FeathersButton,
-        cursor::EntityCursor,
-        palette,
-        theme::{ThemeTextColor, ThemedText},
-        tokens,
-    },
+    feathers::{constants::fonts, cursor::EntityCursor, palette, theme::ThemeTextColor, tokens},
     picking::hover::Hovered,
     prelude::*,
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
@@ -35,7 +28,7 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    kit::{self, Aspect, Sign, caption, check, checkbox, chip_box, group_digits, icons},
+    kit::{self, Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons},
     sim::SimSystems,
 };
 
@@ -267,9 +260,7 @@ pub fn sampler_section() -> impl Scene {
                     ),
                     (
                         #RuleRandom
-                        @FeathersButton {
-                            @caption: bsn! { Text("Random") ThemedText }
-                        }
+                        button("Random")
                         Node { flex_shrink: 0.0 }
                         on(draw)
                     ),

@@ -12,13 +12,7 @@
 
 use bevy::{
     clipboard::Clipboard,
-    feathers::{
-        constants::fonts,
-        controls::{FeathersButton, FeathersTextInput},
-        cursor::EntityCursor,
-        palette,
-        theme::ThemedText,
-    },
+    feathers::{constants::fonts, controls::FeathersTextInput, cursor::EntityCursor, palette},
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
@@ -35,8 +29,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, caption, field_frame, icons, panel_title, scrolling, section,
-        side_panel, tile, tile_label as label, tile_value as value,
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, panel_title, scrolling,
+        section, side_panel, tile, tile_label as label, tile_value as value,
     },
     library::RuleLibrary,
     sampler::sampler_section,
@@ -304,9 +298,7 @@ pub fn editor_panel() -> impl Scene {
                     panel_title(Aspect::Rule, "Rule editor"),
                     (
                         #EditorClose
-                        @FeathersButton {
-                            @caption: bsn! { Text("Close") ThemedText }
-                        }
+                        button("Close")
                         on(|_: On<Activate>, mut editor: ResMut<RuleEditor>| editor.toggle())
                     ),
                 ]
@@ -342,9 +334,7 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                 Children [
                     (
                         #RuleIdentity
-                        @FeathersButton {
-                            @caption: bsn! { Text("Identity") ThemedText }
-                        }
+                        button("Identity")
                         Node { flex_grow: 1.0 }
                         on(|_: On<Activate>,
                             mut universe: ResMut<Universe>,
@@ -355,9 +345,7 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                     ),
                     (
                         #RuleInverse
-                        @FeathersButton {
-                            @caption: bsn! { Text("Inverse") ThemedText }
-                        }
+                        button("Inverse")
                         Node { flex_grow: 1.0 }
                         on(|_: On<Activate>,
                             mut universe: ResMut<Universe>,
@@ -372,9 +360,7 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                         // mirrors, the generations of its vacuum's cycle it could begin at,
                         // and the vacuum's flickering away.
                         #RuleCanonical
-                        @FeathersButton {
-                            @caption: bsn! { Text("Canonical") ThemedText }
-                        }
+                        button("Canonical")
                         Node { flex_grow: 1.0 }
                         on(|_: On<Activate>,
                             mut universe: ResMut<Universe>,
@@ -424,26 +410,20 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                     Children [
                         (
                             #RuleCopy
-                            @FeathersButton {
-                                @caption: bsn! { Text("Copy") ThemedText }
-                            }
+                            button("Copy")
                             Node { flex_grow: 1.0 }
                             on(copy_rule)
                         ),
                         (
                             #RulePaste
-                            @FeathersButton {
-                                @caption: bsn! { Text("Paste") ThemedText }
-                            }
+                            button("Paste")
                             Node { flex_grow: 1.0 }
                             on(paste_rule)
                         ),
                         (
                             // Into the library, which opens to give the rule its name.
                             #RuleKeep
-                            @FeathersButton {
-                                @caption: bsn! { Text("Keep") ThemedText }
-                            }
+                            button("Keep")
                             Node { flex_grow: 1.0 }
                             on(|_: On<Activate>, universe: Res<Universe>, mut library: ResMut<RuleLibrary>| {
                                 library.keep(universe.rule());

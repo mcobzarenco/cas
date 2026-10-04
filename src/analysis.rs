@@ -11,12 +11,7 @@ use std::sync::Arc;
 use bevy::{
     clipboard::Clipboard,
     feathers::{
-        constants::fonts,
-        controls::{FeathersButton, FeathersTextInput},
-        cursor::EntityCursor,
-        palette,
-        theme::{ThemeTextColor, ThemedText},
-        tokens,
+        constants::fonts, controls::FeathersTextInput, cursor::EntityCursor, palette, theme::ThemeTextColor, tokens,
     },
     input_focus::InputFocus,
     picking::hover::Hovered,
@@ -43,9 +38,9 @@ use crate::{
     actions::KeyboardOwner,
     kept::Collected,
     kit::{
-        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, caption, dial,
-        field_frame, group_digits, heading as column_title, icon_button, icons, mono, number, panel_title, picture,
-        scrolling, side_panel, tile, tile_label, tile_value,
+        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button,
+        button_marked, caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono,
+        number, panel_title, picture, scrolling, side_panel, tile, tile_label, tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -521,9 +516,7 @@ pub fn analysis_panel() -> impl Scene {
                     ),
                     (
                         #AnalysisClose
-                        @FeathersButton {
-                            @caption: bsn! { Text("Close") ThemedText }
-                        }
+                        button("Close")
                         on(|_: On<Activate>, mut analysis: ResMut<Analysis>| analysis.toggle())
                     ),
                 ]
@@ -566,18 +559,14 @@ pub fn analysis_panel() -> impl Scene {
                             ),
                             (
                                 #AnalysisPause
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Pause") ThemedText PauseLabel }
-                                }
+                                button_marked("Pause", PauseLabel)
                                 Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
                                 template_value(During::Pattern)
                                 on(pause_world)
                             ),
                             (
                                 #AnalysisRestart
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Restart") ThemedText }
-                                }
+                                button("Restart")
                                 Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
                                 template_value(During::Pattern)
                                 on(restart_world)
@@ -585,9 +574,7 @@ pub fn analysis_panel() -> impl Scene {
                             (
                                 // While a study is on its way: far enough.
                                 #AnalysisStop
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Stop") ThemedText }
-                                }
+                                button("Stop")
                                 Node {
                                     display: Display::None,
                                     flex_shrink: 0.0,
@@ -667,26 +654,20 @@ pub fn analysis_panel() -> impl Scene {
                         Children [
                             (
                                 #AnalysisPlace
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Place") ThemedText }
-                                }
+                                button("Place")
                                 Node { flex_grow: 1.0 }
                                 on(place_subject)
                             ),
                             (
                                 #AnalysisCopy
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Copy") ThemedText }
-                                }
+                                button("Copy")
                                 Node { flex_grow: 1.0 }
                                 on(copy_subject)
                             ),
                             (
                                 // There for what comes back to its shape, as one thing.
                                 #AnalysisKeep
-                                @FeathersButton {
-                                    @caption: bsn! { Text("Keep") ThemedText KeepLabel }
-                                }
+                                button_marked("Keep", KeepLabel)
                                 Node { display: Display::None, flex_grow: 1.0 }
                                 KeepButton
                                 on(keep_subject)
@@ -840,9 +821,7 @@ fn pieces_line() -> impl Scene {
             (
                 // Keeps every kind of piece that comes back to its shape, list open or not.
                 #PiecesKeep
-                @FeathersButton {
-                    @caption: bsn! { Text("Keep all") ThemedText }
-                }
+                button("Keep all")
                 Node { display: Display::None, flex_shrink: 0.0 }
                 KeepAll
                 on(keep_pieces)

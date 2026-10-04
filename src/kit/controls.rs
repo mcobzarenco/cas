@@ -47,14 +47,26 @@ fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> 
     .into()
 }
 
-/// A button with the key that does the same after its label. It takes its share of the row
-/// it is in.
-pub(crate) fn button(label: &'static str, key: &'static str) -> impl Scene {
+/// A button with a word or two on it.
+pub(crate) fn button(label: &'static str) -> impl Scene {
+    button_marked(label, Unmarked)
+}
+
+/// Such a button with a mark on its words, for whoever changes them later.
+pub(crate) fn button_marked<M: Component + Clone + Default + Unpin>(label: &'static str, mark: M) -> impl Scene {
+    bsn! {
+        @FeathersButton {
+            @caption: bsn! { Text(label) ThemedText template_value(mark) }
+        }
+    }
+}
+
+/// A button with the key that does the same after its label.
+pub(crate) fn keyed_button(label: &'static str, key: &'static str) -> impl Scene {
     bsn! {
         @FeathersButton {
             @caption: {label_with_key(label, key)},
         }
-        Node { flex_grow: 1.0 }
     }
 }
 

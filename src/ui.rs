@@ -36,8 +36,8 @@ use crate::{
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     kit::{
-        self, Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, menu_heading, readout,
-        scrolling,
+        self, Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, keyed_button,
+        menu_heading, readout, scrolling,
     },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -382,7 +382,8 @@ fn action_button_hinted(label: &'static str, name: &'static str, action: Action,
     let name = Name::new(name);
     let does = Does(action);
     bsn! {
-        button(label, hinted.key())
+        keyed_button(label, hinted.key())
+        Node { flex_grow: 1.0 }
         template_value(name)
         template_value(does)
     }
@@ -661,9 +662,7 @@ fn time_card() -> impl Scene {
                 Children [
                     (
                         #StepBack
-                        @FeathersButton {
-                            @caption: bsn! { Text("← step") ThemedText }
-                        }
+                        button("← step")
                         Node { flex_grow: 1.0 }
                         ActivateOnPress
                         template_value(back)
@@ -682,9 +681,7 @@ fn time_card() -> impl Scene {
                     ),
                     (
                         #StepForward
-                        @FeathersButton {
-                            @caption: bsn! { Text("step →") ThemedText }
-                        }
+                        button("step →")
                         Node { flex_grow: 1.0 }
                         ActivateOnPress
                         template_value(forward)

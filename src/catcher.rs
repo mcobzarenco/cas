@@ -16,7 +16,7 @@ use std::{
 
 use bevy::{
     clipboard::Clipboard,
-    feathers::{constants::fonts, controls::FeathersButton, palette, theme::ThemedText},
+    feathers::{constants::fonts, controls::FeathersButton, palette},
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
@@ -37,7 +37,7 @@ use crate::{
     analysis::Analysis,
     kept::Collected,
     kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, fitting, glow,
+        Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, fitting, glow,
         group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_title, picture, scrolling,
         side_panel,
     },
@@ -290,9 +290,7 @@ pub fn catcher_panel() -> impl Scene {
                     panel_title(Aspect::Pattern, "Caught"),
                     (
                         #CatcherClose
-                        @FeathersButton {
-                            @caption: bsn! { Text("Close") ThemedText }
-                        }
+                        button("Close")
                         on(|_: On<Activate>, mut catcher: ResMut<Catcher>| catcher.toggle())
                     ),
                 ]
@@ -337,9 +335,7 @@ pub fn catcher_panel() -> impl Scene {
                 Children [
                     (
                         #CatcherForget
-                        @FeathersButton {
-                            @caption: bsn! { Text("Clear list") ThemedText }
-                        }
+                        button("Clear list")
                         Node { flex_shrink: 0.0 }
                         on(|_: On<Activate>, universe: Res<Universe>, mut catcher: ResMut<Catcher>| {
                             catcher.hauls.remove(universe.rule());
@@ -349,9 +345,7 @@ pub fn catcher_panel() -> impl Scene {
                     (
                         // Keeps every kind of the list among the spaceships of the rule.
                         #CatcherKeepAll
-                        @FeathersButton {
-                            @caption: bsn! { Text("Keep all") ThemedText }
-                        }
+                        button("Keep all")
                         Node { flex_shrink: 0.0 }
                         on(keep_all_kinds)
                     ),

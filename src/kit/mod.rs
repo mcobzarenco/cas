@@ -23,8 +23,8 @@ pub(crate) use cards::{
     AXES, GLYPH, GUTTER, ORBIT, card, panel_title, section, side_panel, tile, tile_label, tile_value,
 };
 pub(crate) use controls::{
-    Scrolls, Sign, button, check, checkbox, chip, chip_box, chip_marked, field_frame, icon_button, icon_button_marked,
-    menu_heading, scrolling, slider,
+    Scrolls, Sign, button, button_marked, check, checkbox, chip, chip_box, chip_marked, field_frame, icon_button,
+    icon_button_marked, keyed_button, menu_heading, scrolling, slider,
 };
 pub(crate) use lists::{CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, list_row, picture};
 pub(crate) use text::{caption, fitting, group_digits, heading, key_hint, mono, number, readout};

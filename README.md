@@ -165,8 +165,8 @@ in the menu came out of it.
 
 A rule is written as its table, `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` being Single rotation.
 That is the notation of [dmishin's simulator](https://dmishin.github.io/js-revca) and of MCell
-(with an `MS,D` prefix and `;` separators), so rules can be exchanged with them. The rule menu
-has three groups. From the collections of those two programs:
+(with an `MS,D` prefix and `;` separators), so rules can be exchanged with them. The rules that
+come with the program are in three groups. From the collections of those two programs:
 
 | preset | what it does |
 |--------|--------------|
@@ -248,8 +248,10 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 
 | action | UI | key / mouse |
 |--------|----|-------------|
-| choose a rule | the rule menu | |
-| open / close the rule editor | **Edit** (*Custom…* in the rule menu opens it on your last own rule) | `e` |
+| choose a rule | the rule menu: the rules pinned in the library, and the latest that were on the grid | |
+| show / hide the rule library, with every rule that has a name | **Library** (or *Library…* in the rule menu) | `l` |
+| with the library open: put the rule of the row above, or below, on the grid | a row of its list | `↑` / `↓` |
+| open / close the rule editor | **Edit** | `e` |
 | play / pause | **Play** | `space` |
 | step one frame back / forward (`stride` generations); hold to repeat | **← step** / **step →** | `←` / `→` (`shift`: a single generation) |
 | run backwards in time | *Run backwards in time* | `r` |
@@ -302,8 +304,9 @@ before → after one step, one rotation orbit per row. The cases the rule change
 A reversible rule is a permutation of the sixteen blocks, and the editor keeps it one: the only edit
 is to **swap two outcomes** (click one outcome, then another). Every permutation can be
 reached that way, and since every intermediate table is itself a valid rule, edits take effect at
-once, also while the simulation runs. As soon as the table differs from all presets the rule menu
-shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule back.
+once, also while the simulation runs. A table that has no name goes by *Custom* in the rule menu.
+The menu keeps the latest rules that were on the grid, hand-made ones too, so there is a way
+back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-rule-library).
 
 * **Identity** and **Inverse** (the rule that undoes the current one) replace the table.
   **Canonical** replaces it with the rule's canonical form, the one table that stands for every
@@ -355,6 +358,37 @@ shows *Custom*; pick a preset and *Custom…* brings your last hand-made rule ba
   (otherwise the reason is shown below the field); **Copy** and **Paste** use the system
   clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work in the field. While the field has focus the
   single-key shortcuts are off.
+
+### The rule library
+
+**Library** (or `l`) opens the list of the rules that go by a name: the ones that come with the
+program, by where they are from, and above them the ones you kept. A click on a row puts its rule
+on the grid, and with the panel open `↑` and `↓` go through the rows, which is the quick way to
+look at many rules one after another.
+
+At the top is the rule on the grid. If it has no name, **Keep** puts it in the library, under
+the name typed next to it or one to be going on with. The name of a kept rule, its tags
+(separated by commas) and a note are written there, and **Forget** takes it out again. A rule is
+kept once: a table that is a rule of the library turned, mirrored, or begun at another
+generation of its vacuum's cycle is told to be that rule in another form.
+
+The pin of a rule holds it in the rule menu of the control panel, which is for the few rules you
+switch between: the pinned ones, and after them the latest of the others that were on the grid,
+whether they have a name or not. A random rule you clicked past is still there to go back to.
+
+**Find** narrows the list to the rules that have all the words typed: in their name, their tags,
+their note, where they are from, or their table. What a rule has counts too, by the names
+[`cas-search`](#searching-for-rules) takes (`conserving`, `half-turn`, `linear`, ...), and **has**
+unfolds the same properties as chips to click, the ones a random rule is asked for with in the
+editor.
+
+The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a
+plain text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags, the
+day it was kept and a note, with tabs in between), there to be read, edited by hand, and kept
+under version control with the findings it holds. `--library FILE` names another file. The file
+is written at every change, and read again whenever something else wrote it: a search that keeps
+its finds, an editor, a checkout. One that cannot be read is left as it is, and the panel says
+what is wrong with it.
 
 ### The edge of the grid, and catching spaceships
 
@@ -483,7 +517,18 @@ cargo run --release -p cas-search -- --from searches/half-turn.tsv --limit 200 \
 # 3. See a find in the app, or have a rule of your own measured.
 cargo run --release -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
 cargo run --release -p cas-search -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
+# 4. Keep the best of a table in the app's rule library: the same search again, which finds
+#    its rules measured already, and the five best of them go into rules.tsv.
+cargo run --release -p cas-search -- --from searches/half-turn.tsv --limit 200 \
+    --seeds 1600 --generations 12000 --blob 32000 --out searches/half-turn-closer.tsv --keep 5
 ```
+
+What `--keep` puts in the [rule library](#the-rule-library) is named after what was searched, with
+a number (`half-turn 1`, after the table the rules are from), tagged `search`, and has what was
+measured for a note; a rule the library has already, in any form, is passed over, and so is one
+that is no find. The names are to be going on with: the app, which shows the finds at once if it
+is open, is where one gets a better name. The file is the app's, wherever the search is run from,
+unless `--library` names another.
 
 A run ends by saying how many rules of each character are in the table, and by listing the best.
 The table is tab-separated under a line of column names, so `sort`, `awk` or a spreadsheet take

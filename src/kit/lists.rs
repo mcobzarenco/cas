@@ -1,12 +1,56 @@
-//! The rows of the lists of patterns: the columns they share, the picture of a pattern, and
-//! the dial of the ways it flies.
+//! The rows of lists, and what the lists of patterns share: their columns, the picture of a
+//! pattern, and the dial of the ways it flies.
 
-use bevy::{feathers::palette, prelude::*};
+use bevy::{
+    feathers::{cursor::EntityCursor, palette},
+    picking::hover::Hovered,
+    prelude::*,
+    window::SystemCursorIcon,
+};
 
 use super::{
+    KitSystems,
     aspect::{ALIVE, Aspect, BLOCKS, DEAD},
     icons,
 };
+
+/// The system that keeps the rows looking as they should.
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, light_rows.in_set(KitSystems));
+}
+
+/// The mark of a [`list_row`].
+#[derive(Component, Default, Clone)]
+struct Row;
+
+/// A row of a list that a click does something with: its box, which lights up under the
+/// pointer. How its contents lie in it is the caller's, and so is its outline: of the row
+/// that is chosen, say.
+pub(crate) fn list_row() -> impl Scene {
+    bsn! {
+        Node {
+            padding: UiRect::axes(px(7), px(5)),
+            border: px(1),
+            border_radius: px(5),
+            flex_shrink: 0.0,
+        }
+        BackgroundColor(palette::GRAY_2)
+        BorderColor::all(Color::NONE)
+        Hovered
+        EntityCursor::System(SystemCursorIcon::Pointer)
+        Row
+    }
+}
+
+/// A row lights up under the pointer, since a click on it does something.
+fn light_rows(mut rows: Query<(&Hovered, &mut BackgroundColor), With<Row>>) {
+    for (hovered, mut background) in &mut rows {
+        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
+        if background.0 != color {
+            background.0 = color;
+        }
+    }
+}
 
 /// Column widths of the lists of patterns, shared by their headers and their rows. What they
 /// leave must be room enough for the likes of `2c/184 ↘`, or a row would widen its panel.

@@ -16,14 +16,12 @@ use std::{
 
 use bevy::{
     clipboard::Clipboard,
-    feathers::{constants::fonts, controls::FeathersButton, cursor::EntityCursor, palette, theme::ThemedText},
-    picking::hover::Hovered,
+    feathers::{constants::fonts, controls::FeathersButton, palette, theme::ThemedText},
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{FontSourceTemplate, FontWeight},
     ui_widgets::Activate,
-    window::SystemCursorIcon,
 };
 
 use cas_core::{
@@ -40,7 +38,8 @@ use crate::{
     kept::Collected,
     kit::{
         Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, fitting, glow,
-        group_digits, heading, icon_button_marked, icons, mono, number, panel_title, picture, scrolling, side_panel,
+        group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_title, picture, scrolling,
+        side_panel,
     },
     sim::{SimSystems, rule_changed},
     ui::toggle,
@@ -206,7 +205,7 @@ impl Plugin for CatcherPlugin {
                 follow_the_slow,
                 show_panel,
                 sync_list,
-                light_rows,
+                outline_held,
                 light_kept,
             )
                 .chain()
@@ -418,18 +417,11 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
         Heading::Still => "still",
     };
     bsn! {
+        list_row()
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(6),
-            padding: UiRect::axes(px(7), px(5)),
-            border: px(1),
-            border_radius: px(5),
-            flex_shrink: 0.0,
         }
-        BackgroundColor(palette::GRAY_2)
-        BorderColor::all(Color::NONE)
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
         template_value(name)
         template_value(row)
         on(pick_kind)
@@ -661,21 +653,16 @@ fn light_kept(
     }
 }
 
-/// A row lights up under the pointer, since a click on it does something, and the row of the
-/// pattern picked up is outlined in the pattern's colour.
-fn light_rows(
+/// The row of the pattern picked up is outlined in the pattern's colour.
+fn outline_held(
     stamp: Res<Stamp>,
     catcher: Res<Catcher>,
     universe: Res<Universe>,
-    mut rows: Query<(&KindRow, &Hovered, &mut BackgroundColor, &mut BorderColor)>,
+    mut rows: Query<(&KindRow, &mut BorderColor)>,
 ) {
     let haul = catcher.hauls.get(universe.rule()).map(|haul| haul.number);
-    for (&KindRow(index), hovered, mut background, mut border) in &mut rows {
+    for (&KindRow(index), mut border) in &mut rows {
         let held = haul.is_some_and(|haul| stamp.kind == Some((haul, index)));
-        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
-        if background.0 != color {
-            background.0 = color;
-        }
         let outline = BorderColor::all(if held { Aspect::Pattern.color() } else { Color::NONE });
         if *border != outline {
             *border = outline;

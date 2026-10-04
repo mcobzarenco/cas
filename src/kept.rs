@@ -9,11 +9,9 @@
 use std::path::PathBuf;
 
 use bevy::{
-    feathers::{controls::FeathersButton, cursor::EntityCursor, palette, theme::ThemedText},
-    picking::hover::Hovered,
+    feathers::{controls::FeathersButton, palette, theme::ThemedText},
     prelude::*,
     ui_widgets::Activate,
-    window::SystemCursorIcon,
 };
 
 use cas_core::{
@@ -27,7 +25,7 @@ use crate::{
     analysis::{self, Analysis},
     kit::{
         Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
-        mono, number, panel_title, picture, scrolling, side_panel,
+        list_row, mono, number, panel_title, picture, scrolling, side_panel,
     },
     library::LOOKS_EVERY,
     sim::SimSystems,
@@ -158,7 +156,7 @@ pub struct KeptPlugin;
 
 impl Plugin for KeptPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (watch_file, show_panels, list_kept, light_rows).chain().in_set(SimSystems::Present));
+        app.add_systems(Update, (watch_file, show_panels, list_kept).chain().in_set(SimSystems::Present));
     }
 }
 
@@ -277,19 +275,12 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
         Sort::StillLife => (size, written, String::new()),
     };
     bsn! {
+        list_row()
         Node {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             column_gap: px(COLUMN_GAP),
-            padding: UiRect::axes(px(7), px(5)),
-            border: px(1),
-            border_radius: px(5),
-            flex_shrink: 0.0,
         }
-        BackgroundColor(palette::GRAY_2)
-        BorderColor::all(Color::NONE)
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
         template_value(name)
         template_value(row)
         on(pick_kept)
@@ -442,16 +433,6 @@ fn list_kept(
         text.set_if_neq(Text(said));
     }
     collected.bypass_change_detection().listed = listed;
-}
-
-/// A row lights up under the pointer, since a click on it does something.
-fn light_rows(mut rows: Query<(&Hovered, &mut BackgroundColor), With<KeptRow>>) {
-    for (hovered, mut background) in &mut rows {
-        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
-        if background.0 != color {
-            background.0 = color;
-        }
-    }
 }
 
 #[cfg(test)]

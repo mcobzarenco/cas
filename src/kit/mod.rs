@@ -26,7 +26,7 @@ pub(crate) use controls::{
     Scrolls, Sign, button, checkbox, chip, chip_box, field_frame, icon_button, icon_button_marked, menu_heading,
     scrolling, slider,
 };
-pub(crate) use lists::{CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, picture};
+pub(crate) use lists::{CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, list_row, picture};
 pub(crate) use text::{caption, fitting, group_digits, heading, key_hint, mono, number, readout};
 
 /// Sets the kit up: Feathers' widgets in the kit's theme, the icon font, and the systems that
@@ -41,6 +41,7 @@ pub(crate) struct KitSystems;
 
 impl Plugin for KitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((FeathersPlugins, icons::plugin, controls::plugin)).insert_resource(UiTheme(aspect::theme()));
+        app.add_plugins((FeathersPlugins, icons::plugin, controls::plugin, lists::plugin))
+            .insert_resource(UiTheme(aspect::theme()));
     }
 }

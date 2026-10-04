@@ -306,9 +306,13 @@ struct RuleList;
 #[derive(Component, Default, Clone, Copy)]
 struct RuleRow(usize);
 
-/// The pin of a row: which entry of the library it pins.
+/// The pin of a row: which entry of the library it pins; and its icon: whether it holds the
+/// rule in the menu.
 #[derive(Component, Default, Clone, Copy)]
 struct RowPin(usize);
+
+#[derive(Component, Default, Clone, Copy)]
+struct PinIcon(bool);
 
 /// The pin of the rule on the grid, in the card about it.
 #[derive(Component, Default, Clone)]
@@ -381,7 +385,7 @@ impl Plugin for LibraryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, follow_rule.in_set(SimSystems::Input)).add_systems(
             Update,
-            (watch_file, sync_fields, show_library, light_chips, list_rules, reveal)
+            (watch_file, sync_fields, show_library, light_chips, list_rules, light_pins, reveal)
                 .chain()
                 .in_set(SimSystems::Present),
         );
@@ -617,7 +621,7 @@ fn rule_row(
         None => ((RowPin(usize::MAX), false), Display::None),
     };
     let ink = if pinned.1 { Aspect::Rule.color() } else { palette::GRAY_3 };
-    let pin = pinned.0;
+    let (pin, held) = (pinned.0, PinIcon(pinned.1));
     let second = if about.is_empty() { Display::None } else { Display::Flex };
     bsn! {
         list_row()
@@ -668,7 +672,11 @@ fn rule_row(
                 template_value(pin_name)
                 template_value(pin)
                 on(pin_row)
-                Children [ (icons::icon(icons::PIN, 14.0, ink) template_value(Pickable::IGNORE)) ]
+                Children [(
+                    icons::icon(icons::PIN, 14.0, ink)
+                    template_value(held)
+                    template_value(Pickable::IGNORE)
+                )]
             ),
         ]
     }
@@ -955,6 +963,22 @@ fn section(title: &'static str) -> impl Scene {
     bsn! {
         Node { padding: UiRect { left: px(8), top: px(4) }, flex_shrink: 0.0 }
         Children [ heading(title) ]
+    }
+}
+
+/// A pin that holds nothing is as dim as a row is under the pointer: on that row it is drawn
+/// lighter, or it would be gone just when it is looked for.
+fn light_pins(
+    rows: Query<(Entity, &Hovered), With<RuleRow>>,
+    children: Query<&Children>,
+    mut icons: Query<(&PinIcon, &mut TextColor)>,
+) {
+    for (row, hovered) in &rows {
+        for child in children.iter_descendants(row) {
+            if let Ok((&PinIcon(false), mut ink)) = icons.get_mut(child) {
+                ink.set_if_neq(TextColor(if hovered.0 { palette::LIGHT_GRAY_2 } else { palette::GRAY_3 }));
+            }
+        }
     }
 }
 

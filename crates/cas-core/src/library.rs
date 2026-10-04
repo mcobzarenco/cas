@@ -5,19 +5,20 @@
 //! hand and kept under version control:
 //!
 //! ```text
-//! rule                                   name      pinned  tags        added       note
+//! rule                                   name      pinned  tags        note
 //! critters                                         *
-//! 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15  Lone gun          gun, found  2026-10-04  fires four ways
+//! 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15  Lone gun          gun, found  fires four ways
 //! ```
 //!
-//! The columns are separated by tabs, one between any two (they are drawn apart here). A rule
-//! is written as its table, as the id of a built-in rule or as Morita's number. A line about
-//! a built-in rule only says whether it is pinned.
+//! The columns are separated by tabs, one between any two (they are drawn apart here), and
+//! go by the names in the line that begins with `rule`: a file with its columns in another
+//! order is read by those names, and a column that is not known is passed over. A rule is
+//! written as its table, as the id of a built-in rule or as Morita's number. A line about a
+//! built-in rule only says whether it is pinned.
 
 use std::{
     fmt, fs, io,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
@@ -32,10 +33,42 @@ pub const PINNED: [&str; 6] = ["single-rotation", "critters", "bbm", "tron", "es
 const HEADING: &str = "\
 # The rules kept for cas, a rule to a line, with tabs in between: the rule (its table, or
 # the id of a built-in rule, or Morita's number), its name, a * if it is pinned to the rule
-# menu, its tags, the day it was kept, and a note. A line about a built-in rule only says
-# whether it is pinned.
-rule\tname\tpinned\ttags\tadded\tnote
+# menu, its tags, and a note. A line about a built-in rule only says whether it is pinned.
+rule\tname\tpinned\ttags\tnote
 ";
+
+/// The columns of the file, in the order they are written.
+const COLUMNS: [&str; 5] = ["rule", "name", "pinned", "tags", "note"];
+
+/// The fields of a line by the names of their columns: those a file's own line of column
+/// names gives them, or else the columns as they are written.
+pub(crate) struct Fields<'a> {
+    columns: Vec<&'a str>,
+    fields: Vec<&'a str>,
+}
+
+impl<'a> Fields<'a> {
+    pub(crate) fn of(columns: &[&'a str]) -> Self {
+        Self { columns: columns.to_vec(), fields: Vec::new() }
+    }
+
+    /// Takes a line in. True if it was the line that names the columns, which begins with the
+    /// name of the first of them.
+    pub(crate) fn read(&mut self, line: &'a str) -> bool {
+        self.fields = line.split('\t').map(str::trim).collect();
+        let names = self.fields.first() == self.columns.first();
+        if names {
+            self.columns = std::mem::take(&mut self.fields);
+        }
+        names
+    }
+
+    /// The field of the line under a column: empty if the line, or the file, has none.
+    pub(crate) fn get(&self, column: &str) -> &'a str {
+        let at = self.columns.iter().position(|name| *name == column);
+        at.and_then(|at| self.fields.get(at)).copied().unwrap_or_default()
+    }
+}
 
 /// A rule of the library.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,8 +78,6 @@ pub struct Entry {
     /// What it does, or what there is to remember about it.
     pub note: String,
     pub tags: Vec<String>,
-    /// The day it was kept, as it was written down then.
-    pub added: String,
     /// It is one of the few the rule menu offers.
     pub pinned: bool,
     /// Where a built-in rule is from. None for a rule that was kept: only those can be
@@ -66,7 +97,6 @@ impl Entry {
             name: line(name),
             note: String::new(),
             tags: Vec::new(),
-            added: String::new(),
             pinned: false,
             source,
             world,
@@ -141,27 +171,21 @@ impl Library {
     /// would lose the rest when it is written again.
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut library = Self::built_in();
+        let mut line = Fields::of(&COLUMNS);
         for (number, text) in text.lines().enumerate() {
-            if text.trim().is_empty() || text.starts_with('#') {
+            if text.trim().is_empty() || text.starts_with('#') || line.read(text) {
                 continue;
             }
-            let mut fields = text.split('\t').map(str::trim);
-            let mut field = || fields.next().unwrap_or_default();
-            let (rule, name, pinned, tags, added, note) = (field(), field(), field(), field(), field(), field());
-            // The names of the columns.
-            if rule == "rule" {
-                continue;
-            }
-            let rule: BlockRule = rule.parse().map_err(|error| format!("line {}: {error}", number + 1))?;
-            let pinned = !pinned.is_empty();
+            let rule: BlockRule = line.get("rule").parse().map_err(|error| format!("line {}: {error}", number + 1))?;
+            let pinned = !line.get("pinned").is_empty();
             match library.of(&rule).filter(|&index| !library.entries[index].kept()) {
                 Some(built_in) => library.entries[built_in].pinned = pinned,
                 None => {
+                    let name = line.get("name");
                     let mut entry = Entry::new(rule, if name.is_empty() { "Unnamed" } else { name }, None);
                     entry.pinned = pinned;
-                    entry.tags = tags_of(tags);
-                    entry.added = added.to_string();
-                    entry.note = note.to_string();
+                    entry.tags = tags_of(line.get("tags"));
+                    entry.note = line.get("note").to_string();
                     entry.index();
                     library.entries.push(entry);
                 }
@@ -206,13 +230,11 @@ impl Library {
 
     /// Keeps a rule under a name. A rule whose world is in the library already is not kept
     /// twice: then the entry it has comes back as the error.
-    pub fn keep(&mut self, rule: BlockRule, name: &str, added: &str) -> Result<usize, usize> {
+    pub fn keep(&mut self, rule: BlockRule, name: &str) -> Result<usize, usize> {
         if let Some(known) = self.twin(&rule) {
             return Err(known);
         }
-        let mut entry = Entry::new(rule, name, None);
-        entry.added = line(added);
-        self.entries.push(entry);
+        self.entries.push(Entry::new(rule, name, None));
         Ok(self.entries.len() - 1)
     }
 
@@ -282,7 +304,7 @@ impl fmt::Display for Library {
                 Some(_) => {}
                 None => {
                     let tags = entry.tags.join(", ");
-                    writeln!(f, "{}\t{}\t{pinned}\t{tags}\t{}\t{}", entry.rule, entry.name, entry.added, entry.note)?;
+                    writeln!(f, "{}\t{}\t{pinned}\t{tags}\t{}", entry.rule, entry.name, entry.note)?;
                 }
             }
         }
@@ -303,22 +325,6 @@ pub(crate) fn write_whole(path: &Path, text: &str) -> io::Result<()> {
     beside.push(".new");
     fs::write(&beside, text)?;
     fs::rename(&beside, path)
-}
-
-/// Today's date as the library writes it down: year, month and day.
-pub fn today() -> String {
-    let days = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs() / 86_400) as i64;
-    // The civil date of a day counted from 1970, after Howard Hinnant.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let day_of_era = z.rem_euclid(146_097);
-    let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_from_march = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_from_march + 2) / 5 + 1;
-    let month = if month_from_march < 10 { month_from_march + 3 } else { month_from_march - 9 };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// The properties a rule has, of those that go by a name: `conserving`, `half-turn` and the
@@ -356,14 +362,6 @@ mod tests {
     }
 
     #[test]
-    fn today_is_a_date() {
-        let today = today();
-        let parts: Vec<u32> = today.split('-').map(|part| part.parse().unwrap()).collect();
-        assert_eq!((today.len(), parts.len()), (10, 3));
-        assert!(parts[0] >= 2026 && (1..=12).contains(&parts[1]) && (1..=31).contains(&parts[2]), "{today}");
-    }
-
-    #[test]
     fn the_library_begins_with_the_built_in_rules() {
         let library = Library::new();
         assert_eq!(library.entries().len(), PRESETS.len());
@@ -383,20 +381,20 @@ mod tests {
     fn a_rule_is_kept_once_whatever_form_it_comes_in() {
         let mut library = Library::new();
         let gun = rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15");
-        let kept = library.keep(gun.clone(), "A\tgun\n", "2026-10-04").unwrap();
+        let kept = library.keep(gun.clone(), "A\tgun\n").unwrap();
         assert_eq!(kept, PRESETS.len());
         assert_eq!((library.entries()[kept].name.as_str(), library.entries()[kept].kept()), ("A gun", true));
         assert_eq!((library.of(&gun), library.twin(&gun)), (Some(kept), Some(kept)));
         // The same rule again, and the rule in canonical form, which is another table of the
         // same world: both are there already.
-        assert_eq!(library.keep(gun.clone(), "Again", ""), Err(kept));
+        assert_eq!(library.keep(gun.clone(), "Again"), Err(kept));
         let twin = gun.canonical();
         assert_ne!(twin, gun);
         assert_eq!((library.of(&twin), library.twin(&twin)), (None, Some(kept)));
-        assert_eq!(library.keep(twin, "Its twin", ""), Err(kept));
+        assert_eq!(library.keep(twin, "Its twin"), Err(kept));
         // A built-in rule is in the library from the start.
         let critters = library.of(&rule("critters")).unwrap();
-        assert_eq!(library.keep(rule("critters"), "Mine", ""), Err(critters));
+        assert_eq!(library.keep(rule("critters"), "Mine"), Err(critters));
         // What was kept can be forgotten, and what is built in cannot.
         assert!(!library.forget(critters));
         assert!(library.forget(kept));
@@ -406,7 +404,7 @@ mod tests {
     #[test]
     fn the_file_says_what_was_kept_and_what_is_pinned() {
         let mut library = Library::new();
-        let kept = library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), "A gun", "2026-10-04").unwrap();
+        let kept = library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), "A gun").unwrap();
         library.tag(kept, " gun,  half-turn , ");
         library.annotate(kept, "fires\tfour ways");
         library.pin(kept, true);
@@ -421,13 +419,13 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "rule\tname\tpinned\ttags\tadded\tnote",
+                "rule\tname\tpinned\ttags\tnote",
                 "single-rotation\t\t*",
                 "bbm\t\t*",
                 "tron\t\t*",
                 "espca-01c5ef\t\t*",
                 "four-way-gun\t\t*",
-                "0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15\tA gun\t*\tgun, half-turn\t2026-10-04\tfires four ways",
+                "0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15\tA gun\t*\tgun, half-turn\tfires four ways",
             ]
         );
         // Read again, it is the same library.
@@ -435,10 +433,35 @@ mod tests {
     }
 
     #[test]
+    fn a_file_is_read_by_the_names_of_its_columns() {
+        // A file as it was written when the day a rule was kept had a column: every field is
+        // found under its name, the day is passed over, and written again the file is
+        // without it.
+        let older = "# kept\nrule\tname\tpinned\ttags\tadded\tnote\ncritters\t\t*\n\
+                     0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15\tA gun\t*\tguns, found\t2026-10-04\tfires four ways\n\
+                     0,4,8,3,1,5,6,7,2,9,10,11,12,13,14,15\tAnother\t\t\t2026-10-04\t";
+        let library = Library::parse(older).unwrap();
+        let kept: Vec<&Entry> = library.entries().iter().filter(|entry| entry.kept()).collect();
+        assert_eq!(kept.len(), 2);
+        assert_eq!((kept[0].name.as_str(), kept[0].pinned, kept[0].note.as_str()), ("A gun", true, "fires four ways"));
+        assert_eq!(kept[0].tags, ["guns", "found"]);
+        assert_eq!((kept[1].name.as_str(), kept[1].pinned, kept[1].note.as_str()), ("Another", false, ""));
+        let written = library.to_string();
+        assert!(!written.contains("2026") && !written.contains("added"));
+        assert!(written.contains("\tA gun\t*\tguns, found\tfires four ways\n"));
+        assert_eq!(Library::parse(&written).unwrap(), library);
+        // Columns in another order, and without the ones that are not needed.
+        let turned = "rule\tnote\tname\n0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15\tfires four ways\tA gun";
+        let entry = Library::parse(turned).unwrap().entries().last().unwrap().clone();
+        assert_eq!((entry.name.as_str(), entry.note.as_str(), entry.pinned), ("A gun", "fires four ways", false));
+    }
+
+    #[test]
     fn a_file_is_read_as_far_as_it_makes_sense() {
-        // A rule by its id, by Morita's number and by its table; a line with nothing after the
-        // name; and a kept rule without a name.
-        let file = "# a comment\n\nrule\tname\ncritters\t\t*\nespca-04cadf\tignored\n\
+        // Without a line of column names the columns are as they are written. A rule by its
+        // id, by Morita's number and by its table; a line with nothing after the name; and a
+        // kept rule without a name.
+        let file = "# a comment\n\ncritters\t\t*\nespca-04cadf\tignored\n\
                     0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15\tA gun\n\
                     0,4,8,3,1,5,6,7,2,9,10,11,12,13,14,15\t\t*\ttwo, tags";
         let library = Library::parse(file).unwrap();
@@ -467,7 +490,7 @@ mod tests {
         // A rule kept without a name of its own gets one that is free.
         let mut library = Library::new();
         let name = library.unused("Unnamed");
-        library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), &name, "2026-10-04").unwrap();
+        library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), &name).unwrap();
         assert_eq!((name.as_str(), library.unused("Unnamed").as_str()), ("Unnamed 1", "Unnamed 2"));
         library.write(&path).unwrap();
         assert_eq!(Library::read(&path).unwrap(), library);
@@ -482,7 +505,7 @@ mod tests {
     #[test]
     fn rules_are_found_by_their_words_and_their_properties() {
         let mut library = Library::new();
-        let kept = library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), "A gun", "2026-10-04").unwrap();
+        let kept = library.keep(rule("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15"), "A gun").unwrap();
         library.tag(kept, "Guns");
         library.annotate(kept, "Fires four ways");
         let names = |found: Vec<usize>| -> Vec<String> {

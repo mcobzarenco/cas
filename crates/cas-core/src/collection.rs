@@ -6,12 +6,13 @@
 //! the app, the search and whatever else looks at rules may all add to:
 //!
 //! ```text
-//! rule             sort        pattern   period  moves  name  added       note
-//! single-rotation  spaceship   b2o2$b2o  12      2,0          2026-10-04  the lightest
-//! single-rotation  still life  2o$2o     1                    2026-10-04
+//! rule             sort        pattern   period  moves  name  note
+//! single-rotation  spaceship   b2o2$b2o  12      2,0          the lightest
+//! single-rotation  still life  2o$2o     1
 //! ```
 //!
-//! The columns are separated by tabs, one between any two (they are drawn apart here). A
+//! The columns are separated by tabs, one between any two (they are drawn apart here), and
+//! go by the names in the line that begins with `rule`, as the library's do. A
 //! pattern is written as the app writes one: run-length encoded, from a corner of the blocks
 //! the next step rewrites, at the start of the vacuum's cycle. It is the form its kind is
 //! filed under ([`Motion::canonical`](crate::pattern::Motion)), so that a kind is kept once
@@ -20,7 +21,7 @@
 use std::{fmt, fs, io, path::Path, path::PathBuf, str::FromStr};
 
 use crate::{
-    library,
+    library::{self, Fields},
     pattern::{Cell, from_rle, settled, to_rle},
     rules::{BlockRule, PRESETS},
 };
@@ -31,9 +32,12 @@ const HEADING: &str = "\
 # pattern of (its table, or the id of a built-in rule), what it is (a spaceship, an
 # oscillator or a still life), the pattern (run-length encoded, from a corner of the blocks
 # the next step rewrites, at the start of the vacuum's cycle), its period, how far it moves
-# in a period, a name, the day it was kept, and a note.
-rule\tsort\tpattern\tperiod\tmoves\tname\tadded\tnote
+# in a period, a name, and a note.
+rule\tsort\tpattern\tperiod\tmoves\tname\tnote
 ";
+
+/// The columns of the file, in the order they are written.
+const COLUMNS: [&str; 7] = ["rule", "sort", "pattern", "period", "moves", "name", "note"];
 
 /// The sorts of pattern that are kept: what comes back to its shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -102,8 +106,6 @@ pub struct Kept {
     /// How far that form moves in a period.
     pub moves: (i32, i32),
     pub name: String,
-    /// The day it was kept, as it was written down then.
-    pub added: String,
     pub note: String,
 }
 
@@ -117,7 +119,6 @@ impl Kept {
             period,
             moves,
             name: String::new(),
-            added: String::new(),
             note: String::new(),
         }
     }
@@ -134,22 +135,16 @@ impl Collection {
     /// number: a file read in part would lose the rest when it is written again.
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut collection = Self::default();
+        let mut line = Fields::of(&COLUMNS);
         for (number, text) in text.lines().enumerate() {
-            if text.trim().is_empty() || text.starts_with('#') {
+            if text.trim().is_empty() || text.starts_with('#') || line.read(text) {
                 continue;
             }
-            let mut fields = text.split('\t').map(str::trim);
-            let mut field = || fields.next().unwrap_or_default();
-            let (rule, sort, pattern, period, moves) = (field(), field(), field(), field(), field());
-            let (name, added, note) = (field(), field(), field());
-            // The names of the columns.
-            if rule == "rule" {
-                continue;
-            }
+            let (period, moves) = (line.get("period"), line.get("moves"));
             let wrong = |error: String| format!("line {}: {error}", number + 1);
-            let rule: BlockRule = rule.parse().map_err(wrong)?;
-            let sort: Sort = sort.parse().map_err(wrong)?;
-            let cells = from_rle(pattern).map_err(wrong)?;
+            let rule: BlockRule = line.get("rule").parse().map_err(wrong)?;
+            let sort: Sort = line.get("sort").parse().map_err(wrong)?;
+            let cells = from_rle(line.get("pattern")).map_err(wrong)?;
             if cells.is_empty() {
                 return Err(wrong("a pattern has cells".to_string()));
             }
@@ -162,12 +157,8 @@ impl Collection {
                 },
                 None => return Err(wrong(format!("{moves:?} is no way to move"))),
             };
-            let kept = Kept {
-                name: name.to_string(),
-                added: added.to_string(),
-                note: note.to_string(),
-                ..Kept::new(&rule, sort, &cells, period, moves)
-            };
+            let (name, note) = (line.get("name").to_string(), line.get("note").to_string());
+            let kept = Kept { name, note, ..Kept::new(&rule, sort, &cells, period, moves) };
             // The same pattern twice is the same pattern.
             let _ = collection.keep(kept);
         }
@@ -241,13 +232,7 @@ impl fmt::Display for Collection {
             };
             let pattern = to_rle(&kept.cells);
             let (name, note) = (line(&kept.name), line(&kept.note));
-            writeln!(
-                f,
-                "{rule}\t{}\t{pattern}\t{}\t{moves}\t{name}\t{}\t{note}",
-                kept.sort,
-                kept.period,
-                line(&kept.added)
-            )?;
+            writeln!(f, "{rule}\t{}\t{pattern}\t{}\t{moves}\t{name}\t{note}", kept.sort, kept.period)?;
         }
         Ok(())
     }
@@ -301,7 +286,6 @@ mod tests {
         let slow = rule("15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0");
         let mut collection = Collection::default();
         let mut ship = Kept::new(&slow, Sort::Spaceship, &cells("bobo$obo"), 7_328_092, (0, -8));
-        ship.added = "2026-10-04".to_string();
         ship.name = "The\tslowest".to_string();
         ship.note = "eight cells up\nin a period".to_string();
         collection.keep(ship).unwrap();
@@ -311,9 +295,9 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "rule\tsort\tpattern\tperiod\tmoves\tname\tadded\tnote",
-                "15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0\tspaceship\tbobo$obo\t7328092\t0,-8\tThe slowest\t2026-10-04\teight cells up in a period",
-                "single-rotation\tstill life\t2o$2o\t1\t\t\t\t",
+                "rule\tsort\tpattern\tperiod\tmoves\tname\tnote",
+                "15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0\tspaceship\tbobo$obo\t7328092\t0,-8\tThe slowest\teight cells up in a period",
+                "single-rotation\tstill life\t2o$2o\t1\t\t\t",
             ]
         );
         // Read again, it is the same collection, but for the tab and the line break that a
@@ -328,11 +312,22 @@ mod tests {
     fn a_file_is_read_whole_or_not_at_all() {
         // Comments, the names of the columns, a line with nothing after the period, and the
         // same pattern twice.
-        let file = "# kept\n\nrule\tsort\ncritters\toscillator\to\t4\nCritters\tStill Life\t2o$2o\t2\t\tA block\n\
+        let file = "# kept\n\ncritters\toscillator\to\t4\nCritters\tStill Life\t2o$2o\t2\t\tA block\n\
                     critters\toscillator\to\t4\t\tagain";
         let collection = Collection::parse(file).unwrap();
         assert_eq!(collection.all().len(), 2);
         assert_eq!((collection.all()[1].sort, collection.all()[1].name.as_str()), (Sort::StillLife, "A block"));
+        // A file from when the day a pattern was kept had a column: read by the names of its
+        // columns, and written again without the day.
+        let older = "rule\tsort\tpattern\tperiod\tmoves\tname\tadded\tnote\n\
+                     single-rotation\tspaceship\tb2o2$b2o\t12\t2,0\tLightest\t2026-10-04\ta note";
+        let read = Collection::parse(older).unwrap();
+        let ship = &read.all()[0];
+        assert_eq!(
+            (ship.name.as_str(), ship.note.as_str(), ship.period, ship.moves),
+            ("Lightest", "a note", 12, (2, 0))
+        );
+        assert!(!read.to_string().contains("2026") && !read.to_string().contains("added"));
         // What is wrong is said, with its line.
         let wrong = |line: &str| Collection::parse(&format!("critters\toscillator\to\t4\n{line}")).unwrap_err();
         assert_eq!(wrong("0,1,2\tspaceship\to\t4"), "line 2: a rule has 16 entries, found 3");

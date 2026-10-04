@@ -24,7 +24,6 @@ use bevy::{
 
 use cas_core::{
     collection::{Collection, Kept, Sort},
-    library::today,
     pattern::{Analyser, Cell},
     rules::BlockRule,
     universe::Universe,
@@ -103,7 +102,7 @@ impl Collected {
     /// Keeps a pattern of a rule, by the form its kind is filed under. True if it was not
     /// kept before.
     pub fn keep(&mut self, rule: &BlockRule, sort: Sort, cells: &[Cell], period: u32, moves: (i32, i32)) -> bool {
-        let kept = Kept { added: today(), ..Kept::new(rule, sort, cells, period, moves) };
+        let kept = Kept::new(rule, sort, cells, period, moves);
         let new = self.collection.edit(|collection| collection.keep(kept).is_ok());
         self.revision += 1;
         new
@@ -323,13 +322,8 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
         along.clone().max().unwrap_or(0) - along.min().unwrap_or(0) + 1
     };
     let size = mono(format!("{}×{}", span(|cell| cell.0), span(|cell| cell.1)), 14.0, palette::WHITE);
-    // What was written about it, or else the day it was kept.
-    let word = match (kept.name.is_empty(), kept.note.is_empty(), kept.added.is_empty()) {
-        (false, ..) => kept.name.clone(),
-        (true, false, _) => kept.note.clone(),
-        (true, true, false) => format!("kept {}", kept.added),
-        _ => String::new(),
-    };
+    // What was written about it, if anything was.
+    let word = if kept.name.is_empty() { kept.note.clone() } else { kept.name.clone() };
     let period = if SHELVES[shelf] == Sort::Oscillator { kept.period.to_string() } else { String::new() };
     bsn! {
         Node {

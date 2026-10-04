@@ -14,7 +14,7 @@ use std::{
 
 use cas_core::{
     families::{self, ENUMERABLE, Family},
-    library::{Library, today, usual_file},
+    library::{Library, usual_file},
     rules::{BlockRule, Population},
     search::{self, Effort, Report},
     universe::Rng,
@@ -388,7 +388,7 @@ fn store(args: &Args, lines: &[Vec<String>]) {
     let file = args.library.clone().unwrap_or_else(usual_file);
     let read = Library::read(&file).unwrap_or_else(|error| fail(&format!("{}: {error}", file.display())));
     let mut library = read.clone();
-    let said = keep(&mut library, lines, args.keep, &searched, &today());
+    let said = keep(&mut library, lines, args.keep, &searched);
     if said.is_empty() {
         println!("nothing to keep: none of the rules is a find");
     }
@@ -403,7 +403,7 @@ fn store(args: &Args, lines: &[Vec<String>]) {
 
 /// Keeps the best of the rules, which come best first, in the library: so many at most, and
 /// only finds. Says what became of each.
-fn keep(library: &mut Library, lines: &[Vec<String>], most: usize, searched: &str, today: &str) -> Vec<String> {
+fn keep(library: &mut Library, lines: &[Vec<String>], most: usize, searched: &str) -> Vec<String> {
     let finds = lines.iter().filter(|line| merit(line).0 > 0).take(most);
     let cell = |line: &[String], name: &str| line[column(name)].clone();
     let counted = |count: String, one: &str, many: &str| format!("{count} {}", if count == "1" { one } else { many });
@@ -413,7 +413,7 @@ fn keep(library: &mut Library, lines: &[Vec<String>], most: usize, searched: &st
             continue;
         };
         let name = library.unused(searched);
-        match library.keep(rule, &name, today) {
+        match library.keep(rule, &name) {
             Ok(kept) => {
                 library.tag(kept, "search");
                 library.annotate(
@@ -503,7 +503,7 @@ mod tests {
             line("0,4,8,3,1,5,6,7,2,9,10,11,12,13,14,15", "spaceships", "1"),
         ];
         let mut library = Library::new();
-        let said = keep(&mut library, &lines, 5, "half-turn", "2026-10-04");
+        let said = keep(&mut library, &lines, 5, "half-turn");
         // The names are numbered as the rules are kept, whatever their places.
         assert_eq!(
             said,
@@ -514,12 +514,12 @@ mod tests {
             ]
         );
         let kept: Vec<_> = library.entries().iter().filter(|entry| entry.kept()).collect();
-        assert_eq!((kept[0].name.as_str(), kept[0].added.as_str()), ("half-turn 1", "2026-10-04"));
+        assert_eq!(kept[0].name, "half-turn 1");
         assert_eq!(kept[0].tags, ["search"]);
         assert_eq!(kept[0].note, "spaceships: 5 kinds of spaceship, 3 periods, the longest 48");
         assert_eq!(kept[1].note, "spaceships: 1 kind of spaceship, 3 periods, the longest 48");
         // A second run keeps nothing twice.
-        assert_eq!(keep(&mut library, &lines, 1, "half-turn", "2026-10-05").len(), 1);
+        assert_eq!(keep(&mut library, &lines, 1, "half-turn").len(), 1);
         assert_eq!(library.entries().iter().filter(|entry| entry.kept()).count(), 2);
     }
 

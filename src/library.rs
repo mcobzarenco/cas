@@ -27,7 +27,7 @@ use bevy::{
 
 use cas_core::{
     families::Constraint,
-    library::{Entry, Library, properties, today},
+    library::{Entry, Library, properties},
     rules::{BlockRule, Source},
     universe::Universe,
 };
@@ -214,7 +214,7 @@ impl RuleLibrary {
         let mut kept = false;
         self.edit(|library| {
             let name = if typed.is_empty() { library.unused("Unnamed") } else { typed };
-            said = match library.keep(rule.clone(), &name, &today()) {
+            said = match library.keep(rule.clone(), &name) {
                 Ok(_) => {
                     kept = true;
                     format!("Kept as “{name}”.")
@@ -1157,13 +1157,13 @@ mod tests {
         // A search keeps a find in the file. The library here is the file's again when it is
         // looked at.
         let mut outside = on_disk();
-        outside.keep(first.clone(), "A find", "2026-10-04").unwrap();
+        outside.keep(first.clone(), "A find").unwrap();
         outside.write(&path).unwrap();
         assert!(library.read_again() && !library.read_again());
         assert_eq!(library.label(&first), "A find");
         // And a change made here before the file was looked at is made to the file as it is:
         // nothing of what was written there is lost.
-        outside.keep(second.clone(), "Another find", "2026-10-04").unwrap();
+        outside.keep(second.clone(), "Another find").unwrap();
         outside.write(&path).unwrap();
         library.pin(&gun);
         library.forget(&first);

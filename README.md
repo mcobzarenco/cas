@@ -390,6 +390,10 @@ is written at every change, and read again whenever something else wrote it: a s
 its finds, an editor, a checkout. One that cannot be read is left as it is, and the panel says
 what is wrong with it.
 
+<p align="center">
+  <img src="docs/library.png" width="368" alt="The rule library. At the top the rule on the grid, Rotate and half-turn, with its pin, its tags and its note. Under the field that narrows the list: a rule that was on the grid of late and has no name, three kept rules, two of them as a search named them, and the first of the rules that come with the program, the pinned ones marked.">
+</p>
+
 ### The edge of the grid, and catching spaceships
 
 The grid is a torus: what leaves on one side comes back on the other. *Open border* (`o`) makes

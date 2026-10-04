@@ -9,6 +9,7 @@
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:28,$P"   docs/cases.png
 #   ffmpeg -i shots/tour-editor.png     -vf "crop=736:736:600:752,$P"  docs/properties.png
 #   ffmpeg -i shots/tour-analysis.png   -vf "crop=792:1440:600:0,$P"   docs/analysis.png
+#   ffmpeg -i shots/tour-library.png    -vf "crop=736:1480:600:0,$P"   docs/library.png
 #   ffmpeg -i shots/rule-NAME.png -vf "crop=1702:1702:889:49,scale=640:-1:flags=area,$P" docs/rule-NAME.png
 #   oxipng -o max --strip safe docs/*.png
 wait 25
@@ -46,4 +47,31 @@ rule espca-0925bf; clear; paint 128 128; step 225; wait 3; shot rule-disk
 click GridSize; wait 4; click GridSize:128; wait 6
 rule four-way-gun; clear; paint 64 64; step 170; wait 3; shot rule-gun
 rule ship-factory; blob; step 2000; wait 3; shot rule-factory
+
+# The rule library, in a lower window: the three best rules a search of the quarter-turn family
+# kept that the library did not have (cas-search --family quarter-turn --limit 400 --keep 5),
+# the best of them given a name, tags and a note since, and pinned; and a rule of that search's
+# table that was on the grid a moment ago and has no name.
+window 1440 740; wait 12
+key l; wait 6
+rule 0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15; wait 4
+click LibraryKeep; wait 4; type Rotate and half-turn; key Escape; wait 3
+click KeptTags; wait 3; type search, spaceships; key Escape; wait 3
+clipboard 17 kinds of spaceship. Threes turn by 180°.
+click KeptNote; wait 3; key Ctrl+v; wait 3; key Escape; wait 3
+rule 0,2,8,5,1,12,6,13,4,9,3,7,10,14,11,15; wait 4
+click LibraryKeep; wait 4; type quarter-turn 2; key Escape; wait 3
+click KeptTags; wait 3; type search; key Escape; wait 3
+clipboard spaceships: 6 kinds of spaceship, 43 periods, the longest 2792
+click KeptNote; wait 3; key Ctrl+v; wait 3; key Escape; wait 3
+rule 0,2,8,12,1,10,6,11,4,9,5,14,3,7,13,15; wait 4
+click LibraryKeep; wait 4; type quarter-turn 3; key Escape; wait 3
+click KeptTags; wait 3; type search; key Escape; wait 3
+clipboard spaceships: 6 kinds of spaceship, 43 periods, the longest 2716
+click KeptNote; wait 3; key Ctrl+v; wait 3; key Escape; wait 3
+rule 15,7,11,4,13,8,6,10,14,9,1,12,2,3,5,0; wait 4
+rule 0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15; wait 4
+click LibraryPin; wait 4
+move Grid 0 0; wait 6
+shot tour-library
 quit

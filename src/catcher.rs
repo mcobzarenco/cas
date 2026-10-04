@@ -35,7 +35,8 @@ use bevy::{
 
 use cas_core::{
     census::{self, Census, Found, Kind},
-    pattern::{Analyser, Cell, Heading, WAYS, Watch, to_rle},
+    collection::Sort,
+    pattern::{Analyser, Cell, Heading, Motion, WAYS, Watch, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
 };
@@ -44,8 +45,9 @@ use crate::{
     actions::Toggle,
     analysis::Analysis,
     icons,
+    kept::Collected,
     sim::{SimSystems, rule_changed},
-    ui::{Aspect, caption, group_digits, panel_title, side_panel, toggle},
+    ui::{Aspect, caption, group_digits, icon_button_marked, panel_title, side_panel, toggle},
     view::{ALIVE, BLOCKS, DEAD, Stamp},
 };
 
@@ -77,6 +79,8 @@ const SPEED_ROOM: f32 = 62.0;
 pub(crate) const CELLS_COLUMN: f32 = 30.0;
 pub(crate) const CAUGHT_COLUMN: f32 = 48.0;
 const ANALYSE_COLUMN: f32 = 24.0;
+/// The height of the two small buttons of a row, which lie one above the other.
+const SMALL_BUTTON: f32 = 20.0;
 pub(crate) const COLUMN_GAP: f32 = 6.0;
 /// The side of the dial that shows which ways the ships of a kind fly.
 const DIAL: f32 = 30.0;
@@ -114,7 +118,7 @@ impl Catcher {
 
     /// Spaceships caught under `rule`, and how many kinds they are.
     pub fn totals(&self, rule: &BlockRule) -> (u64, usize) {
-        self.hauls.get(rule).map_or((0, 0), |haul| (haul.census.ships(), haul.census.kinds().len()))
+        self.hauls.get(rule).map_or((0, 0), |haul| (haul.census.ships(), caught_kinds(&haul.census)))
     }
 }
 
@@ -127,6 +131,12 @@ struct Haul {
     /// having it.
     slow: VecDeque<Departure>,
     following: Option<Following>,
+}
+
+/// How many kinds of spaceship were caught: a kind that was kept earlier is listed before any
+/// of it is.
+fn caught_kinds(census: &Census) -> usize {
+    census.kinds().iter().filter(|kind| kind.count > 0).count()
 }
 
 /// A catch being followed for longer, on another thread.
@@ -144,6 +154,12 @@ impl Drop for Following {
 }
 
 impl Haul {
+    /// A haul under a rule, numbered after the ones before it.
+    fn begin(begun: &mut u64, rule: &BlockRule) -> Self {
+        *begun += 1;
+        Self { number: *begun, census: Census::new(rule), slow: VecDeque::new(), following: None }
+    }
+
     /// How many catches are yet to be told for what they are.
     fn unsettled(&self) -> usize {
         self.slow.len() + self.following.is_some() as usize
@@ -185,6 +201,14 @@ struct Share(usize);
 #[derive(Component, Default, Clone, Copy)]
 struct AnalyseKind(usize);
 
+/// The small button of a row that keeps its kind, or lets go of it, and the mark on it, which
+/// is lit while the kind is kept.
+#[derive(Component, Default, Clone, Copy)]
+struct KeepKind(usize);
+
+#[derive(Component, Default, Clone, Copy)]
+struct KeepSign(usize);
+
 /// An arrow of a dial: the way it points, as one of the eight [`WAYS`], and which kind of the
 /// list it belongs to, if it is the list's: those are kept in step with what is caught.
 #[derive(Component, Default, Clone, Copy)]
@@ -203,7 +227,16 @@ impl Plugin for CatcherPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Catcher>().add_systems(
             Update,
-            (drop_the_queue.run_if(rule_changed), identify, follow_the_slow, show_panel, sync_list, light_rows)
+            (
+                drop_the_queue.run_if(rule_changed),
+                know_the_kept,
+                identify,
+                follow_the_slow,
+                show_panel,
+                sync_list,
+                light_rows,
+                light_kept,
+            )
                 .chain()
                 .in_set(SimSystems::Present),
         );
@@ -231,10 +264,7 @@ fn identify(mut universe: ResMut<Universe>, mut catcher: ResMut<Catcher>) {
     }
     let started = Instant::now();
     let Catcher { waiting, hauls, begun, .. } = &mut *catcher;
-    let haul = hauls.entry(universe.rule().clone()).or_insert_with(|| {
-        *begun += 1;
-        Haul { number: *begun, census: Census::new(universe.rule()), slow: VecDeque::new(), following: None }
-    });
+    let haul = hauls.entry(universe.rule().clone()).or_insert_with(|| Haul::begin(begun, universe.rule()));
     while let Some(departure) = waiting.pop_front() {
         if let Some(slow) = haul.census.record_or_defer(departure) {
             haul.slow.push_back(slow);
@@ -379,6 +409,15 @@ pub fn catcher_panel() -> impl Scene {
                             catcher.note = None;
                         })
                     ),
+                    (
+                        // Keeps every kind of the list among the spaceships of the rule.
+                        #CatcherKeepAll
+                        @FeathersButton {
+                            @caption: bsn! { Text("Keep all") ThemedText }
+                        }
+                        Node { flex_shrink: 0.0 }
+                        on(keep_all_kinds)
+                    ),
                     (#CatcherNote caption("") Note Node { flex_grow: 1.0, flex_basis: px(0) }),
                 ]
             ),
@@ -458,6 +497,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
     let row = KindRow(index);
     let (caught, share) = (Figure::Caught(index), Share(index));
     let (analyse, analyse_name) = (AnalyseKind(index), Name::new(format!("AnalyseKind{index}")));
+    let (keep, keep_name) = (KeepKind(index), Name::new(format!("KeepKind{index}")));
     let bar = Aspect::Pattern.color();
     // The picture is of the form the kind is filed under, which flies right or down; the ways
     // its ships were going when they were caught are on the dial.
@@ -524,20 +564,40 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                         template_value(caught)
                     ),
                     (
-                        // Sends the kind to the analysis panel, for a closer look.
-                        @FeathersButton {
-                            @caption: bsn! { icons::icon(icons::LOOK, 14.0, palette::LIGHT_GRAY_1) }
-                        }
+                        // One above the other: a closer look in the analysis panel, and the
+                        // mark that keeps the kind, lit while it is kept.
                         Node {
                             width: px(ANALYSE_COLUMN),
-                            min_width: px(ANALYSE_COLUMN),
-                            padding: px(0),
-                            justify_content: JustifyContent::Center,
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(3),
                             flex_shrink: 0.0,
                         }
-                        template_value(analyse_name)
-                        template_value(analyse)
-                        on(analyse_kind)
+                        Children [
+                            (
+                                @FeathersButton {
+                                    @caption: bsn! { icons::icon(icons::LOOK, 12.0, palette::LIGHT_GRAY_1) }
+                                }
+                                Node {
+                                    width: px(ANALYSE_COLUMN),
+                                    min_width: px(ANALYSE_COLUMN),
+                                    height: px(SMALL_BUTTON),
+                                    min_height: px(SMALL_BUTTON),
+                                    padding: px(0),
+                                    justify_content: JustifyContent::Center,
+                                    flex_shrink: 0.0,
+                                }
+                                template_value(analyse_name)
+                                template_value(analyse)
+                                on(analyse_kind)
+                            ),
+                            (
+                                icon_button_marked(icons::KEEP, palette::LIGHT_GRAY_2, KeepSign(index))
+                                Node { height: px(SMALL_BUTTON), min_height: px(SMALL_BUTTON) }
+                                template_value(keep_name)
+                                template_value(keep)
+                                on(keep_kind)
+                            ),
+                        ]
                     ),
                 ]
             ),
@@ -768,6 +828,106 @@ fn analyse_kind(
     }
 }
 
+/// The mark of a row keeps its kind among the spaceships of the rule, or lets go of it. The
+/// click goes no further: the row would pick the pattern up.
+fn keep_kind(
+    mut click: On<Pointer<Click>>,
+    buttons: Query<&KeepKind>,
+    universe: Res<Universe>,
+    catcher: Res<Catcher>,
+    mut collected: ResMut<Collected>,
+) {
+    let Ok(&KeepKind(index)) = buttons.get(click.entity) else {
+        return;
+    };
+    click.propagate(false);
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let rule = universe.rule();
+    if let Some(kind) = catcher.hauls.get(rule).and_then(|haul| haul.census.kinds().get(index)) {
+        let motion = &kind.motion;
+        collected.keep_or_forget(rule, Sort::Spaceship, &motion.canonical, motion.period, motion.displacement);
+    }
+}
+
+/// Keeps every kind of the list.
+fn keep_all_kinds(
+    _: On<Activate>,
+    universe: Res<Universe>,
+    mut catcher: ResMut<Catcher>,
+    mut collected: ResMut<Collected>,
+) {
+    let rule = universe.rule();
+    let kinds = catcher.hauls.get(rule).map_or(&[][..], |haul| haul.census.kinds());
+    let (mut new, mut known) = (0, 0);
+    for Kind { motion, .. } in kinds {
+        match collected.keep(rule, Sort::Spaceship, &motion.canonical, motion.period, motion.displacement) {
+            true => new += 1,
+            false => known += 1,
+        }
+    }
+    let were = if known == 1 { "was" } else { "were" };
+    catcher.note = Some(match (new, known) {
+        (0, 0) => "There is nothing to keep yet.".to_string(),
+        (0, _) => "Every kind of the list was kept already.".to_string(),
+        (1, 0) => "Kept the one kind there is.".to_string(),
+        (new, 0) => format!("Kept {new} kinds."),
+        (new, known) => format!("Kept {new} more, and {known} {were} kept already."),
+    });
+}
+
+/// The spaceships that were kept under the rule on the grid are in its list from the start,
+/// each with a count of none until one of it is caught.
+fn know_the_kept(
+    universe: Res<Universe>,
+    collected: Res<Collected>,
+    mut catcher: ResMut<Catcher>,
+    mut known: Local<Option<(BlockRule, u64, Option<u64>)>>,
+) {
+    let rule = universe.rule();
+    let haul = catcher.hauls.get(rule).map(|haul| haul.number);
+    if known
+        .as_ref()
+        .is_some_and(|(of, revision, numbered)| of == rule && *revision == collected.revision() && *numbered == haul)
+    {
+        return;
+    }
+    let kept = collected.of(rule, Sort::Spaceship);
+    if !kept.is_empty() {
+        let Catcher { hauls, begun, .. } = catcher.bypass_change_detection();
+        let haul = hauls.entry(rule.clone()).or_insert_with(|| Haul::begin(begun, rule));
+        for kept in kept {
+            haul.census.know(Motion { period: kept.period, displacement: kept.moves, canonical: kept.cells.clone() });
+        }
+    }
+    let haul = catcher.hauls.get(rule).map(|haul| haul.number);
+    *known = Some((rule.clone(), collected.revision(), haul));
+}
+
+/// The mark of a row is lit while its kind is kept.
+fn light_kept(
+    catcher: Res<Catcher>,
+    collected: Res<Collected>,
+    universe: Res<Universe>,
+    mut signs: Query<(&KeepSign, &mut TextColor)>,
+    mut shown: Local<Option<(u64, usize, u64)>>,
+) {
+    let rule = universe.rule();
+    let Some(haul) = catcher.hauls.get(rule) else {
+        return;
+    };
+    // The signs themselves count: a row is only there a frame after its kind.
+    let now = (haul.number, signs.iter().count(), collected.revision());
+    if shown.replace(now) == Some(now) {
+        return;
+    }
+    for (&KeepSign(index), mut color) in &mut signs {
+        let kept = haul.census.kinds().get(index).is_some_and(|kind| collected.is_kept(rule, &kind.motion.canonical));
+        color.set_if_neq(TextColor(if kept { Aspect::Pattern.color() } else { palette::LIGHT_GRAY_2 }));
+    }
+}
+
 /// A row lights up under the pointer, since a click on it does something, and the row of the
 /// pattern picked up is outlined in the pattern's colour.
 fn light_rows(
@@ -867,7 +1027,7 @@ fn sync_list(
     for (figure, mut text) in &mut figures {
         let value = match *figure {
             Figure::Ships => ships,
-            Figure::Kinds => kinds.len() as u64,
+            Figure::Kinds => kinds.iter().filter(|kind| kind.count > 0).count() as u64,
             Figure::Others => others,
             Figure::Caught(kind) => kinds.get(kind).map_or(0, |kind| kind.count),
         };

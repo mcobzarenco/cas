@@ -40,7 +40,7 @@ use crate::{
     kit::{
         ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button,
         button_marked, caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono,
-        number, panel_title, picture, scrolling, side_panel, tile, tile_label, tile_value,
+        number, panel_header, panel_title, picture, scrolling, side_panel, tile, tile_label, tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -495,31 +495,23 @@ pub fn analysis_panel() -> impl Scene {
     bsn! {
         #Analysis
         side_panel(ANALYSIS_WIDTH, bsn_list![
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                }
-                Children [
-                    (
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Baseline,
-                            column_gap: px(10),
-                        }
-                        Children [
-                            panel_title(Aspect::Pattern, "Analysis"),
-                            // The rule the pattern was studied in, which the grid may have left.
-                            (#SubjectRule caption("") SubjectRule),
-                        ]
-                    ),
-                    (
-                        #AnalysisClose
-                        button("Close")
-                        on(|_: On<Activate>, mut analysis: ResMut<Analysis>| analysis.toggle())
-                    ),
-                ]
+            panel_header(
+                bsn! {
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Baseline,
+                        column_gap: px(10),
+                    }
+                    Children [
+                        panel_title(Aspect::Pattern, "Analysis"),
+                        // The rule the pattern was studied in, which the grid may have left.
+                        (#SubjectRule caption("") SubjectRule),
+                    ]
+                },
+                bsn! {
+                    #AnalysisClose
+                    on(|_: On<Activate>, mut analysis: ResMut<Analysis>| analysis.toggle())
+                },
             ),
             // What is in the panel scrolls when the window is too low for it.
             scrolling(Scrolls::Body, bsn! {

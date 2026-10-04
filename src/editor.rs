@@ -29,8 +29,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, panel_title, scrolling,
-        section, side_panel, tile, tile_label as label, tile_value as value,
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, panel_header,
+        panel_title, scrolling, section, side_panel, tile, tile_label as label, tile_value as value,
     },
     library::RuleLibrary,
     sampler::sampler_section,
@@ -288,21 +288,10 @@ pub fn editor_panel() -> impl Scene {
     bsn! {
         #RuleEditor
         side_panel(EDITOR_WIDTH, bsn_list![
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                }
-                Children [
-                    panel_title(Aspect::Rule, "Rule editor"),
-                    (
-                        #EditorClose
-                        button("Close")
-                        on(|_: On<Activate>, mut editor: ResMut<RuleEditor>| editor.toggle())
-                    ),
-                ]
-            ),
+            panel_header(panel_title(Aspect::Rule, "Rule editor"), bsn! {
+                #EditorClose
+                on(|_: On<Activate>, mut editor: ResMut<RuleEditor>| editor.toggle())
+            }),
             scrolling(Scrolls::Body, bsn! {
                 #EditorBody
                 Children [

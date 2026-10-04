@@ -28,7 +28,7 @@ use cas_core::{
 use crate::{
     kit::{
         Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
-        panel_title, scrolling, side_panel,
+        panel_header, panel_title, scrolling, side_panel,
     },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
@@ -393,21 +393,10 @@ pub fn library_panel() -> impl Scene {
     bsn! {
         #RuleLibrary
         side_panel(LIBRARY_WIDTH, bsn_list![
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                }
-                Children [
-                    panel_title(Aspect::Rule, "Rule library"),
-                    (
-                        #LibraryClose
-                        button("Close")
-                        on(|_: On<Activate>, mut library: ResMut<RuleLibrary>| library.toggle())
-                    ),
-                ]
-            ),
+            panel_header(panel_title(Aspect::Rule, "Rule library"), bsn! {
+                #LibraryClose
+                on(|_: On<Activate>, mut library: ResMut<RuleLibrary>| library.toggle())
+            }),
             on_the_grid(),
             (
                 // What the list is narrowed to.

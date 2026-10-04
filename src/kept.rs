@@ -20,8 +20,8 @@ use cas_core::{
 use crate::{
     analysis::{self, Analysis},
     kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, heading, icon_button,
-        icons, list_row, mono, number, panel_title, picture, scrolling, side_panel,
+        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
+        list_row, mono, number, panel_header, panel_title, picture, scrolling, side_panel,
     },
     library::LOOKS_EVERY,
     sim::SimSystems,
@@ -193,26 +193,15 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
     };
     bsn! {
         side_panel(KEPT_WIDTH, bsn_list![
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                }
-                Children [
-                    panel_title(Aspect::Pattern, title),
-                    (
-                        button("Close")
-                        template_value(close)
-                        template_value(closes)
-                        on(|activate: On<Activate>, buttons: Query<&KeptClose>, mut collected: ResMut<Collected>| {
-                            if let Ok(&KeptClose(shelf)) = buttons.get(activate.entity) {
-                                collected.close(SHELVES[shelf]);
-                            }
-                        })
-                    ),
-                ]
-            ),
+            panel_header(panel_title(Aspect::Pattern, title), bsn! {
+                template_value(close)
+                template_value(closes)
+                on(|activate: On<Activate>, buttons: Query<&KeptClose>, mut collected: ResMut<Collected>| {
+                    if let Ok(&KeptClose(shelf)) = buttons.get(activate.entity) {
+                        collected.close(SHELVES[shelf]);
+                    }
+                })
+            }),
             caption(about),
             (
                 // Titles over the columns of the rows below: same widths, same padding.

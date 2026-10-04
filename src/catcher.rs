@@ -38,8 +38,8 @@ use crate::{
     kept::Collected,
     kit::{
         Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, fitting, glow,
-        group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_title, picture, scrolling,
-        side_panel,
+        group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_header, panel_title, picture,
+        scrolling, side_panel,
     },
     sim::{SimSystems, rule_changed},
     ui::toggle,
@@ -280,21 +280,10 @@ pub fn catcher_panel() -> impl Scene {
     bsn! {
         #Catcher
         side_panel(CATCHER_WIDTH, bsn_list![
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                }
-                Children [
-                    panel_title(Aspect::Pattern, "Caught"),
-                    (
-                        #CatcherClose
-                        button("Close")
-                        on(|_: On<Activate>, mut catcher: ResMut<Catcher>| catcher.toggle())
-                    ),
-                ]
-            ),
+            panel_header(panel_title(Aspect::Pattern, "Caught"), bsn! {
+                #CatcherClose
+                on(|_: On<Activate>, mut catcher: ResMut<Catcher>| catcher.toggle())
+            }),
             caption("Small patterns that reach the edge of the grid are taken out of the world. Those that travel are identified and counted here."),
             toggle("Catch spaceships", "CatcherCatching", Toggle::Catching),
             (

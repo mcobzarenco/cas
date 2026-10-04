@@ -20,7 +20,7 @@ use bevy::{
 
 pub(crate) use aspect::{ALIVE, Aspect, BLOCKS, DEAD};
 pub(crate) use cards::{
-    AXES, GLYPH, GUTTER, ORBIT, card, panel_title, section, side_panel, tile, tile_label, tile_value,
+    AXES, GLYPH, GUTTER, ORBIT, card, panel_header, panel_title, section, side_panel, tile, tile_label, tile_value,
 };
 pub(crate) use controls::{
     Scrolls, Sign, button, button_marked, check, checkbox, chip, chip_box, chip_marked, field_frame, icon_button,

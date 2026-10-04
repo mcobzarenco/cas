@@ -6,7 +6,7 @@ use bevy::{
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
 };
 
-use super::aspect::Aspect;
+use super::{aspect::Aspect, controls::button};
 
 /// What cards are made of. They lie on the window's background, a shade darker than they are.
 pub(crate) const CARD: Color = palette::GRAY_1;
@@ -128,6 +128,22 @@ pub(crate) fn panel_title(aspect: Aspect, text: &'static str) -> impl Scene {
                 }
                 TextColor(palette::WHITE)
             ),
+        ]
+    }
+}
+
+/// The head of a side panel: its title, and across from it the button that puts the panel
+/// away. `close` is put on that button: the name it goes by, and what a press does.
+pub(crate) fn panel_header(title: impl Scene, close: impl Scene) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+        }
+        Children [
+            title,
+            (button("Close") close),
         ]
     }
 }

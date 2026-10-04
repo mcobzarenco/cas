@@ -2,6 +2,7 @@
 
 ```sh
 cargo run --features dev            # dynamic linking: much faster incremental builds
+cargo run --release -p cas-ui --example gallery   # the elements of the interface, on one page
 cargo test --release --workspace
 cargo clippy --release --workspace --all-targets
 cargo fmt --all                     # 120 columns, short things on one line: rustfmt.toml
@@ -66,8 +67,9 @@ takes `ffmpeg`, and `oxipng` to shrink the PNGs).
 
 ## Layout
 
-A cargo workspace of three crates. `cas-core` is the automata without the app and knows nothing
-of Bevy; the app at the root and the search program are built on it.
+A cargo workspace of four crates. `cas-core` is the automata without the app and knows nothing
+of Bevy; the app at the root and the search program are built on it. `cas-ui` is what the app's
+panels are made of, and knows nothing of the automata or of the app.
 
 | file | what |
 |------|------|
@@ -81,14 +83,15 @@ of Bevy; the app at the root and the search program are built on it.
 | `…/families.rs` | the families of rules a search goes through: the rules with some properties in common (symmetries, what patterns keep, the form of the table), enumerated by filling in the table under those constraints, or sampled when there are too many |
 | `crates/cas-core/examples/figures.rs` | draws the figures of the README |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table, keeping the best in the rule library |
+| `crates/cas-ui` | the kit: what the panels are made of, with only Bevy in it. The aspects with their colours and the `bevy_feathers` dark theme (`aspect.rs`), text in the faces and sizes it comes in (`text.rs`), cards, side panels with their heads, sections and tiles (`cards.rs`), buttons, checkboxes and sliders on the headless widgets, text fields, chips, and what scrolls with its scrollbar (`controls.rs`), the rows of lists and the columns, pictures and dials of the lists of patterns (`lists.rs`). `KitPlugin` sets it up, and its own systems run last in a frame (`KitSystems`) |
+| `…/src/icons.rs`, `…/assets/fonts/` | the icons: the Phosphor icon font (bold) with its licence, built into the program, and the glyphs the interface uses by name. Another icon is another constant, and a line in `ALL` for the gallery: its code point is in the `style.css` of `@phosphor-icons/web` |
+| `…/examples/gallery.rs` | every element of the kit on one page, in a window of its own and with nothing of cas in it; given a path, it saves a picture of itself there |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
 | `src/catcher.rs` | the spaceship list: identifies what was caught at the edge within a time budget per frame, for each rule, follows the catches that do not repeat at once for millions of generations on another thread, shows the panel, and hands a kind to the stamp when its row is clicked, or to the analysis by the row's small button |
 | `src/analysis.rs` | the analysis panel: a pattern chosen with a band on the grid, sent from the list, or typed or pasted as text is studied by `cas_core::pattern::Analyser` (`Study`: fate, period, motion, symmetry, heat, growth, pieces), on Bevy's compute task pool with a `Watch` that says how far it has got and stops it, and shown living in a small universe of its own, drawn with the grid's material; a pattern that never repeats gets an open border there, and what leaves is counted by a `Census` |
 | `src/actions.rs` | everything the user can ask for as one `Action` enum with a single handler; the key table, which also labels the controls; hold-to-repeat stepping; who gets the keyboard |
 | `src/view.rs` | the grid node: view state (zoom / pan / fit), the UI material and its parameters (shared with the analysis panel's small view), painting and navigation via picking events, the band drawn around a pattern to analyse, and the stamp: a pattern picked up from the spaceship list or the analysis panel, shown as a ghost and put down with a click |
 | `src/grid.wgsl` | the fragment shader: view transform, cell colours, the vacuum under the cells, grid and block overlays, the band, the ghost of the stamp |
-| `src/kit/` | what the panels are made of, kept free of the app and of the automata so that it can become a crate of its own: the aspects with their colours and the `bevy_feathers` dark theme (`aspect.rs`), text in the sizes it comes in (`text.rs`), cards, side panels and tiles (`cards.rs`), buttons, checkboxes and sliders on the headless widgets, text fields and chips (`controls.rs`), and the columns, pictures and dials of the lists of patterns (`lists.rs`). A panel takes its elements from here and binds them to what it shows |
-| `src/kit/icons.rs`, `assets/fonts/` | the icons: the Phosphor icon font (bold) with its licence, built into the program, and the glyphs the interface uses by name. Another icon is another constant: its code point is in the `style.css` of `@phosphor-icons/web` |
 | `src/ui.rs` | the control panel as cards, one per aspect (Bevy UI, `bsn!` scenes); the rule menu, whose items are the library's pinned rules and the latest; which side panels there is room for; widget↔state sync |
 | `src/editor.rs` | the rule editor panel: the sixteen cases, swap editing, the properties with their diagrams, the rule string and clipboard |
 | `src/library.rs` | the rule library panel: the rule on the grid with its name, tags and note, the list with its filter (words, and the editor's chips), the pins, the rules that were on the grid of late, and the keeping of the file (written at every change, read again when something else wrote it) |
@@ -112,6 +115,15 @@ Drawing: the cell array is uploaded as-is into an `R8Uint` texture (one byte per
 `memcpy` when the universe changes) and a UI material's fragment shader does everything else, so
 zooming, panning and toggling overlays cost nothing on the CPU. Zoomed out, the shader looks at
 every cell under a pixel (up to 8×8) and lets any live cell show, so sparse patterns stay visible.
+
+## The kit
+
+An element that more than one panel shows is the kit's: a function that returns a scene, and
+knows nothing of the app. What it stands for and what it does are put on it by the panel that
+makes it, so `ui::toggle` is the kit's `checkbox` with an action on it, and the row of a list is
+the kit's `list_row` with what a click on it does. A panel says what an element shows (the
+`Checked` of a checkbox or of a chip, the value of a slider) and the kit's systems, which run
+after the panels', make it look that way; what lights up under the pointer is the kit's alone.
 
 ## Known gaps
 

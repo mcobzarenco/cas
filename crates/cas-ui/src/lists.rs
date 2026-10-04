@@ -27,7 +27,7 @@ struct Row;
 /// A row of a list that a click does something with: its box, which lights up under the
 /// pointer. How its contents lie in it is the caller's, and so is its outline: of the row
 /// that is chosen, say.
-pub(crate) fn list_row() -> impl Scene {
+pub fn list_row() -> impl Scene {
     bsn! {
         Node {
             padding: UiRect::axes(px(7), px(5)),
@@ -55,16 +55,12 @@ fn light_rows(mut rows: Query<(&Hovered, &mut BackgroundColor), With<Row>>) {
 
 /// A thin bar under what a row says: so much of it, from 0 to 1, is filled in the colour of
 /// an aspect.
-pub(crate) fn share_bar(share: f32, aspect: Aspect) -> impl Scene {
+pub fn share_bar(share: f32, aspect: Aspect) -> impl Scene {
     share_bar_marked(share, aspect, Unmarked)
 }
 
 /// Such a bar with a mark on the part that is filled, for whoever changes its width later.
-pub(crate) fn share_bar_marked<M: Component + Clone + Default + Unpin>(
-    share: f32,
-    aspect: Aspect,
-    mark: M,
-) -> impl Scene {
+pub fn share_bar_marked<M: Component + Clone + Default + Unpin>(share: f32, aspect: Aspect, mark: M) -> impl Scene {
     let fill = aspect.color();
     bsn! {
         Node {
@@ -88,10 +84,10 @@ pub(crate) fn share_bar_marked<M: Component + Clone + Default + Unpin>(
 
 /// Column widths of the lists of patterns, shared by their headers and their rows. What they
 /// leave must be room enough for the likes of `2c/184 ↘`, or a row would widen its panel.
-pub(crate) const PICTURE: (f32, f32) = (64.0, 44.0);
-pub(crate) const PERIOD_COLUMN: f32 = 40.0;
-pub(crate) const CELLS_COLUMN: f32 = 30.0;
-pub(crate) const COLUMN_GAP: f32 = 6.0;
+pub const PICTURE: (f32, f32) = (64.0, 44.0);
+pub const PERIOD_COLUMN: f32 = 40.0;
+pub const CELLS_COLUMN: f32 = 30.0;
+pub const COLUMN_GAP: f32 = 6.0;
 
 /// The side of the dial that shows which ways the ships of a kind fly.
 const DIAL: f32 = 30.0;
@@ -102,12 +98,13 @@ const FAINTEST: f32 = 0.45;
 /// step down each.
 const WAYS: [(i32, i32); 8] = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)];
 
-/// An arrow of a dial: the way it points, as one of the eight [`WAYS`], and which kind of the
-/// list it belongs to, if it is the list's: those are kept in step with what is caught.
+/// An arrow of a dial: the way it points, of the eight there are, clockwise from straight up,
+/// and which kind of the list it belongs to, if it is the list's: those are kept in step with
+/// what is caught ([`glow`]).
 #[derive(Component, Default, Clone, Copy)]
-pub(crate) struct Flown {
-    pub(crate) kind: Option<usize>,
-    pub(crate) way: usize,
+pub struct Flown {
+    pub kind: Option<usize>,
+    pub way: usize,
 }
 
 /// The ways the spaceships of a kind go, as a dial: the eight ways there are, lit where some
@@ -115,7 +112,7 @@ pub(crate) struct Flown {
 /// mirrors take it. `ways` counts the ships by the way they went, clockwise from straight up;
 /// `kind` is the kind's place in the spaceship list, whose dials follow what is caught. With
 /// no ship at all there is no dial.
-pub(crate) fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
+pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
     let step = DIAL / 3.0;
     let arrows: Vec<_> = WAYS
         .iter()
@@ -159,7 +156,7 @@ pub(crate) fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
 
 /// The colour of a way on a dial: dark where no ship went, and from there the brighter the
 /// more ships went that way, up to the way most of them took.
-pub(crate) fn glow(ways: &[u64; 8], way: usize) -> Color {
+pub fn glow(ways: &[u64; 8], way: usize) -> Color {
     let most = ways.iter().copied().max().unwrap_or(0);
     if ways[way] == 0 {
         return palette::GRAY_3;
@@ -173,7 +170,7 @@ pub(crate) fn glow(ways: &[u64; 8], way: usize) -> Color {
 /// lies on. The cells are given relative to a corner of the blocks the next step rewrites, so
 /// the picture is cut at block boundaries and shows them, as the grid does: how a pattern sits
 /// on the blocks is part of what it is.
-pub(crate) fn picture(cells: &[(i32, i32)]) -> impl Scene {
+pub fn picture(cells: &[(i32, i32)]) -> impl Scene {
     // Whole blocks: the bounding box widened to even coordinates on the left and the top (a
     // settled pattern starts at 0 or 1 either way) and to odd ones on the right and the bottom.
     let span = |axis: fn(&(i32, i32)) -> i32| {

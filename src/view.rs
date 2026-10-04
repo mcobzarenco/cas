@@ -25,10 +25,10 @@ use bevy::{
 };
 
 use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
+use cas_ui::{ALIVE, Aspect, BLOCKS, DEAD};
 
 use crate::{
     analysis::Analysis,
-    kit::{ALIVE, Aspect, BLOCKS, DEAD},
     sim::{Settings, SimSystems},
 };
 

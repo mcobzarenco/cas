@@ -16,13 +16,13 @@ use cas_core::{
     rules::BlockRule,
     universe::Universe,
 };
+use cas_ui::{
+    Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
+    list_row, mono, number, panel_header, panel_title, picture, scrolling, side_panel,
+};
 
 use crate::{
     analysis::{self, Analysis},
-    kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
-        list_row, mono, number, panel_header, panel_title, picture, scrolling, side_panel,
-    },
     library::LOOKS_EVERY,
     sim::SimSystems,
     synced::Synced,

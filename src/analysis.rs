@@ -33,16 +33,15 @@ use cas_core::{
     rules::BlockRule,
     universe::Universe,
 };
+use cas_ui::{
+    ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button, button_marked,
+    caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono, number, panel_header,
+    panel_title, picture, sans, scrolling, share_bar, side_panel, tile, tile_label, tile_picture, tile_value,
+};
 
 use crate::{
     actions::KeyboardOwner,
     kept::Collected,
-    kit::{
-        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button, button_marked,
-        caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono, number,
-        panel_header, panel_title, picture, sans, scrolling, share_bar, side_panel, tile, tile_label, tile_picture,
-        tile_value,
-    },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
 };

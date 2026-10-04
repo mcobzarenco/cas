@@ -24,12 +24,12 @@ use cas_core::{
     rules::{BlockRule, Source},
     universe::Universe,
 };
+use cas_ui::{
+    Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
+    panel_header, panel_title, sans, scrolling, side_panel,
+};
 
 use crate::{
-    kit::{
-        Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
-        panel_header, panel_title, sans, scrolling, side_panel,
-    },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
     synced::Synced,

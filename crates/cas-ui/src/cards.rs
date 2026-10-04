@@ -13,13 +13,13 @@ use super::{
 };
 
 /// What cards are made of. They lie on the window's background, a shade darker than they are.
-pub(crate) const CARD: Color = palette::GRAY_1;
+const CARD: Color = palette::GRAY_1;
 /// The room between cards, and around them.
-pub(crate) const GUTTER: f32 = 8.0;
+pub const GUTTER: f32 = 8.0;
 
 /// A card: the controls of one aspect under its name. `figure` is what the card has to show
 /// of its own, if anything; it goes next to the name.
-pub(crate) fn card(aspect: Aspect, figure: impl SceneList, body: impl SceneList) -> impl Scene {
+pub fn card(aspect: Aspect, figure: impl SceneList, body: impl SceneList) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
@@ -85,8 +85,9 @@ fn mark(aspect: Aspect, height: f32) -> impl Scene {
     }
 }
 
-/// A side panel: one tall card beside the control panel, hidden until it is asked for.
-pub(crate) fn side_panel(width: f32, body: impl SceneList) -> impl Scene {
+/// A side panel: one tall card beside the others, hidden until it is asked for. Whoever makes
+/// it shows it, by the `display` of its node.
+pub fn side_panel(width: f32, body: impl SceneList) -> impl Scene {
     bsn! {
         Node {
             display: Display::None,
@@ -114,7 +115,7 @@ pub(crate) fn side_panel(width: f32, body: impl SceneList) -> impl Scene {
 }
 
 /// The name of a side panel, marked with the aspect the panel is about.
-pub(crate) fn panel_title(aspect: Aspect, text: &'static str) -> impl Scene {
+pub fn panel_title(aspect: Aspect, text: &'static str) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -138,7 +139,7 @@ pub(crate) fn panel_title(aspect: Aspect, text: &'static str) -> impl Scene {
 
 /// The head of a side panel: its title, and across from it the button that puts the panel
 /// away. `close` is put on that button: the name it goes by, and what a press does.
-pub(crate) fn panel_header(title: impl Scene, close: impl Scene) -> impl Scene {
+pub fn panel_header(title: impl Scene, close: impl Scene) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -153,7 +154,7 @@ pub(crate) fn panel_header(title: impl Scene, close: impl Scene) -> impl Scene {
 }
 
 /// A titled group of controls.
-pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
+pub fn section(title: &'static str, body: impl SceneList) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
@@ -168,20 +169,20 @@ pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
 }
 
 /// The side of the box a tile has its picture in.
-pub(crate) const GLYPH: f32 = 48.0;
+pub const GLYPH: f32 = 48.0;
 
 /// A symmetry as a picture in such a box. Where a point just right of the top of a square
 /// ends up under each way of turning and mirroring it, as `(x, y)` from the middle: first as
 /// it is, then in the order of `TURNS_AND_MIRRORS`. The ones a rule or a pattern is itself
 /// under are a picture of its symmetry.
-pub(crate) const ORBIT: [(f32, f32); 8] =
+pub const ORBIT: [(f32, f32); 8] =
     [(6.0, -16.0), (16.0, 6.0), (-6.0, 16.0), (-16.0, -6.0), (-6.0, -16.0), (6.0, 16.0), (-16.0, 6.0), (16.0, -6.0)];
 /// The axes of the mirrors among those, left to right, top to bottom, and the two diagonals:
 /// which of the eight each is, and how far a bar through the middle is turned to lie along it.
-pub(crate) const AXES: [(usize, f32); 4] = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)];
+pub const AXES: [(usize, f32); 4] = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)];
 
 /// The dark box a tile has its picture in, so much a side.
-pub(crate) fn tile_picture(side: f32) -> impl Scene {
+pub fn tile_picture(side: f32) -> impl Scene {
     bsn! {
         Node {
             width: px(side),
@@ -196,7 +197,7 @@ pub(crate) fn tile_picture(side: f32) -> impl Scene {
 }
 
 /// The box a finding is shown in: of a rule in the editor, of a pattern in the analysis.
-pub(crate) fn tile() -> impl Scene {
+pub fn tile() -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -210,7 +211,7 @@ pub(crate) fn tile() -> impl Scene {
 }
 
 /// The name of a finding.
-pub(crate) fn tile_label(name: &'static str) -> impl Scene {
+pub fn tile_label(name: &'static str) -> impl Scene {
     bsn! {
         Text(name)
         TextFont {
@@ -224,7 +225,7 @@ pub(crate) fn tile_label(name: &'static str) -> impl Scene {
 }
 
 /// What was found, in words.
-pub(crate) fn tile_value(text: &'static str) -> impl Scene {
+pub fn tile_value(text: &'static str) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {

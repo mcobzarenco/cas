@@ -26,13 +26,12 @@ use cas_core::{
     rules::{BlockRule, Population, Reversed, Symmetry, TURNS_AND_MIRRORS, popcount},
     universe::Universe,
 };
+use cas_ui::{
+    ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, mono, panel_header,
+    panel_title, sans, scrolling, section, side_panel, tile, tile_label as label, tile_picture, tile_value as value,
+};
 
 use crate::{
-    kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, mono, panel_header,
-        panel_title, sans, scrolling, section, side_panel, tile, tile_label as label, tile_picture,
-        tile_value as value,
-    },
     library::RuleLibrary,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},

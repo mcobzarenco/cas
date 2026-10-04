@@ -24,14 +24,11 @@ use cas_core::{
     rules::BlockRule,
     universe::{Rng, Universe},
 };
-
-use crate::{
-    editor::RuleEditor,
-    kit::{
-        self, Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons, section_title, tile_label,
-    },
-    sim::SimSystems,
+use cas_ui::{
+    Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons, section_title, tile_label,
 };
+
+use crate::{editor::RuleEditor, sim::SimSystems};
 
 /// Rules are counted up to so many, and a family that can be counted is kept, to draw from
 /// evenly and to tell how many worlds it makes; of a family with more, that is all that is
@@ -338,7 +335,7 @@ fn chip_scene(index: usize) -> impl Scene {
     let name = Name::new(format!("Want:{}", CHIPS[index].name));
     let want = Want(index);
     bsn! {
-        kit::chip_marked(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule, WantSign(index))
+        cas_ui::chip_marked(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule, WantSign(index))
         template_value(name)
         template_value(want)
         on(|click: On<Pointer<Click>>, chips: Query<&Want>, mut sampler: ResMut<Sampler>| {
@@ -359,7 +356,7 @@ fn chip_scene(index: usize) -> impl Scene {
 
 /// The chip of a property, by its place in [`CHIPS`], as the library shows it too.
 pub(crate) fn chip_face(index: usize) -> impl Scene {
-    kit::chip(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule)
+    cas_ui::chip(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule)
 }
 
 /// A small button that makes the number of the sparse chip one less or one more.

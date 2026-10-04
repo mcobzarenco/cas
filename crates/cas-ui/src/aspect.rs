@@ -25,7 +25,7 @@ pub enum Aspect {
 }
 
 impl Aspect {
-    pub(crate) fn title(self) -> &'static str {
+    pub fn title(self) -> &'static str {
         match self {
             Aspect::Rule => "RULE",
             Aspect::World => "WORLD",
@@ -49,7 +49,7 @@ impl Aspect {
     }
 
     /// What to draw in on top of the aspect's colour: dark on the light ones.
-    pub(crate) fn ink(self) -> Color {
+    pub fn ink(self) -> Color {
         match self {
             Aspect::World | Aspect::View | Aspect::Pattern => DEAD,
             Aspect::Rule | Aspect::Time => palette::WHITE,

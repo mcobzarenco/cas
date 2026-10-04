@@ -18,13 +18,13 @@ use cas_core::{
     collection::Sort,
     universe::{Rng, Universe},
 };
+use cas_ui::Aspect;
 
 use crate::{
     analysis::Analysis,
     catcher::Catcher,
     editor::RuleEditor,
     kept::Collected,
-    kit::Aspect,
     library::RuleLibrary,
     sim::{Playback, Settings, SimSystems},
     ui::Control,

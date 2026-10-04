@@ -713,5 +713,5 @@ contribution intentionally submitted for inclusion in the work by you, as define
 Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 The icons are [Phosphor's](https://phosphoricons.com) (bold), under the
-[MIT license](assets/fonts/Phosphor-LICENSE); the font is in `assets/fonts` and is built into
-the program.
+[MIT license](crates/cas-ui/assets/fonts/Phosphor-LICENSE); the font is in
+`crates/cas-ui/assets/fonts` and is built into the program.

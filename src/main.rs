@@ -9,7 +9,6 @@ mod analysis;
 mod catcher;
 mod editor;
 mod kept;
-mod kit;
 mod library;
 mod rig;
 mod sampler;
@@ -190,7 +189,7 @@ fn main() -> AppExit {
         show_blocks: false,
     })
     .add_plugins((
-        kit::KitPlugin,
+        cas_ui::KitPlugin,
         sim::SimPlugin,
         view::ViewPlugin,
         actions::ActionsPlugin,

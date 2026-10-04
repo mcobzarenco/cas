@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use bevy::{platform::time::Instant, prelude::*};
 use cas_core::{rules::BlockRule, universe::Universe};
-
-use crate::kit::KitSystems;
+use cas_ui::KitSystems;
 
 /// The order of a frame in `Update`: input changes the world and the transport, the simulation
 /// steps, then everything that shows the result catches up. Last of all the kit brings its

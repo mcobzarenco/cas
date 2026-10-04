@@ -1,0 +1,31 @@
+[package]
+name = "cas-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "What the panels of cas are made of: colours, text, cards, controls and icons, on Bevy UI"
+
+[dependencies]
+bevy = { workspace = true, features = [
+  "std",
+  # the dark-themed widget set the kit is built on, which brings Bevy UI and its text with it
+  "bevy_feathers",
+  # scenes: every element is one
+  "bevy_scene",
+  # what lies under the pointer lights up
+  "bevy_picking",
+] }
+
+[dev-dependencies]
+# The example in the crate's documentation is an app: it opens a window and draws.
+bevy = { workspace = true, features = [
+  "default_app",
+  "multi_threaded",
+  "bevy_winit",
+  "x11",
+  "ui_bevy_render",
+  "ui_picking",
+  "default_font",
+  "png",
+] }

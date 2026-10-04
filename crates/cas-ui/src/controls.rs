@@ -30,7 +30,7 @@ pub(super) fn plugin(app: &mut App) {
 
 /// Brings the `Checked` of a checkbox or of a chip in line with what it stands for: `is` says
 /// whether it has it, `should` whether it should.
-pub(crate) fn check(commands: &mut Commands, entity: Entity, is: bool, should: bool) {
+pub fn check(commands: &mut Commands, entity: Entity, is: bool, should: bool) {
     match (should, is) {
         (true, false) => commands.entity(entity).insert(Checked),
         (false, true) => commands.entity(entity).remove::<Checked>(),
@@ -48,12 +48,12 @@ fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> 
 }
 
 /// A button with a word or two on it.
-pub(crate) fn button(label: &'static str) -> impl Scene {
+pub fn button(label: &'static str) -> impl Scene {
     button_marked(label, Unmarked)
 }
 
 /// Such a button with a mark on its words, for whoever changes them later.
-pub(crate) fn button_marked<M: Component + Clone + Default + Unpin>(label: &'static str, mark: M) -> impl Scene {
+pub fn button_marked<M: Component + Clone + Default + Unpin>(label: &'static str, mark: M) -> impl Scene {
     bsn! {
         @FeathersButton {
             @caption: bsn! { Text(label) ThemedText template_value(mark) }
@@ -62,7 +62,7 @@ pub(crate) fn button_marked<M: Component + Clone + Default + Unpin>(label: &'sta
 }
 
 /// A button with the key that does the same after its label.
-pub(crate) fn keyed_button(label: &'static str, key: &'static str) -> impl Scene {
+pub fn keyed_button(label: &'static str, key: &'static str) -> impl Scene {
     bsn! {
         @FeathersButton {
             @caption: {label_with_key(label, key)},
@@ -72,7 +72,7 @@ pub(crate) fn keyed_button(label: &'static str, key: &'static str) -> impl Scene
 
 /// A small square button with an icon on it, as the rows of the lists have them. A click on
 /// it is its own: a row that takes clicks itself does not get it.
-pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
+pub fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
     icon_button_marked(glyph, ink, Unmarked)
 }
 
@@ -81,7 +81,7 @@ pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
 pub(crate) struct Unmarked;
 
 /// Such a button with a mark on its icon, for whoever changes the icon's colour later.
-pub(crate) fn icon_button_marked<M: Component + Clone + Default + Unpin>(
+pub fn icon_button_marked<M: Component + Clone + Default + Unpin>(
     glyph: &'static str,
     ink: Color,
     mark: M,
@@ -112,7 +112,7 @@ struct ToggleTick;
 
 /// A checkbox ticked in the colour of an aspect, with the key that flips it, if it has one.
 /// Whoever makes it keeps its `Checked` in step with what it stands for ([`check`]).
-pub(crate) fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, key: &'static str) -> impl Scene {
+pub fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, key: &'static str) -> impl Scene {
     let name = Name::new(name);
     bsn! {
         Node {
@@ -199,7 +199,7 @@ struct SliderFill;
 /// it answers its `ValueChange` with the `SliderValue` it is to have, the one asked for or one
 /// near it. The fill has the colour of an aspect. The thumb travels inside a box that is one
 /// thumb narrower than the slider, so plain percentages place it.
-pub(crate) fn slider(aspect: Aspect) -> impl Scene {
+pub fn slider(aspect: Aspect) -> impl Scene {
     let fill = aspect.color();
     bsn! {
         Node {
@@ -288,7 +288,7 @@ fn style_sliders(
 
 /// The frame of a text field: a well in its card, which shows while there is nothing in the
 /// field, with the text a little way in from its edges.
-pub(crate) fn field_frame() -> impl Scene {
+pub fn field_frame() -> impl Scene {
     bsn! {
         @FeathersTextInputContainer
         ThemeBackgroundColor(tokens::WINDOW_BG)
@@ -301,7 +301,7 @@ pub(crate) fn field_frame() -> impl Scene {
 
 /// What a chip is known by: an icon, an icon turned by so many degrees, or a few characters.
 #[derive(Clone, Copy)]
-pub(crate) enum Sign {
+pub enum Sign {
     Icon(&'static str),
     Turned(&'static str, f32),
     Written(&'static str),
@@ -317,7 +317,7 @@ struct ChipSign;
 /// The box of a chip, or of a small button among chips. It lights up under the pointer, and
 /// while it is `Checked` it is outlined in the colour of an aspect. Whoever makes it keeps
 /// its `Checked` in step with what it stands for ([`check`]).
-pub(crate) fn chip_box(aspect: Aspect) -> impl Scene {
+pub fn chip_box(aspect: Aspect) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -338,12 +338,12 @@ pub(crate) fn chip_box(aspect: Aspect) -> impl Scene {
 
 /// A chip: its box, its sign, and a word or two, or none where the sign says it all. The
 /// sign is bright while the chip is on.
-pub(crate) fn chip(sign: Sign, label: &'static str, aspect: Aspect) -> impl Scene {
+pub fn chip(sign: Sign, label: &'static str, aspect: Aspect) -> impl Scene {
     chip_marked(sign, label, aspect, Unmarked)
 }
 
 /// Such a chip with a mark on its sign, for whoever writes something else there later.
-pub(crate) fn chip_marked<M: Component + Clone + Default + Unpin>(
+pub fn chip_marked<M: Component + Clone + Default + Unpin>(
     sign: Sign,
     label: &'static str,
     aspect: Aspect,
@@ -413,7 +413,7 @@ fn style_chips(
 }
 
 /// The name of a group of items in a menu.
-pub(crate) fn menu_heading(text: &'static str) -> impl Scene {
+pub fn menu_heading(text: &'static str) -> impl Scene {
     bsn! {
         Node {
             padding: UiRect { left: px(8), right: px(8), top: px(5), bottom: px(2) },
@@ -434,7 +434,7 @@ pub(crate) fn menu_heading(text: &'static str) -> impl Scene {
 
 /// What scrolls, and with that where its scrollbar lies and how far apart the things in it are.
 #[derive(Clone, Copy)]
-pub(crate) enum Scrolls {
+pub enum Scrolls {
     /// The rows of a list: the scrollbar beside them, in room that is kept for it.
     Rows,
     /// The body of a side panel: the scrollbar in the padding of the panel's card.
@@ -446,7 +446,7 @@ pub(crate) enum Scrolls {
 /// A node that scrolls when what is in it is higher than the room it has, and its scrollbar,
 /// which is there only then. `area` is put on the node that scrolls: the name it goes by, a
 /// mark to find it by, what is in it.
-pub(crate) fn scrolling(what: Scrolls, area: impl Scene) -> impl Scene {
+pub fn scrolling(what: Scrolls, area: impl Scene) -> impl Scene {
     // The room kept beside what scrolls, the gap between the things in it, and how far out
     // and how wide the scrollbar is.
     let (room, gap, right, width) = match what {

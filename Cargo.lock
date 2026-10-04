@@ -1774,6 +1774,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "cas-core",
+ "cas-ui",
  "clap",
 ]
 
@@ -1791,6 +1792,13 @@ version = "0.1.0"
 dependencies = [
  "cas-core",
  "clap",
+]
+
+[[package]]
+name = "cas-ui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

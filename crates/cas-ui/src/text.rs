@@ -7,7 +7,7 @@ use bevy::{
 };
 
 /// Small dim explanatory text.
-pub(crate) fn caption(text: impl Into<String>) -> impl Scene {
+pub fn caption(text: impl Into<String>) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -20,7 +20,7 @@ pub(crate) fn caption(text: impl Into<String>) -> impl Scene {
 }
 
 /// Monospace readout text.
-pub(crate) fn readout(text: impl Into<String>) -> impl Scene {
+pub fn readout(text: impl Into<String>) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -33,7 +33,7 @@ pub(crate) fn readout(text: impl Into<String>) -> impl Scene {
 }
 
 /// A column title of a list; the name of a field or of a group as well.
-pub(crate) fn heading(title: &'static str) -> impl Scene {
+pub fn heading(title: &'static str) -> impl Scene {
     bsn! {
         Text(title)
         TextFont {
@@ -46,7 +46,7 @@ pub(crate) fn heading(title: &'static str) -> impl Scene {
 }
 
 /// The title of a section: of a group of controls, or of a part that folds away.
-pub(crate) fn section_title(title: &'static str) -> impl Scene {
+pub fn section_title(title: &'static str) -> impl Scene {
     bsn! {
         Text(title)
         TextFont {
@@ -60,7 +60,7 @@ pub(crate) fn section_title(title: &'static str) -> impl Scene {
 
 /// Text in the face of the interface, at any size and in any colour: a name, a count.
 /// Clicks go through it.
-pub(crate) fn sans(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
+pub fn sans(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -74,7 +74,7 @@ pub(crate) fn sans(text: impl Into<String>, size: f32, color: Color) -> impl Sce
 }
 
 /// Text in the fixed-width face, as figures and speeds are set. Clicks go through it.
-pub(crate) fn mono(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
+pub fn mono(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {
@@ -90,13 +90,13 @@ pub(crate) fn mono(text: impl Into<String>, size: f32, color: Color) -> impl Sce
 /// The size at which so many letters of the fixed-width face fit in so much room, and no
 /// larger than `most`. The period of a slow spaceship has seven figures, and its speed more:
 /// they are set smaller rather than cut short.
-pub(crate) fn fitting(letters: usize, room: f32, most: f32) -> f32 {
+pub fn fitting(letters: usize, room: f32, most: f32) -> f32 {
     // A letter of that face is six tenths of its size wide.
     (room / (0.6 * letters.max(1) as f32)).clamp(8.0, most)
 }
 
 /// A figure set to the right of its column.
-pub(crate) fn number(text: String, column: f32, color: Color) -> impl Scene {
+pub fn number(text: String, column: f32, color: Color) -> impl Scene {
     let size = fitting(text.chars().count(), column, 12.0);
     bsn! {
         mono(text, size, color)
@@ -109,7 +109,7 @@ pub(crate) fn number(text: String, column: f32, color: Color) -> impl Scene {
 const KEY_HINT: Color = Color::srgba(1.0, 1.0, 1.0, 0.45);
 
 /// A quiet reminder of a shortcut, placed right after the label of its control.
-pub(crate) fn key_hint(keys: impl Into<String>) -> impl Scene {
+pub fn key_hint(keys: impl Into<String>) -> impl Scene {
     bsn! {
         Text(keys)
         TextFont {
@@ -125,7 +125,7 @@ pub(crate) fn key_hint(keys: impl Into<String>) -> impl Scene {
 }
 
 /// `1234567` → `1 234 567`, for a number of any width.
-pub(crate) fn group_digits(n: impl TryInto<i128>) -> String {
+pub fn group_digits(n: impl TryInto<i128>) -> String {
     let n = n.try_into().unwrap_or(i128::MAX);
     let digits = n.unsigned_abs().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);

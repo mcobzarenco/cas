@@ -1,6 +1,6 @@
 //! The icons of the interface: glyphs of the Phosphor icon font (bold, MIT), which lies in
-//! `assets/fonts` and is built into the program, as the shader is, so that it is there
-//! wherever the program runs.
+//! the crate's `assets/fonts` and is built into the program, so that it is there wherever the
+//! program runs.
 
 use std::path::{Path, PathBuf};
 
@@ -11,7 +11,7 @@ use bevy::{
 };
 
 /// Where the font is found once it is registered.
-pub const FONT: &str = "embedded://cas/fonts/Phosphor-Bold.ttf";
+pub const FONT: &str = "embedded://cas_ui/fonts/Phosphor-Bold.ttf";
 
 /// A block that becomes a turn of itself.
 pub const TURN: &str = "\u{e036}";
@@ -64,9 +64,9 @@ pub(super) fn plugin(app: &mut App) {
     // Not `embedded_asset!`: that is for files next to the source, and names them after
     // where they lie.
     app.world().resource::<EmbeddedAssetRegistry>().insert_asset(
-        PathBuf::from("assets/fonts/Phosphor-Bold.ttf"),
-        Path::new("cas/fonts/Phosphor-Bold.ttf"),
-        include_bytes!("../../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
+        PathBuf::from("crates/cas-ui/assets/fonts/Phosphor-Bold.ttf"),
+        Path::new("cas_ui/fonts/Phosphor-Bold.ttf"),
+        include_bytes!("../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
     );
 }
 

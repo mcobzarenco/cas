@@ -30,16 +30,16 @@ use cas_core::{
     rules::BlockRule,
     universe::{Departure, Universe},
 };
+use cas_ui::{
+    Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, fitting, glow,
+    group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_header, panel_title, picture,
+    scrolling, share_bar_marked, side_panel,
+};
 
 use crate::{
     actions::Toggle,
     analysis::Analysis,
     kept::Collected,
-    kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, fitting, glow,
-        group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_header, panel_title, picture,
-        scrolling, share_bar_marked, side_panel,
-    },
     sim::{SimSystems, rule_changed},
     ui::toggle,
     view::Stamp,

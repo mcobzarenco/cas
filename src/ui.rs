@@ -28,6 +28,10 @@ use cas_core::{
     rules::{BlockRule, PRESETS},
     universe::Universe,
 };
+use cas_ui::{
+    Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, keyed_button, menu_heading,
+    readout, scrolling,
+};
 
 use crate::{
     actions::{Action, Does, Toggle},
@@ -35,10 +39,6 @@ use crate::{
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
-    kit::{
-        self, Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, keyed_button,
-        menu_heading, readout, scrolling,
-    },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{grid_view, wheel_notches},
@@ -368,7 +368,7 @@ fn card(aspect: Aspect, figure: Option<Readout>, body: impl SceneList) -> impl S
         Some(figure) => bsn_list![(readout("") template_value(figure))].into(),
         None => bsn_list![].into(),
     };
-    kit::card(aspect, figure, body)
+    cas_ui::card(aspect, figure, body)
 }
 
 /// A button that triggers `action`, labelled with its shortcut.
@@ -431,7 +431,7 @@ fn slider_row(label: &'static str, name: &'static str, control: Control, keys: S
 fn slider(name: &'static str, control: Control) -> impl Scene {
     let name = Name::new(name);
     bsn! {
-        kit::slider(control.aspect())
+        cas_ui::slider(control.aspect())
         template_value(name)
         template_value(control)
         on(slider_changed)

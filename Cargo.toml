@@ -1,7 +1,11 @@
 [workspace]
 # The app is the package at the root; `cargo run` starts it. The automata themselves are in
 # `cas-core`, which knows nothing of Bevy, and `cas-search` looks for interesting rules with it.
-members = ["crates/cas-core", "crates/cas-search"]
+# What the app's panels are made of is in `cas-ui`, which knows nothing of the automata.
+members = ["crates/cas-core", "crates/cas-search", "crates/cas-ui"]
+
+[workspace.dependencies]
+bevy = { version = "0.19.1", default-features = false }
 
 [workspace.package]
 version = "0.1.0"
@@ -18,7 +22,7 @@ repository.workspace = true
 description = "A sandbox for exploring reversible block cellular automata"
 
 [dependencies]
-bevy = { version = "0.19.1", default-features = false, features = [
+bevy = { workspace = true, features = [
   # core app + platform (`x11` runs under XWayland too; native Wayland is the crate's `wayland` feature)
   "default_app",
   "std",
@@ -40,6 +44,7 @@ bevy = { version = "0.19.1", default-features = false, features = [
 ] }
 # With `bevy`, the universe and the random generator are Bevy resources.
 cas-core = { path = "crates/cas-core", features = ["bevy"] }
+cas-ui = { path = "crates/cas-ui" }
 clap = { version = "4", features = ["derive"] }
 
 [features]

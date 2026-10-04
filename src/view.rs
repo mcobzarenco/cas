@@ -136,8 +136,9 @@ struct Stroke {
 #[derive(Resource, Default)]
 pub struct Stamp {
     /// The pattern through the vacuum's cycle, one form per generation of it, each relative
-    /// to a corner of the blocks the next step rewrites ([`Analyser::forms`]). Empty while
-    /// nothing is picked up.
+    /// to a corner of the blocks the next step rewrites
+    /// ([`Analyser::forms`](cas_core::pattern::Analyser::forms)). Empty while nothing is
+    /// picked up.
     forms: Vec<Vec<Cell>>,
     /// The least and the greatest coordinates of each form: the corners of its bounding box.
     bounds: Vec<(IVec2, IVec2)>,

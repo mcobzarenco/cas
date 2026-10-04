@@ -1,7 +1,7 @@
 # The layout: how the side panels make room for the grid, and what scrolls in a low window.
 # Expects the default start-up, in the default window of 1440×900.
 wait 25
-expect_shown Spaceships on
+expect_shown Caught on
 
 # The grid keeps a share of the window. Two side panels leave it that, three do not: the one
 # opened longest ago is put away.
@@ -25,7 +25,7 @@ shot layout-2-low
 # slider it would step the slider, had the panel all its room.
 scroll Speed -12; wait 6; expect_speed 30
 shot layout-3-scrolled
-click Spaceships; wait 6; expect_shown Catcher on
+click Caught; wait 6; expect_shown Catcher on
 key s; wait 4
 
 # A menu reaches down to the edge of the window and scrolls on from there: the sizes of the

@@ -42,7 +42,7 @@ use crate::{
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     icons,
-    kept::{Collected, KEPT_WIDTH, oscillators_panel, still_lifes_panel},
+    kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
@@ -344,6 +344,7 @@ fn root() -> impl Scene {
             library_panel(),
             editor_panel(),
             catcher_panel(),
+            spaceships_panel(),
             oscillators_panel(),
             still_lifes_panel(),
             analysis_panel(),
@@ -452,9 +453,8 @@ fn fit_menus(
 enum Side {
     Library,
     Editor,
-    Spaceships,
-    Oscillators,
-    StillLifes,
+    Caught,
+    Kept(Sort),
     Analysis,
 }
 
@@ -474,9 +474,10 @@ fn make_room(
     for (side, is_open) in [
         (Side::Library, library.is_open()),
         (Side::Editor, editor.is_open()),
-        (Side::Spaceships, catcher.is_open()),
-        (Side::Oscillators, collected.is_open(Sort::Oscillator)),
-        (Side::StillLifes, collected.is_open(Sort::StillLife)),
+        (Side::Caught, catcher.is_open()),
+        (Side::Kept(Sort::Spaceship), collected.is_open(Sort::Spaceship)),
+        (Side::Kept(Sort::Oscillator), collected.is_open(Sort::Oscillator)),
+        (Side::Kept(Sort::StillLife), collected.is_open(Sort::StillLife)),
         (Side::Analysis, analysis.is_open()),
     ] {
         match (is_open, open.contains(&side)) {
@@ -488,8 +489,8 @@ fn make_room(
     let width = |side: &Side| match side {
         Side::Library => LIBRARY_WIDTH,
         Side::Editor => EDITOR_WIDTH,
-        Side::Spaceships => CATCHER_WIDTH,
-        Side::Oscillators | Side::StillLifes => KEPT_WIDTH,
+        Side::Caught => CATCHER_WIDTH,
+        Side::Kept(_) => KEPT_WIDTH,
         Side::Analysis => ANALYSIS_WIDTH,
     };
     let room = window.width() - PANEL_WIDTH - GRID_ROOM;
@@ -497,9 +498,8 @@ fn make_room(
         match open.remove(0) {
             Side::Library => library.close(),
             Side::Editor => editor.close(),
-            Side::Spaceships => catcher.close(),
-            Side::Oscillators => collected.close(Sort::Oscillator),
-            Side::StillLifes => collected.close(Sort::StillLife),
+            Side::Caught => catcher.close(),
+            Side::Kept(sort) => collected.close(sort),
             Side::Analysis => analysis.close(),
         }
     }
@@ -1378,20 +1378,22 @@ fn pattern_card() -> impl Scene {
                         Node { flex_grow: 1.0 }
                     ),
                     (
-                        action_button("Spaceships", "Spaceships", Action::Spaceships)
+                        action_button("Caught", "Caught", Action::Caught)
                         Node { flex_grow: 0.0 }
                     ),
                 ]
             ),
             (
-                // What was kept of the patterns that stay where they are.
+                // What is kept under the rule, sort by sort. Three in a row: with less room
+                // around their words.
                 Node {
                     flex_direction: FlexDirection::Row,
-                    column_gap: px(6),
+                    column_gap: px(4),
                 }
                 Children [
-                    action_button("Oscillators", "Oscillators", Action::Oscillators),
-                    action_button("Still lifes", "StillLifes", Action::StillLifes),
+                    (action_button("Spaceships", "Spaceships", Action::Kept(Sort::Spaceship)) Node { padding: UiRect::horizontal(px(4)) }),
+                    (action_button("Oscillators", "Oscillators", Action::Kept(Sort::Oscillator)) Node { padding: UiRect::horizontal(px(4)) }),
+                    (action_button("Still lifes", "StillLifes", Action::Kept(Sort::StillLife)) Node { padding: UiRect::horizontal(px(4)) }),
                 ]
             ),
         ],

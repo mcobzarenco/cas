@@ -1806,7 +1806,7 @@ fn turned(turn: Turn) -> &'static str {
 }
 
 /// A speed as a fraction of the speed of light.
-fn speed(motion: &Motion) -> String {
+pub(crate) fn speed(motion: &Motion) -> String {
     match motion.speed() {
         (1, 1) => "c".to_string(),
         (1, period) => format!("c/{period}"),
@@ -1814,7 +1814,7 @@ fn speed(motion: &Motion) -> String {
     }
 }
 
-fn heading(motion: &Motion) -> &'static str {
+pub(crate) fn heading(motion: &Motion) -> &'static str {
     match motion.heading() {
         Heading::Orthogonal => "orthogonal",
         Heading::Diagonal => "diagonal",

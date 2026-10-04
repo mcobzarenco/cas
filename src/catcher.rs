@@ -36,7 +36,7 @@ use bevy::{
 use cas_core::{
     census::{self, Census, Found, Kind},
     collection::Sort,
-    pattern::{Analyser, Cell, Heading, Motion, WAYS, Watch, to_rle},
+    pattern::{Analyser, Cell, Heading, WAYS, Watch, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
 };
@@ -118,7 +118,7 @@ impl Catcher {
 
     /// Spaceships caught under `rule`, and how many kinds they are.
     pub fn totals(&self, rule: &BlockRule) -> (u64, usize) {
-        self.hauls.get(rule).map_or((0, 0), |haul| (haul.census.ships(), caught_kinds(&haul.census)))
+        self.hauls.get(rule).map_or((0, 0), |haul| (haul.census.ships(), haul.census.kinds().len()))
     }
 }
 
@@ -131,12 +131,6 @@ struct Haul {
     /// having it.
     slow: VecDeque<Departure>,
     following: Option<Following>,
-}
-
-/// How many kinds of spaceship were caught: a kind that was kept earlier is listed before any
-/// of it is.
-fn caught_kinds(census: &Census) -> usize {
-    census.kinds().iter().filter(|kind| kind.count > 0).count()
 }
 
 /// A catch being followed for longer, on another thread.
@@ -229,7 +223,6 @@ impl Plugin for CatcherPlugin {
             Update,
             (
                 drop_the_queue.run_if(rule_changed),
-                know_the_kept,
                 identify,
                 follow_the_slow,
                 show_panel,
@@ -316,7 +309,7 @@ pub fn catcher_panel() -> impl Scene {
                     justify_content: JustifyContent::SpaceBetween,
                 }
                 Children [
-                    panel_title(Aspect::Pattern, "Spaceships"),
+                    panel_title(Aspect::Pattern, "Caught"),
                     (
                         #CatcherClose
                         @FeathersButton {
@@ -628,7 +621,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
 /// mirrors take it. `ways` counts the ships by the way they went, clockwise from straight up;
 /// `kind` is the kind's place in the spaceship list, whose dials follow what is caught. With
 /// no ship at all there is no dial.
-pub(crate) fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene {
+pub(crate) fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
     let step = DIAL / 3.0;
     let arrows: Vec<_> = WAYS
         .iter()
@@ -877,34 +870,6 @@ fn keep_all_kinds(
     });
 }
 
-/// The spaceships that were kept under the rule on the grid are in its list from the start,
-/// each with a count of none until one of it is caught.
-fn know_the_kept(
-    universe: Res<Universe>,
-    collected: Res<Collected>,
-    mut catcher: ResMut<Catcher>,
-    mut known: Local<Option<(BlockRule, u64, Option<u64>)>>,
-) {
-    let rule = universe.rule();
-    let haul = catcher.hauls.get(rule).map(|haul| haul.number);
-    if known
-        .as_ref()
-        .is_some_and(|(of, revision, numbered)| of == rule && *revision == collected.revision() && *numbered == haul)
-    {
-        return;
-    }
-    let kept = collected.of(rule, Sort::Spaceship);
-    if !kept.is_empty() {
-        let Catcher { hauls, begun, .. } = catcher.bypass_change_detection();
-        let haul = hauls.entry(rule.clone()).or_insert_with(|| Haul::begin(begun, rule));
-        for kept in kept {
-            haul.census.know(Motion { period: kept.period, displacement: kept.moves, canonical: kept.cells.clone() });
-        }
-    }
-    let haul = catcher.hauls.get(rule).map(|haul| haul.number);
-    *known = Some((rule.clone(), collected.revision(), haul));
-}
-
 /// The mark of a row is lit while its kind is kept.
 fn light_kept(
     catcher: Res<Catcher>,
@@ -1027,7 +992,7 @@ fn sync_list(
     for (figure, mut text) in &mut figures {
         let value = match *figure {
             Figure::Ships => ships,
-            Figure::Kinds => kinds.iter().filter(|kind| kind.count > 0).count() as u64,
+            Figure::Kinds => kinds.len() as u64,
             Figure::Others => others,
             Figure::Caught(kind) => kinds.get(kind).map_or(0, |kind| kind.count),
         };

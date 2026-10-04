@@ -198,12 +198,6 @@ impl Census {
         self.others += kinds.is_empty() as u64;
     }
 
-    /// Makes a kind known before any of it was caught: it is among the kinds, with a count of
-    /// none, and what is caught of it later is counted there. Its place among the kinds.
-    pub fn know(&mut self, motion: Motion) -> usize {
-        self.file(motion)
-    }
-
     /// The kind with this canonical form, new if need be.
     fn file(&mut self, motion: Motion) -> usize {
         let known = self.kinds.iter().position(|kind| kind.motion.canonical == motion.canonical);
@@ -303,21 +297,6 @@ mod tests {
         // Two lone cells that far apart are two things that stay.
         census.record(Departure { cells: vec![(0, 0), (9, 0)], phase: 0 });
         assert_eq!((census.ships(), census.others()), (1, 1));
-    }
-
-    #[test]
-    fn a_kind_can_be_known_before_it_is_caught() {
-        let mut census = census();
-        // The lightest ship as it is filed, known from somewhere else.
-        let mut analyser = Analyser::new(&"single-rotation".parse().unwrap());
-        analyser.max_generations = 100;
-        let lightest = analyser.analyse(&from_rle("$2o2$2o").unwrap(), 0).unwrap();
-        assert_eq!(census.know(lightest.clone()), 0);
-        assert_eq!(census.know(lightest), 0);
-        assert_eq!((census.ships(), census.kinds().len(), census.kinds()[0].count), (0, 1, 0));
-        // Caught, it is counted as that kind.
-        census.record(departure("$2o2$2o"));
-        assert_eq!((census.ships(), census.kinds().len(), census.kinds()[0].count), (1, 1, 1));
     }
 
     #[test]

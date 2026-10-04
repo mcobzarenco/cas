@@ -1,11 +1,10 @@
-//! The patterns kept under a rule: the oscillators and the still lifes, each sort in a panel
-//! of its own. (The spaceships that were kept are in the spaceship list, with the ones that
-//! were caught.)
+//! The patterns kept under a rule: the spaceships, the oscillators and the still lifes, each
+//! sort in a panel of its own.
 //!
 //! What is kept lies in a file next to the library's ([`cas_core::collection`]), which is
 //! written when something is kept or let go of, and read again whenever something else wrote
 //! it ([`Synced`]). Nothing gets there by itself: a pattern is kept with a button, in the
-//! analysis panel or in the spaceship list.
+//! analysis panel or in the list of what was caught.
 
 use std::path::PathBuf;
 
@@ -24,14 +23,14 @@ use bevy::{
 
 use cas_core::{
     collection::{Collection, Kept, Sort},
-    pattern::{Analyser, Cell},
+    pattern::{Analyser, Cell, Motion, way},
     rules::BlockRule,
     universe::Universe,
 };
 
 use crate::{
-    analysis::Analysis,
-    catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, heading, mono, number, picture},
+    analysis::{self, Analysis},
+    catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, dial, heading, mono, number, picture},
     icons,
     library::LOOKS_EVERY,
     sim::SimSystems,
@@ -42,8 +41,8 @@ use crate::{
 
 pub const KEPT_WIDTH: f32 = 396.0;
 
-/// The sorts that have a panel here, in the order of the panels.
-const SHELVES: [Sort; 2] = [Sort::Oscillator, Sort::StillLife];
+/// The sorts, in the order of their panels.
+const SHELVES: [Sort; 3] = Sort::ALL;
 
 /// Which of the panels a sort has, if it has one.
 fn shelf(sort: Sort) -> Option<usize> {
@@ -54,17 +53,17 @@ fn shelf(sort: Sort) -> Option<usize> {
 pub struct Collected {
     /// The collection, and the file it lies in. A scripted run has none, and keeps to itself.
     collection: Synced<Collection>,
-    open: [bool; 2],
+    open: [bool; 3],
     /// Counts the changes that show, here or wherever a pattern says whether it is kept.
     revision: u64,
     /// What the panels list, row by row.
-    listed: [Vec<Kept>; 2],
+    listed: [Vec<Kept>; 3],
 }
 
 impl Collected {
     /// The collection of the file at `path`. Without a path it is written nowhere.
     pub fn at(path: Option<PathBuf>) -> Self {
-        Self { collection: Synced::at(path), open: [false; 2], revision: 0, listed: Default::default() }
+        Self { collection: Synced::at(path), open: [false; 3], revision: 0, listed: Default::default() }
     }
 
     pub fn toggle(&mut self, sort: Sort) {
@@ -174,6 +173,47 @@ const BUTTON: f32 = 24.0;
 #[derive(Component, Default, Clone, Copy)]
 struct KeptClose(usize);
 
+pub fn spaceships_panel() -> impl Scene {
+    // The frame holds the scrollbar; the list inside it scrolls.
+    let list = bsn! {
+        Node {
+            flex_grow: 1.0,
+            min_height: px(0),
+            flex_direction: FlexDirection::Column,
+            padding: UiRect { right: px(10) },
+        }
+        Children [
+            (
+                #KeptSpaceshipList
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(4),
+                    overflow: Overflow::scroll_y(),
+                }
+                ScrollArea
+                KeptList(0)
+            ),
+            (
+                @FeathersScrollbar {
+                    @target: #KeptSpaceshipList,
+                    @orientation: {ControlOrientation::Vertical}
+                }
+                Node {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    right: px(0),
+                    top: px(0),
+                    bottom: px(0),
+                    width: px(6),
+                }
+            ),
+        ]
+    };
+    let about = "The spaceships kept under this rule: patterns that are back in their shape, somewhere else, \
+                 after their period.";
+    kept_panel(0, "Spaceships", about, list)
+}
+
 pub fn oscillators_panel() -> impl Scene {
     // The frame holds the scrollbar; the list inside it scrolls.
     let list = bsn! {
@@ -192,7 +232,7 @@ pub fn oscillators_panel() -> impl Scene {
                     overflow: Overflow::scroll_y(),
                 }
                 ScrollArea
-                KeptList(0)
+                KeptList(1)
             ),
             (
                 @FeathersScrollbar {
@@ -212,10 +252,11 @@ pub fn oscillators_panel() -> impl Scene {
     };
     let about = "The oscillators kept under this rule: patterns that are back in their shape, where they were, \
                  after their period.";
-    kept_panel(0, "Oscillators", about, list)
+    kept_panel(1, "Oscillators", about, list)
 }
 
 pub fn still_lifes_panel() -> impl Scene {
+    // The frame holds the scrollbar; the list inside it scrolls.
     let list = bsn! {
         Node {
             flex_grow: 1.0,
@@ -232,7 +273,7 @@ pub fn still_lifes_panel() -> impl Scene {
                     overflow: Overflow::scroll_y(),
                 }
                 ScrollArea
-                KeptList(1)
+                KeptList(2)
             ),
             (
                 @FeathersScrollbar {
@@ -250,16 +291,20 @@ pub fn still_lifes_panel() -> impl Scene {
             ),
         ]
     };
-    kept_panel(1, "Still lifes", "The still lifes kept under this rule: patterns that stay as they are.", list)
+    kept_panel(2, "Still lifes", "The still lifes kept under this rule: patterns that stay as they are.", list)
 }
 
-/// The panel of a shelf, around its list: the two are alike but for their names, by which
-/// the rig knows them and each scrollbar its list.
+/// The panel of a shelf, around its list: the three are alike but for their names, by which
+/// the rig knows them and each scrollbar its list, and for what their columns say.
 fn kept_panel(shelf: usize, title: &'static str, about: &'static str, list: impl Scene) -> impl Scene {
-    let stem = ["KeptOscillators", "KeptStillLifes"][shelf];
+    let stem = ["KeptSpaceships", "KeptOscillators", "KeptStillLifes"][shelf];
     let (panel, close, note) = (Name::new(stem), Name::new(format!("{stem}Close")), Name::new(format!("{stem}Note")));
     let (this, closes, noted) = (KeptPanel(shelf), KeptClose(shelf), KeptNote(shelf));
-    let period = if SHELVES[shelf] == Sort::Oscillator { "PERIOD" } else { "" };
+    let (how, period) = match SHELVES[shelf] {
+        Sort::Spaceship => ("SPEED", "PERIOD"),
+        Sort::Oscillator => ("SIZE", "PERIOD"),
+        Sort::StillLife => ("SIZE", ""),
+    };
     bsn! {
         side_panel(KEPT_WIDTH, bsn_list![
             (
@@ -295,7 +340,7 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str, list: impl
                 }
                 Children [
                     (Node { width: px(PICTURE.0) } Children [ heading("PATTERN") ]),
-                    (Node { flex_grow: 1.0, flex_basis: px(0) } Children [ heading("SIZE") ]),
+                    (Node { flex_grow: 1.0, flex_basis: px(0) } Children [ heading(how) ]),
                     (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ heading(period) ]),
                     (Node { width: px(CELLS_COLUMN), justify_content: JustifyContent::End } Children [ heading("CELLS") ]),
                     (Node { width: px(2.0 * BUTTON + COLUMN_GAP) }),
@@ -309,11 +354,11 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str, list: impl
     }
 }
 
-/// A kept pattern: its picture, its size, a word on it, its period if it has one to speak of,
-/// its cells, and two small buttons: a closer look, and the mark that it is kept, which lets
-/// go of it.
+/// A kept pattern: its picture; how fast it flies and which way, or how large it is; a word
+/// on it; its period if it has one to speak of; its cells; and two small buttons: a closer
+/// look, and the mark that it is kept, which lets go of it.
 fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
-    let stem = ["KeptOscillator", "KeptStillLife"][shelf];
+    let stem = ["KeptSpaceship", "KeptOscillator", "KeptStillLife"][shelf];
     let name = Name::new(format!("{stem}{index}"));
     let (look_name, forget_name) = (Name::new(format!("{stem}Look{index}")), Name::new(format!("{stem}Forget{index}")));
     let (row, look, forget) = (KeptRow(shelf, index), KeptLook(shelf, index), KeptForget(shelf, index));
@@ -321,10 +366,24 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
         let along = kept.cells.iter().map(axis);
         along.clone().max().unwrap_or(0) - along.min().unwrap_or(0) + 1
     };
-    let size = mono(format!("{}×{}", span(|cell| cell.0), span(|cell| cell.1)), 14.0, palette::WHITE);
+    let size = format!("{}×{}", span(|cell| cell.0), span(|cell| cell.1));
     // What was written about it, if anything was.
-    let word = if kept.name.is_empty() { kept.note.clone() } else { kept.name.clone() };
-    let period = if SHELVES[shelf] == Sort::Oscillator { kept.period.to_string() } else { String::new() };
+    let written = if kept.name.is_empty() { kept.note.clone() } else { kept.name.clone() };
+    // A spaceship by its speed, with the way the form it is filed under flies on the dial;
+    // what stays where it is by its size.
+    let motion = Motion { period: kept.period, displacement: kept.moves, canonical: Vec::new() };
+    let mut ways = [0; 8];
+    let (title, word, period) = match kept.sort {
+        Sort::Spaceship => {
+            if let Some(way) = way(kept.moves.0, kept.moves.1) {
+                ways[way] = 1;
+            }
+            let word = if written.is_empty() { analysis::heading(&motion).to_string() } else { written };
+            (analysis::speed(&motion), word, kept.period.to_string())
+        }
+        Sort::Oscillator => (size, written, kept.period.to_string()),
+        Sort::StillLife => (size, written, String::new()),
+    };
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -355,10 +414,11 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
                 }
                 template_value(Pickable::IGNORE)
                 Children [
-                    size,
+                    mono(title, 14.0, palette::WHITE),
                     (caption(word) template_value(Pickable::IGNORE)),
                 ]
             ),
+            dial(&ways, None),
             number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
             number(kept.cells.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
             (
@@ -471,7 +531,7 @@ fn list_kept(
     }
     *shown = Some(now);
     let rule = universe.rule();
-    let listed: [Vec<Kept>; 2] = SHELVES.map(|sort| collected.of(rule, sort).into_iter().rev().cloned().collect());
+    let listed: [Vec<Kept>; 3] = SHELVES.map(|sort| collected.of(rule, sort).into_iter().rev().cloned().collect());
     for (list, &KeptList(shelf)) in &lists {
         let rows: Vec<Entity> = listed[shelf]
             .iter()
@@ -484,9 +544,7 @@ fn list_kept(
     for (&KeptNote(shelf), mut text) in &mut notes {
         let said = match (collected.trouble(), listed[shelf].is_empty()) {
             (Some(trouble), _) => trouble.to_string(),
-            (None, true) => {
-                "None kept under this rule yet. Keep, in the analysis panel, puts a pattern here.".to_string()
-            }
+            (None, true) => "None kept under this rule yet. Keep puts a pattern here.".to_string(),
             (None, false) => "Click a pattern to pick it up. Its mark lets go of it.".to_string(),
         };
         text.set_if_neq(Text(said));
@@ -536,8 +594,7 @@ mod tests {
         let on_disk = Collection::read(&path).unwrap();
         assert_eq!(on_disk.all().len(), 2);
         assert!(collected.is_kept(&rule, &[(0, 0)]) && !collected.is_kept(&rule, &block));
-        // Only the oscillators and the still lifes have a panel here.
-        collected.toggle(Sort::Spaceship);
+        // Each sort has a panel of its own.
         collected.toggle(Sort::Oscillator);
         assert!(
             collected.is_open(Sort::Oscillator)

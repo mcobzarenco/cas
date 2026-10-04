@@ -1,15 +1,17 @@
-# Keeping patterns: the oscillators and the still lifes of a rule in panels of their own, the
-# spaceships in the spaceship list. Expects the default start-up (single rotation, 256×256).
-# A scripted run has no file for what it keeps, which is gone when it ends.
+# Keeping patterns: the spaceships, the oscillators and the still lifes of a rule, each sort
+# in a panel of its own. Expects the default start-up (single rotation, 256×256). A scripted
+# run has no file for what it keeps, which is gone when it ends.
 wait 25; clear
 
-# The two panels open from the pattern card, and say that nothing is kept yet.
+# The panels open from the pattern card, and say that nothing is kept yet.
+click Spaceships; wait 6; expect_shown KeptSpaceships on
+expect_text KeptSpaceshipsNote None kept under this rule yet. Keep puts a pattern here.
 click Oscillators; wait 6; expect_shown KeptOscillators on
-expect_text KeptOscillatorsNote None kept under this rule yet. Keep, in the analysis panel, puts a pattern here.
-click StillLifes; wait 6; expect_shown KeptStillLifes on
 shot kept-1-empty
-click Oscillators; wait 4; click StillLifes; wait 4
-expect_shown KeptOscillators off; expect_shown KeptStillLifes off
+click Spaceships; wait 4; click Oscillators; wait 4
+expect_shown KeptSpaceships off; expect_shown KeptOscillators off
+click StillLifes; wait 6; expect_shown KeptStillLifes on
+click StillLifes; wait 4; expect_shown KeptStillLifes off
 
 # A still life, typed into the analysis panel. Keep is there for what comes back to its shape
 # as one thing, and says whether that is kept; a second click lets go of it again.
@@ -63,22 +65,28 @@ click PiecesToggle; wait 4
 key Escape; wait 3; key a; wait 6
 expect_shown Analysis off
 
-# The spaceships that were kept are in the spaceship list before any is caught, and one that
-# is caught is counted there.
-clear; key s; wait 10
-expect_shown Catcher on; expect_caught 0 0
-expect_shown Kind0 on; expect_shown Kind2 on
-shot kept-5-known
+# The three kinds of spaceship are in the panel of the spaceships, the latest first, each with
+# its speed and the way the form it is filed under flies.
+clear; click Spaceships; wait 10
+expect_shown KeptSpaceship0 on; expect_shown KeptSpaceship2 on
+expect_text KeptSpaceship2 12 4 c/6 orthogonal
+shot kept-5-spaceships
+click Spaceships; wait 4
+
+# What is caught at the edge can be kept from its list, by the mark of its row or all at once.
+# A kind that is kept has its mark lit; a click on it lets go of the kind.
 place $2o2$2o 240 120
-key k; wait 6; step 120; wait 10
+key k; wait 10; expect_shown Catcher on
+step 120; wait 10
 expect_caught 1 1; expect_text Kind0 12 4 1 c/6 orthogonal
-# A mark in the list lets go of a kind; Keep all keeps them all again. Clearing the list
-# forgets what was caught, and leaves what is kept.
 click KeepKind0; wait 6
 click CatcherKeepAll; wait 6
-expect_text CatcherNote Kept 1 more, and 2 were kept already.
-click CatcherForget; wait 20; expect_caught 0 0; expect_shown Kind2 on
+expect_text CatcherNote Kept the one kind there is.
+# Clearing the list forgets what was caught, and leaves what is kept where it is.
+click CatcherForget; wait 20; expect_caught 0 0
 key k; wait 3; key s; wait 4
+click Spaceships; wait 8; expect_shown KeptSpaceship2 on
+click Spaceships; wait 4
 
 # A click on a kept pattern picks it up, to be put down on the grid; its mark lets go of it.
 click Oscillators; wait 8
@@ -86,10 +94,10 @@ expect_shown KeptOscillator0 on
 click KeptOscillator0; wait 3; click Grid 0 0; wait 3; expect_population 1
 key Escape; wait 3
 click KeptOscillatorForget0; wait 8
-expect_text KeptOscillatorsNote None kept under this rule yet. Keep, in the analysis panel, puts a pattern here.
+expect_text KeptOscillatorsNote None kept under this rule yet. Keep puts a pattern here.
 # Under another rule there are other patterns: none yet.
 click StillLifes; wait 8; expect_shown KeptStillLife0 on
 rule critters; wait 8
-expect_text KeptStillLifesNote None kept under this rule yet. Keep, in the analysis panel, puts a pattern here.
+expect_text KeptStillLifesNote None kept under this rule yet. Keep puts a pattern here.
 shot kept-6-another-rule
 quit

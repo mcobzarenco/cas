@@ -60,11 +60,10 @@ pub enum Action {
     /// With the library open: put the rule of the row before, or after, on the grid.
     PreviousRule,
     NextRule,
-    /// Show or hide the list of the spaceships caught.
-    Spaceships,
-    /// Show or hide the oscillators kept under the rule, and the still lifes.
-    Oscillators,
-    StillLifes,
+    /// Show or hide the list of what was caught at the edge.
+    Caught,
+    /// Show or hide the patterns of a sort that are kept under the rule.
+    Kept(Sort),
     /// Show or hide the analysis panel; it opens choosing a pattern on the grid.
     Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
@@ -134,7 +133,7 @@ const KEYS: [(&str, Action); 28] = [
     ("c", Action::Clear),
     ("o", Action::Flip(Toggle::OpenBorder)),
     ("k", Action::Flip(Toggle::Catching)),
-    ("s", Action::Spaceships),
+    ("s", Action::Caught),
     ("e", Action::EditRule),
     ("l", Action::Library),
     ("↑", Action::PreviousRule),
@@ -283,9 +282,8 @@ fn perform(
                 universe.set_rule(rule);
             }
         }
-        Action::Spaceships => catcher.toggle(),
-        Action::Oscillators => collected.toggle(Sort::Oscillator),
-        Action::StillLifes => collected.toggle(Sort::StillLife),
+        Action::Caught => catcher.toggle(),
+        Action::Kept(sort) => collected.toggle(sort),
         Action::Analysis => {
             analysis.toggle();
             if analysis.is_open() {

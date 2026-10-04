@@ -59,18 +59,15 @@ pub const PIN: &str = "\u{e3e2}";
 /// The mark of a pattern that is kept.
 pub const KEEP: &str = "\u{e0ea}";
 
-pub struct IconsPlugin;
-
-impl Plugin for IconsPlugin {
-    fn build(&self, app: &mut App) {
-        // Not `embedded_asset!`: that is for files next to the source, and names them after
-        // where they lie.
-        app.world().resource::<EmbeddedAssetRegistry>().insert_asset(
-            PathBuf::from("assets/fonts/Phosphor-Bold.ttf"),
-            Path::new("cas/fonts/Phosphor-Bold.ttf"),
-            include_bytes!("../../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
-        );
-    }
+/// Registers the font.
+pub(super) fn plugin(app: &mut App) {
+    // Not `embedded_asset!`: that is for files next to the source, and names them after
+    // where they lie.
+    app.world().resource::<EmbeddedAssetRegistry>().insert_asset(
+        PathBuf::from("assets/fonts/Phosphor-Bold.ttf"),
+        Path::new("cas/fonts/Phosphor-Bold.ttf"),
+        include_bytes!("../../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
+    );
 }
 
 /// An icon, so many pixels high.

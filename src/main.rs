@@ -190,7 +190,7 @@ fn main() -> AppExit {
         show_blocks: false,
     })
     .add_plugins((
-        kit::icons::IconsPlugin,
+        kit::KitPlugin,
         sim::SimPlugin,
         view::ViewPlugin,
         actions::ActionsPlugin,

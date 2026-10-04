@@ -7,14 +7,13 @@
 
 use bevy::{
     feathers::{
-        FeathersPlugins,
         constants::fonts,
         controls::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
             FeathersMenuPopup,
         },
         palette,
-        theme::{ThemeBackgroundColor, ThemedText, UiTheme},
+        theme::{ThemeBackgroundColor, ThemedText},
         tokens,
     },
     prelude::*,
@@ -37,8 +36,8 @@ use crate::{
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     kit::{
-        self, Aspect, GUTTER, Scrolls, button, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading,
-        readout, scrolling, show_scrollbars, style_sliders, style_toggles, theme,
+        self, Aspect, GUTTER, Scrolls, button, caption, checkbox, group_digits, key_hint, menu_heading, readout,
+        scrolling,
     },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -199,23 +198,17 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(FeathersPlugins)
-            .insert_resource(UiTheme(theme()))
-            .add_systems(Startup, spawn_ui)
-            .add_systems(Update, make_room.in_set(SimSystems::Input))
-            .add_systems(
-                Update,
-                (
-                    (sync_widgets.run_if(rule_changed.or_eager(options_changed)), style_toggles).chain(),
-                    (sync_sliders.run_if(options_changed), style_sliders).chain(),
-                    name_rule,
-                    list_rule_menu,
-                    update_status,
-                    show_scrollbars,
-                    fit_menus,
-                )
-                    .in_set(SimSystems::Present),
-            );
+        app.add_systems(Startup, spawn_ui).add_systems(Update, make_room.in_set(SimSystems::Input)).add_systems(
+            Update,
+            (
+                sync_widgets.run_if(rule_changed.or_eager(options_changed)),
+                sync_sliders.run_if(options_changed),
+                name_rule,
+                list_rule_menu,
+                update_status,
+            )
+                .in_set(SimSystems::Present),
+        );
     }
 }
 
@@ -462,8 +455,8 @@ fn rule_card() -> impl Scene {
                         Node { flex_grow: 1.0 }
                     ),
                     (
-                        // Its height is the window's business: see `fit_menus`. Its items
-                        // are the library's: see `list_rule_menu`.
+                        // Its height is the window's business, which the kit sees to. Its
+                        // items are the library's: see `list_rule_menu`.
                         @FeathersMenuPopup
                         Node { overflow: Overflow::scroll_y(), min_width: percent(100) }
                         ScrollArea

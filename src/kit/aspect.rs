@@ -63,7 +63,7 @@ pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.22);
 
 /// The feathers dark theme, with its one accent colour handed out by aspect: the play button
 /// is about time, the text field about the rule, and what belongs to no aspect is grey.
-pub(crate) fn theme() -> ThemeProps {
+pub(super) fn theme() -> ThemeProps {
     let mut theme = create_dark_theme();
     let (time, rule) = (Aspect::Time.color(), Aspect::Rule.color());
     theme.color.extend([

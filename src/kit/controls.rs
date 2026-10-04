@@ -21,7 +21,12 @@ use bevy::{
     window::{PrimaryWindow, SystemCursorIcon},
 };
 
-use super::{aspect::Aspect, cards::GUTTER, icons, text::key_hint};
+use super::{KitSystems, aspect::Aspect, cards::GUTTER, icons, text::key_hint};
+
+/// The systems that keep the controls looking as they should.
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(Update, (style_toggles, style_sliders, show_scrollbars, fit_menus).in_set(KitSystems));
+}
 
 /// The caption of a button that has a key: its label and the key that does the same.
 fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> {
@@ -78,10 +83,10 @@ const TICK_BOX: f32 = 18.0;
 
 /// The box of a [`checkbox`], and the tick in it.
 #[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct ToggleBox;
+struct ToggleBox;
 
 #[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct ToggleTick;
+struct ToggleTick;
 
 /// A checkbox ticked in the colour of an aspect, with the key that flips it, if it has one.
 /// Whoever makes it keeps its `Checked` in step with what it stands for.
@@ -138,7 +143,7 @@ pub(crate) fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, 
 }
 
 /// Colours the toggles: a ticked one has the colour of its aspect.
-pub(crate) fn style_toggles(
+fn style_toggles(
     toggles: Query<(&Aspect, &Hovered, Has<Checked>, &Children), With<Checkbox>>,
     mut boxes: Query<(&mut BackgroundColor, &Children), With<ToggleBox>>,
     mut ticks: Query<(&mut BorderColor, &mut Visibility), With<ToggleTick>>,
@@ -165,7 +170,7 @@ const RAIL: f32 = 4.0;
 
 /// The filled part of a slider's rail.
 #[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct SliderFill;
+struct SliderFill;
 
 /// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: a click
 /// on the rail asks for the value there, a drag for the one under the pointer. Whoever makes
@@ -235,7 +240,7 @@ pub(crate) fn slider(aspect: Aspect) -> impl Scene {
 }
 
 /// Places each slider's thumb and fill, and highlights the thumb while hovered or dragged.
-pub(crate) fn style_sliders(
+fn style_sliders(
     sliders: Query<
         (Entity, &SliderValue, &Hovered, &SliderDragState),
         (With<Slider>, Or<(Changed<SliderValue>, Changed<Hovered>, Changed<SliderDragState>)>),
@@ -421,7 +426,7 @@ pub(crate) fn scrolling(what: Scrolls, area: impl Scene) -> impl Scene {
 
 /// A scrollbar is there while there is something to scroll: what it scrolls is higher than
 /// the room it has.
-pub(crate) fn show_scrollbars(areas: Query<&ComputedNode>, mut bars: Query<(&Scrollbar, &mut Node)>) {
+fn show_scrollbars(areas: Query<&ComputedNode>, mut bars: Query<(&Scrollbar, &mut Node)>) {
     for (bar, mut node) in &mut bars {
         let Ok(area) = areas.get(bar.target) else {
             continue;
@@ -436,7 +441,7 @@ pub(crate) fn show_scrollbars(areas: Query<&ComputedNode>, mut bars: Query<(&Scr
 
 /// A menu reaches down as far as the window does, and scrolls beyond that: it hangs under
 /// its button, which may be anywhere in a window of any height.
-pub(crate) fn fit_menus(
+fn fit_menus(
     window: Single<&Window, With<PrimaryWindow>>,
     menus: Query<(&ComputedNode, &UiGlobalTransform)>,
     mut popups: Query<(&mut Node, &ChildOf), With<FeathersMenuPopup>>,

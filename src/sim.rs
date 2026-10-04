@@ -6,8 +6,11 @@ use std::time::Duration;
 use bevy::{platform::time::Instant, prelude::*};
 use cas_core::{rules::BlockRule, universe::Universe};
 
+use crate::kit::KitSystems;
+
 /// The order of a frame in `Update`: input changes the world and the transport, the simulation
-/// steps, then everything that shows the result catches up.
+/// steps, then everything that shows the result catches up. Last of all the kit brings its
+/// elements in line with what they were given to show ([`KitSystems`]).
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SimSystems {
     Input,
@@ -87,7 +90,7 @@ impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Playback>()
             .init_resource::<Pace>()
-            .configure_sets(Update, (SimSystems::Input, SimSystems::Step, SimSystems::Present).chain())
+            .configure_sets(Update, (SimSystems::Input, SimSystems::Step, SimSystems::Present, KitSystems).chain())
             .add_systems(Update, advance.in_set(SimSystems::Step));
     }
 }

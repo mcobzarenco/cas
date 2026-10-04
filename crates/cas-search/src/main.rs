@@ -347,8 +347,21 @@ fn main() {
         &best(1),
         &["rule", "espca", "growing", "growth", "spaceships", "blob"],
     );
+    // A list of nothing is not printed: with no list at all, that is said.
+    if args.top > 0 && !lines.is_empty() && lines.iter().all(|line| merit(line).0 == 0) {
+        let table = match &args.out {
+            Some(path) => format!("What was measured of each rule is in {}.", path.display()),
+            None => "With --out FILE, what was measured of each rule is written to a table.".to_string(),
+        };
+        println!(
+            "\nNone of these rules is a find (a world where something travels slower than light, or a rule\n\
+             whose seeds grow along lines and send spaceships out), so there is no list of the best.\n{table}"
+        );
+    }
 
-    println!();
+    if args.keep > 0 {
+        println!();
+    }
     store(&args, &lines);
 }
 

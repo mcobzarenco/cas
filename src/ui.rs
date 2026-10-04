@@ -11,7 +11,7 @@ use bevy::{
         constants::fonts,
         controls::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
-            FeathersMenuPopup, FeathersScrollbar,
+            FeathersMenuPopup,
         },
         palette,
         theme::{ThemeBackgroundColor, ThemedText, UiTheme},
@@ -20,7 +20,7 @@ use bevy::{
     prelude::*,
     text::{FontSourceTemplate, FontWeight},
     ui::Checked,
-    ui_widgets::{Activate, ActivateOnPress, ControlOrientation, ScrollArea, SliderValue, ValueChange},
+    ui_widgets::{Activate, ActivateOnPress, ScrollArea, SliderValue, ValueChange},
     window::PrimaryWindow,
 };
 
@@ -37,8 +37,8 @@ use crate::{
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     kit::{
-        self, Aspect, GUTTER, button, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading, readout,
-        show_scrollbars, style_sliders, style_toggles, theme,
+        self, Aspect, GUTTER, Scrolls, button, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading,
+        readout, scrolling, show_scrollbars, style_sliders, style_toggles, theme,
     },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -272,48 +272,18 @@ fn panel() -> impl Scene {
         }
         Children [
             header(),
-            (
-                // The frame holds the scrollbar, in the gutter beside the cards; the cards
-                // scroll when the window is too low for them all.
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                }
+            // The cards scroll when the window is too low for them all.
+            scrolling(Scrolls::Cards, bsn! {
+                #PanelBody
+                PanelBody
                 Children [
-                    (
-                        #PanelBody
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(GUTTER),
-                            overflow: Overflow::scroll_y(),
-                        }
-                        ScrollArea
-                        PanelBody
-                        Children [
-                            rule_card(),
-                            world_card(),
-                            time_card(),
-                            view_card(),
-                            pattern_card(),
-                        ]
-                    ),
-                    (
-                        @FeathersScrollbar {
-                            @target: #PanelBody,
-                            @orientation: {ControlOrientation::Vertical}
-                        }
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Absolute,
-                            right: px(-6),
-                            top: px(0),
-                            bottom: px(0),
-                            width: px(4),
-                        }
-                    ),
+                    rule_card(),
+                    world_card(),
+                    time_card(),
+                    view_card(),
+                    pattern_card(),
                 ]
-            ),
+            }),
         ]
     }
 }

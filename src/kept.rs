@@ -9,15 +9,10 @@
 use std::path::PathBuf;
 
 use bevy::{
-    feathers::{
-        controls::{FeathersButton, FeathersScrollbar},
-        cursor::EntityCursor,
-        palette,
-        theme::ThemedText,
-    },
+    feathers::{controls::FeathersButton, cursor::EntityCursor, palette, theme::ThemedText},
     picking::hover::Hovered,
     prelude::*,
-    ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
@@ -31,8 +26,8 @@ use cas_core::{
 use crate::{
     analysis::{self, Analysis},
     kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, caption, dial, heading, icon_button, icons, mono,
-        number, panel_title, picture, side_panel,
+        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
+        mono, number, panel_title, picture, scrolling, side_panel,
     },
     library::LOOKS_EVERY,
     sim::SimSystems,
@@ -175,132 +170,28 @@ const BUTTON: f32 = 24.0;
 struct KeptClose(usize);
 
 pub fn spaceships_panel() -> impl Scene {
-    // The frame holds the scrollbar; the list inside it scrolls.
-    let list = bsn! {
-        Node {
-            flex_grow: 1.0,
-            min_height: px(0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect { right: px(10) },
-        }
-        Children [
-            (
-                #KeptSpaceshipList
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
-                    overflow: Overflow::scroll_y(),
-                }
-                ScrollArea
-                KeptList(0)
-            ),
-            (
-                @FeathersScrollbar {
-                    @target: #KeptSpaceshipList,
-                    @orientation: {ControlOrientation::Vertical}
-                }
-                Node {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    right: px(0),
-                    top: px(0),
-                    bottom: px(0),
-                    width: px(6),
-                }
-            ),
-        ]
-    };
     let about = "The spaceships kept under this rule: patterns that are back in their shape, somewhere else, \
                  after their period.";
-    kept_panel(0, "Spaceships", about, list)
+    kept_panel(0, "Spaceships", about)
 }
 
 pub fn oscillators_panel() -> impl Scene {
-    // The frame holds the scrollbar; the list inside it scrolls.
-    let list = bsn! {
-        Node {
-            flex_grow: 1.0,
-            min_height: px(0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect { right: px(10) },
-        }
-        Children [
-            (
-                #KeptOscillatorList
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
-                    overflow: Overflow::scroll_y(),
-                }
-                ScrollArea
-                KeptList(1)
-            ),
-            (
-                @FeathersScrollbar {
-                    @target: #KeptOscillatorList,
-                    @orientation: {ControlOrientation::Vertical}
-                }
-                Node {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    right: px(0),
-                    top: px(0),
-                    bottom: px(0),
-                    width: px(6),
-                }
-            ),
-        ]
-    };
     let about = "The oscillators kept under this rule: patterns that are back in their shape, where they were, \
                  after their period.";
-    kept_panel(1, "Oscillators", about, list)
+    kept_panel(1, "Oscillators", about)
 }
 
 pub fn still_lifes_panel() -> impl Scene {
-    // The frame holds the scrollbar; the list inside it scrolls.
-    let list = bsn! {
-        Node {
-            flex_grow: 1.0,
-            min_height: px(0),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect { right: px(10) },
-        }
-        Children [
-            (
-                #KeptStillLifeList
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
-                    overflow: Overflow::scroll_y(),
-                }
-                ScrollArea
-                KeptList(2)
-            ),
-            (
-                @FeathersScrollbar {
-                    @target: #KeptStillLifeList,
-                    @orientation: {ControlOrientation::Vertical}
-                }
-                Node {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    right: px(0),
-                    top: px(0),
-                    bottom: px(0),
-                    width: px(6),
-                }
-            ),
-        ]
-    };
-    kept_panel(2, "Still lifes", "The still lifes kept under this rule: patterns that stay as they are.", list)
+    kept_panel(2, "Still lifes", "The still lifes kept under this rule: patterns that stay as they are.")
 }
 
-/// The panel of a shelf, around its list: the three are alike but for their names, by which
-/// the rig knows them and each scrollbar its list, and for what their columns say.
-fn kept_panel(shelf: usize, title: &'static str, about: &'static str, list: impl Scene) -> impl Scene {
+/// The panel of a shelf: the three are alike but for their names, by which the rig knows
+/// them, and for what their columns say.
+fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Scene {
     let stem = ["KeptSpaceships", "KeptOscillators", "KeptStillLifes"][shelf];
     let (panel, close, note) = (Name::new(stem), Name::new(format!("{stem}Close")), Name::new(format!("{stem}Note")));
-    let (this, closes, noted) = (KeptPanel(shelf), KeptClose(shelf), KeptNote(shelf));
+    let list = Name::new(["KeptSpaceshipList", "KeptOscillatorList", "KeptStillLifeList"][shelf]);
+    let (this, closes, noted, listed) = (KeptPanel(shelf), KeptClose(shelf), KeptNote(shelf), KeptList(shelf));
     let (how, period) = match SHELVES[shelf] {
         Sort::Spaceship => ("SPEED", "PERIOD"),
         Sort::Oscillator => ("SIZE", "PERIOD"),
@@ -347,7 +238,7 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str, list: impl
                     (Node { width: px(2.0 * BUTTON + COLUMN_GAP) }),
                 ]
             ),
-            list,
+            scrolling(Scrolls::Rows, bsn! { template_value(list) template_value(listed) }),
             (caption("") template_value(note) template_value(noted)),
         ])
         template_value(panel)

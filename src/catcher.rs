@@ -16,19 +16,13 @@ use std::{
 
 use bevy::{
     clipboard::Clipboard,
-    feathers::{
-        constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar},
-        cursor::EntityCursor,
-        palette,
-        theme::ThemedText,
-    },
+    feathers::{constants::fonts, controls::FeathersButton, cursor::EntityCursor, palette, theme::ThemedText},
     picking::hover::Hovered,
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{FontSourceTemplate, FontWeight},
-    ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
@@ -45,8 +39,8 @@ use crate::{
     analysis::Analysis,
     kept::Collected,
     kit::{
-        Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, caption, dial, fitting, glow, group_digits,
-        heading, icon_button_marked, icons, mono, number, panel_title, picture, side_panel,
+        Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, fitting, glow,
+        group_digits, heading, icon_button_marked, icons, mono, number, panel_title, picture, scrolling, side_panel,
     },
     sim::{SimSystems, rule_changed},
     ui::toggle,
@@ -334,41 +328,7 @@ pub fn catcher_panel() -> impl Scene {
                     (Node { width: px(ANALYSE_COLUMN) }),
                 ]
             ),
-            (
-                // The frame holds the scrollbar; the list inside it scrolls.
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                    padding: UiRect { right: px(10) },
-                }
-                Children [
-                    (
-                        #KindList
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(4),
-                            overflow: Overflow::scroll_y(),
-                        }
-                        ScrollArea
-                        KindList
-                    ),
-                    (
-                        @FeathersScrollbar {
-                            @target: #KindList,
-                            @orientation: {ControlOrientation::Vertical}
-                        }
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Absolute,
-                            right: px(0),
-                            top: px(0),
-                            bottom: px(0),
-                            width: px(6),
-                        }
-                    ),
-                ]
-            ),
+            scrolling(Scrolls::Rows, bsn! { #KindList KindList }),
             (
                 Node {
                     flex_direction: FlexDirection::Row,

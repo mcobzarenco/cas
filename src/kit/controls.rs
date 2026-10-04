@@ -1,9 +1,10 @@
-//! The controls: buttons, checkboxes and text fields, and what scrolls and what drops down.
+//! The controls: buttons, checkboxes, sliders, text fields and chips, and what scrolls and what
+//! drops down.
 
 use bevy::{
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersMenuPopup, FeathersTextInputContainer},
+        controls::{FeathersButton, FeathersMenuPopup, FeathersScrollbar, FeathersTextInputContainer},
         cursor::EntityCursor,
         palette,
         theme::{ThemeBackgroundColor, ThemeTextColor, ThemedText},
@@ -14,14 +15,15 @@ use bevy::{
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
     ui::{Checked, UiGlobalTransform},
     ui_widgets::{
-        Checkbox, Scrollbar, Slider, SliderDragState, SliderOrientation, SliderThumb, SliderValue, TrackClick,
+        Checkbox, ControlOrientation, ScrollArea, Scrollbar, Slider, SliderDragState, SliderOrientation, SliderThumb,
+        SliderValue, TrackClick,
     },
     window::{PrimaryWindow, SystemCursorIcon},
 };
 
-use super::{aspect::Aspect, icons, text::key_hint};
+use super::{aspect::Aspect, cards::GUTTER, icons, text::key_hint};
 
-/// The caption of a button or checkbox: its label and the key that does the same.
+/// The caption of a button that has a key: its label and the key that does the same.
 fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> {
     bsn_list![
         (Text(label) ThemedText),
@@ -41,8 +43,8 @@ pub(crate) fn button(label: &'static str, key: &'static str) -> impl Scene {
     }
 }
 
-/// A small square button with an icon on it, as the rows of the lists have them. In a row
-/// that takes clicks itself, whoever handles its click keeps the click from the row.
+/// A small square button with an icon on it, as the rows of the lists have them. A click on
+/// it is its own: a row that takes clicks itself does not get it.
 pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
     icon_button_marked(glyph, ink, Unmarked)
 }
@@ -165,10 +167,11 @@ const RAIL: f32 = 4.0;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct SliderFill;
 
-/// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: clicking
-/// the rail jumps there, dragging follows the pointer. The fill has the colour of an aspect.
-/// The thumb travels inside a box that is one thumb narrower than the slider, so plain
-/// percentages place it.
+/// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: a click
+/// on the rail asks for the value there, a drag for the one under the pointer. Whoever makes
+/// it answers its `ValueChange` with the `SliderValue` it is to have, the one asked for or one
+/// near it. The fill has the colour of an aspect. The thumb travels inside a box that is one
+/// thumb narrower than the slider, so plain percentages place it.
 pub(crate) fn slider(aspect: Aspect) -> impl Scene {
     let fill = aspect.color();
     bsn! {
@@ -354,6 +357,65 @@ pub(crate) fn menu_heading(text: &'static str) -> impl Scene {
             template_value(LetterSpacing::Px(0.5))
             ThemeTextColor(tokens::TEXT_DIM)
         )]
+    }
+}
+
+/// What scrolls, and with that where its scrollbar lies and how far apart the things in it are.
+#[derive(Clone, Copy)]
+pub(crate) enum Scrolls {
+    /// The rows of a list: the scrollbar beside them, in room that is kept for it.
+    Rows,
+    /// The body of a side panel: the scrollbar in the padding of the panel's card.
+    Body,
+    /// The cards of a column: the scrollbar in the gutter beside them.
+    Cards,
+}
+
+/// A node that scrolls when what is in it is higher than the room it has, and its scrollbar,
+/// which is there only then. `area` is put on the node that scrolls: the name it goes by, a
+/// mark to find it by, what is in it.
+pub(crate) fn scrolling(what: Scrolls, area: impl Scene) -> impl Scene {
+    // The room kept beside what scrolls, the gap between the things in it, and how far out
+    // and how wide the scrollbar is.
+    let (room, gap, right, width) = match what {
+        Scrolls::Rows => (10.0, 4.0, 0.0, 6.0),
+        Scrolls::Body => (0.0, 12.0, -10.0, 6.0),
+        Scrolls::Cards => (0.0, GUTTER, -6.0, 4.0),
+    };
+    bsn! {
+        // The frame holds the scrollbar; what is in the other node scrolls.
+        Node {
+            flex_grow: 1.0,
+            min_height: px(0),
+            flex_direction: FlexDirection::Column,
+            padding: UiRect { right: px(room) },
+        }
+        Children [
+            (
+                #Scrolls
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(gap),
+                    overflow: Overflow::scroll_y(),
+                }
+                ScrollArea
+                area
+            ),
+            (
+                @FeathersScrollbar {
+                    @target: #Scrolls,
+                    @orientation: {ControlOrientation::Vertical}
+                }
+                Node {
+                    display: Display::None,
+                    position_type: PositionType::Absolute,
+                    right: px(right),
+                    top: px(0),
+                    bottom: px(0),
+                    width: px(width),
+                }
+            ),
+        ]
     }
 }
 

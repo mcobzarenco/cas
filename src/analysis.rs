@@ -12,7 +12,7 @@ use bevy::{
     clipboard::Clipboard,
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput},
+        controls::{FeathersButton, FeathersTextInput},
         cursor::EntityCursor,
         palette,
         theme::{ThemeTextColor, ThemedText},
@@ -24,7 +24,7 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
-    ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
@@ -43,9 +43,9 @@ use crate::{
     actions::KeyboardOwner,
     kept::Collected,
     kit::{
-        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, caption, dial, field_frame,
-        group_digits, heading as column_title, icon_button, icons, mono, number, panel_title, picture, side_panel,
-        tile, tile_label, tile_value,
+        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, caption, dial,
+        field_frame, group_digits, heading as column_title, icon_button, icons, mono, number, panel_title, picture,
+        scrolling, side_panel, tile, tile_label, tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -528,227 +528,197 @@ pub fn analysis_panel() -> impl Scene {
                     ),
                 ]
             ),
-            (
-                // The frame holds the scrollbar, in the margin of the panel; what is in it
-                // scrolls when the window is too low for it.
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                }
+            // What is in the panel scrolls when the window is too low for it.
+            scrolling(Scrolls::Body, bsn! {
+                #AnalysisBody
                 Children [
                     (
-                        #AnalysisBody
+                        // What the panel is for, until there is a pattern in it.
+                        #AnalysisIntro
+                        caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, send a spaceship over from the list, or type or paste a pattern's text here.")
+                        template_value(During::Nothing)
+                    ),
+                    (
+                        #AnalysisView
                         Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(12),
-                            overflow: Overflow::scroll_y(),
+                            display: Display::None,
+                            width: px(VIEW.0),
+                            height: px(VIEW.1),
+                            flex_shrink: 0.0,
                         }
-                        ScrollArea
+                        SmallView
+                        template_value(During::Pattern)
+                    ),
+                    (
+                        Node {
+                            display: Display::None,
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(6),
+                        }
+                        template_value(During::PatternOrStudy)
                         Children [
-                        (
-                            // What the panel is for, until there is a pattern in it.
-                            #AnalysisIntro
-                            caption("A pattern on its own, followed until it repeats or gets out of hand, and left to live in a small world. Choose one with Analyse and a drag over the grid, send a spaceship over from the list, or type or paste a pattern's text here.")
-                            template_value(During::Nothing)
-                        ),
-                        (
-                            #AnalysisView
-                            Node {
-                                display: Display::None,
-                                width: px(VIEW.0),
-                                height: px(VIEW.1),
-                                flex_shrink: 0.0,
-                            }
-                            SmallView
-                            template_value(During::Pattern)
-                        ),
-                        (
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                align_items: AlignItems::Center,
-                                column_gap: px(6),
-                            }
-                            template_value(During::PatternOrStudy)
-                            Children [
-                                (
-                                    #SmallCaption
-                                    caption("")
-                                    SmallCaption
-                                    Node { flex_grow: 1.0, flex_basis: px(0) }
-                                ),
-                                (
-                                    #AnalysisPause
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Pause") ThemedText PauseLabel }
-                                    }
-                                    Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
-                                    template_value(During::Pattern)
-                                    on(pause_world)
-                                ),
-                                (
-                                    #AnalysisRestart
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Restart") ThemedText }
-                                    }
-                                    Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
-                                    template_value(During::Pattern)
-                                    on(restart_world)
-                                ),
-                                (
-                                    // While a study is on its way: far enough.
-                                    #AnalysisStop
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Stop") ThemedText }
-                                    }
-                                    Node {
-                                        display: Display::None,
-                                        flex_shrink: 0.0,
-                                        min_height: px(22),
-                                        padding: UiRect::axes(px(8), px(0)),
-                                    }
-                                    template_value(During::Study)
-                                    on(stop_study)
-                                ),
-                            ]
-                        ),
-                        (
-                            // The small world's generation, and what left it: in the mono font, which has
-                            // the arrows.
-                            #SmallStatus
-                            Text("")
-                            TextFont {
-                                font: FontSourceTemplate::Handle(fonts::MONO),
-                                font_size: FontSize::Px(12.0),
-                                weight: FontWeight::NORMAL,
-                            }
-                            ThemeTextColor(tokens::TEXT_DIM)
-                            SmallStatus
-                            Node { display: Display::None }
-                            template_value(During::PatternOrStudy)
-                        ),
-                        (
-                            // What the study found, a tile to each finding, two to a row.
-                            #AnalysisFacts
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                flex_wrap: FlexWrap::Wrap,
-                                column_gap: px(6),
-                                row_gap: px(6),
-                                flex_shrink: 0.0,
-                            }
-                            template_value(During::Pattern)
-                            Children [
-                                fact_tile("WHAT", Finding::What),
-                                fact_tile("PERIOD", Finding::Period),
-                                fact_tile("CELLS", Finding::Cells),
-                                fact_tile("CHANGES", Finding::Changes),
-                                fact_tile("SIZE", Finding::Size),
-                                fact_tile("SYMMETRY", Finding::Symmetry),
-                            ]
-                        ),
-                        (
-                            // The pattern as text: to read, and to type or paste another into.
-                            Node {
-                                flex_direction: FlexDirection::Row,
-                                align_items: AlignItems::Center,
-                                column_gap: px(NAME_GAP),
-                                flex_shrink: 0.0,
-                            }
-                            Children [
-                                (column_title("TEXT") Node { width: px(NAME_COLUMN), flex_shrink: 0.0 }),
-                                (
-                                    field_frame()
-                                    Node { flex_basis: px(0), min_width: px(0) }
-                                    Children [(
-                                        #StudyText
-                                        @FeathersTextInput {}
-                                        PatternText
-                                        on(text_edited)
-                                    )]
-                                ),
-                            ]
-                        ),
-                        (
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Row,
-                                column_gap: px(6),
-                            }
-                            template_value(During::Pattern)
-                            Children [
-                                (
-                                    #AnalysisPlace
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Place") ThemedText }
-                                    }
-                                    Node { flex_grow: 1.0 }
-                                    on(place_subject)
-                                ),
-                                (
-                                    #AnalysisCopy
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Copy") ThemedText }
-                                    }
-                                    Node { flex_grow: 1.0 }
-                                    on(copy_subject)
-                                ),
-                                (
-                                    // There for what comes back to its shape, as one thing.
-                                    #AnalysisKeep
-                                    @FeathersButton {
-                                        @caption: bsn! { Text("Keep") ThemedText KeepLabel }
-                                    }
-                                    Node { display: Display::None, flex_grow: 1.0 }
-                                    KeepButton
-                                    on(keep_subject)
-                                ),
-                            ]
-                        ),
-                        (#AnalysisNote caption("") Note),
-                        (
-                            // The pieces come last: their list may be long, and what is above
-                            // it, the buttons too, stays where it is when the list opens.
-                            Node {
-                                display: Display::None,
-                                flex_direction: FlexDirection::Column,
-                                row_gap: px(5),
-                                flex_shrink: 0.0,
-                            }
-                            template_value(During::Pattern)
-                            Children [
-                                pieces_line(),
-                                (
-                                    #PiecesList
-                                    Node {
-                                        display: Display::None,
-                                        flex_direction: FlexDirection::Column,
-                                        row_gap: px(4),
-                                    }
-                                    PiecesList
-                                ),
-                            ]
-                        ),
+                            (
+                                #SmallCaption
+                                caption("")
+                                SmallCaption
+                                Node { flex_grow: 1.0, flex_basis: px(0) }
+                            ),
+                            (
+                                #AnalysisPause
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Pause") ThemedText PauseLabel }
+                                }
+                                Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                                template_value(During::Pattern)
+                                on(pause_world)
+                            ),
+                            (
+                                #AnalysisRestart
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Restart") ThemedText }
+                                }
+                                Node { flex_shrink: 0.0, min_height: px(22), padding: UiRect::axes(px(8), px(0)) }
+                                template_value(During::Pattern)
+                                on(restart_world)
+                            ),
+                            (
+                                // While a study is on its way: far enough.
+                                #AnalysisStop
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Stop") ThemedText }
+                                }
+                                Node {
+                                    display: Display::None,
+                                    flex_shrink: 0.0,
+                                    min_height: px(22),
+                                    padding: UiRect::axes(px(8), px(0)),
+                                }
+                                template_value(During::Study)
+                                on(stop_study)
+                            ),
                         ]
                     ),
                     (
-                        @FeathersScrollbar {
-                            @target: #AnalysisBody,
-                            @orientation: {ControlOrientation::Vertical}
+                        // The small world's generation, and what left it: in the mono font, which has
+                        // the arrows.
+                        #SmallStatus
+                        Text("")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(fonts::MONO),
+                            font_size: FontSize::Px(12.0),
+                            weight: FontWeight::NORMAL,
                         }
+                        ThemeTextColor(tokens::TEXT_DIM)
+                        SmallStatus
+                        Node { display: Display::None }
+                        template_value(During::PatternOrStudy)
+                    ),
+                    (
+                        // What the study found, a tile to each finding, two to a row.
+                        #AnalysisFacts
                         Node {
                             display: Display::None,
-                            position_type: PositionType::Absolute,
-                            right: px(-10),
-                            top: px(0),
-                            bottom: px(0),
-                            width: px(6),
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            column_gap: px(6),
+                            row_gap: px(6),
+                            flex_shrink: 0.0,
                         }
+                        template_value(During::Pattern)
+                        Children [
+                            fact_tile("WHAT", Finding::What),
+                            fact_tile("PERIOD", Finding::Period),
+                            fact_tile("CELLS", Finding::Cells),
+                            fact_tile("CHANGES", Finding::Changes),
+                            fact_tile("SIZE", Finding::Size),
+                            fact_tile("SYMMETRY", Finding::Symmetry),
+                        ]
+                    ),
+                    (
+                        // The pattern as text: to read, and to type or paste another into.
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(NAME_GAP),
+                            flex_shrink: 0.0,
+                        }
+                        Children [
+                            (column_title("TEXT") Node { width: px(NAME_COLUMN), flex_shrink: 0.0 }),
+                            (
+                                field_frame()
+                                Node { flex_basis: px(0), min_width: px(0) }
+                                Children [(
+                                    #StudyText
+                                    @FeathersTextInput {}
+                                    PatternText
+                                    on(text_edited)
+                                )]
+                            ),
+                        ]
+                    ),
+                    (
+                        Node {
+                            display: Display::None,
+                            flex_direction: FlexDirection::Row,
+                            column_gap: px(6),
+                        }
+                        template_value(During::Pattern)
+                        Children [
+                            (
+                                #AnalysisPlace
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Place") ThemedText }
+                                }
+                                Node { flex_grow: 1.0 }
+                                on(place_subject)
+                            ),
+                            (
+                                #AnalysisCopy
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Copy") ThemedText }
+                                }
+                                Node { flex_grow: 1.0 }
+                                on(copy_subject)
+                            ),
+                            (
+                                // There for what comes back to its shape, as one thing.
+                                #AnalysisKeep
+                                @FeathersButton {
+                                    @caption: bsn! { Text("Keep") ThemedText KeepLabel }
+                                }
+                                Node { display: Display::None, flex_grow: 1.0 }
+                                KeepButton
+                                on(keep_subject)
+                            ),
+                        ]
+                    ),
+                    (#AnalysisNote caption("") Note),
+                    (
+                        // The pieces come last: their list may be long, and what is above
+                        // it, the buttons too, stays where it is when the list opens.
+                        Node {
+                            display: Display::None,
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(5),
+                            flex_shrink: 0.0,
+                        }
+                        template_value(During::Pattern)
+                        Children [
+                            pieces_line(),
+                            (
+                                #PiecesList
+                                Node {
+                                    display: Display::None,
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: px(4),
+                                }
+                                PiecesList
+                            ),
+                        ]
                     ),
                 ]
-            ),
+            }),
         ])
         AnalysisPanel
     }

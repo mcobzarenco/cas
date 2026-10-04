@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use bevy::{
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput},
+        controls::{FeathersButton, FeathersTextInput},
         cursor::EntityCursor,
         palette,
         theme::ThemedText,
@@ -21,7 +21,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, FontSourceTemplate, FontWeight, LineBreak, TextEdit, TextEditChange},
     ui::UiGlobalTransform,
-    ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
@@ -33,7 +33,7 @@ use cas_core::{
 };
 
 use crate::{
-    kit::{Aspect, caption, chip_box, field_frame, heading, icons, panel_title, side_panel},
+    kit::{Aspect, Scrolls, caption, chip_box, field_frame, heading, icons, panel_title, scrolling, side_panel},
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
     synced::Synced,
@@ -466,41 +466,7 @@ pub fn library_panel() -> impl Scene {
                 ChipBox
                 Children [ { chips } ]
             ),
-            (
-                // The frame holds the scrollbar; the list inside it scrolls.
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                    padding: UiRect { right: px(10) },
-                }
-                Children [
-                    (
-                        #LibraryList
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(4),
-                            overflow: Overflow::scroll_y(),
-                        }
-                        ScrollArea
-                        RuleList
-                    ),
-                    (
-                        @FeathersScrollbar {
-                            @target: #LibraryList,
-                            @orientation: {ControlOrientation::Vertical}
-                        }
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Absolute,
-                            right: px(0),
-                            top: px(0),
-                            bottom: px(0),
-                            width: px(6),
-                        }
-                    ),
-                ]
-            ),
+            scrolling(Scrolls::Rows, bsn! { #LibraryList RuleList }),
             (#LibraryStatus caption("") template_value(Says::Status)),
         ])
         LibraryPanel

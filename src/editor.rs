@@ -14,7 +14,7 @@ use bevy::{
     clipboard::Clipboard,
     feathers::{
         constants::fonts,
-        controls::{FeathersButton, FeathersScrollbar, FeathersTextInput},
+        controls::{FeathersButton, FeathersTextInput},
         cursor::EntityCursor,
         palette,
         theme::ThemedText,
@@ -23,7 +23,7 @@ use bevy::{
     picking::hover::Hovered,
     prelude::*,
     text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
-    ui_widgets::{Activate, ControlOrientation, ScrollArea},
+    ui_widgets::Activate,
     window::SystemCursorIcon,
 };
 
@@ -35,8 +35,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, caption, field_frame, icons, panel_title, section, side_panel, tile,
-        tile_label as label, tile_value as value,
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, caption, field_frame, icons, panel_title, scrolling, section,
+        side_panel, tile, tile_label as label, tile_value as value,
     },
     library::RuleLibrary,
     sampler::sampler_section,
@@ -311,43 +311,12 @@ pub fn editor_panel() -> impl Scene {
                     ),
                 ]
             ),
-            (
-                // The frame holds the scrollbar, in the margin of the panel; what is in it
-                // scrolls.
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                }
+            scrolling(Scrolls::Body, bsn! {
+                #EditorBody
                 Children [
-                    (
-                        #EditorBody
-                        Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(12),
-                            overflow: Overflow::scroll_y(),
-                        }
-                        ScrollArea
-                        Children [
-                            { editor_body(orbits) },
-                        ]
-                    ),
-                    (
-                        @FeathersScrollbar {
-                            @target: #EditorBody,
-                            @orientation: {ControlOrientation::Vertical}
-                        }
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Absolute,
-                            right: px(-10),
-                            top: px(0),
-                            bottom: px(0),
-                            width: px(6),
-                        }
-                    ),
+                    { editor_body(orbits) },
                 ]
-            ),
+            }),
         ])
         EditorPanel
     }

@@ -28,7 +28,7 @@ use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
 
 use crate::{
     analysis::Analysis,
-    kit::{ALIVE, Aspect, DEAD},
+    kit::{ALIVE, Aspect, BLOCKS, DEAD},
     sim::{Settings, SimSystems},
 };
 
@@ -37,8 +37,6 @@ pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 /// pattern while it catches cells.
 const EDGE: (Color, f32) = (Aspect::World.color(), 0.3);
 const CATCHING_EDGE: (Color, f32) = (Aspect::Pattern.color(), 0.45);
-/// The blocks are what the rule rewrites.
-pub const BLOCKS: (Color, f32) = (Aspect::Rule.color(), 0.22);
 /// A pattern about to be placed shows through at this opacity.
 const GHOST: f32 = 0.55;
 /// The band drawn around a pattern being chosen for analysis: its outline and its fill.

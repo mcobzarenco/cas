@@ -30,8 +30,10 @@ use cas_core::{
 
 use crate::{
     analysis::{self, Analysis},
-    catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, dial, heading, mono, number, picture},
-    kit::{Aspect, caption, icon_button, icons, panel_title, side_panel},
+    kit::{
+        Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, caption, dial, heading, icon_button, icons, mono,
+        number, panel_title, picture, side_panel,
+    },
     library::LOOKS_EVERY,
     sim::SimSystems,
     synced::Synced,

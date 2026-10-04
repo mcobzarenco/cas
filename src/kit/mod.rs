@@ -11,9 +11,10 @@ mod aspect;
 mod cards;
 mod controls;
 pub mod icons;
+mod lists;
 mod text;
 
-pub(crate) use aspect::{ALIVE, Aspect, DEAD, theme};
+pub(crate) use aspect::{ALIVE, Aspect, BLOCKS, DEAD, theme};
 pub(crate) use cards::{
     AXES, GLYPH, GUTTER, ORBIT, card, panel_title, section, side_panel, tile, tile_label, tile_value,
 };
@@ -21,4 +22,5 @@ pub(crate) use controls::{
     button, checkbox, field_frame, fit_menus, icon_button, icon_button_marked, menu_heading, show_scrollbars, slider,
     style_sliders, style_toggles,
 };
-pub(crate) use text::{caption, group_digits, key_hint, readout};
+pub(crate) use lists::{CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, picture};
+pub(crate) use text::{caption, fitting, group_digits, heading, key_hint, mono, number, readout};

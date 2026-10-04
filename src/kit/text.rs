@@ -32,6 +32,51 @@ pub(crate) fn readout(text: impl Into<String>) -> impl Scene {
     }
 }
 
+/// A column title of a list; the name of a field or of a group as well.
+pub(crate) fn heading(title: &'static str) -> impl Scene {
+    bsn! {
+        Text(title)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::BOLD),
+            font_size: FontSize::Px(10.0),
+            weight: FontWeight::BOLD,
+        }
+        ThemeTextColor(tokens::TEXT_DIM)
+    }
+}
+
+/// Text in the fixed-width face, as figures and speeds are set. Clicks go through it.
+pub(crate) fn mono(text: String, size: f32, color: Color) -> impl Scene {
+    bsn! {
+        Text(text)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::MONO),
+            font_size: FontSize::Px(size),
+            weight: FontWeight::NORMAL,
+        }
+        TextColor(color)
+        template_value(Pickable::IGNORE)
+    }
+}
+
+/// The size at which so many letters of the fixed-width face fit in so much room, and no
+/// larger than `most`. The period of a slow spaceship has seven figures, and its speed more:
+/// they are set smaller rather than cut short.
+pub(crate) fn fitting(letters: usize, room: f32, most: f32) -> f32 {
+    // A letter of that face is six tenths of its size wide.
+    (room / (0.6 * letters.max(1) as f32)).clamp(8.0, most)
+}
+
+/// A figure set to the right of its column.
+pub(crate) fn number(text: String, column: f32, color: Color) -> impl Scene {
+    let size = fitting(text.chars().count(), column, 12.0);
+    bsn! {
+        mono(text, size, color)
+        TextLayout { justify: Justify::Right }
+        Node { width: px(column) }
+    }
+}
+
 /// Shortcut reminders are legible on a button of any colour, and quiet.
 const KEY_HINT: Color = Color::srgba(1.0, 1.0, 1.0, 0.45);
 

@@ -33,8 +33,7 @@ use cas_core::{
 };
 
 use crate::{
-    catcher::heading,
-    kit::{Aspect, caption, field_frame, icons, panel_title, side_panel},
+    kit::{Aspect, caption, field_frame, heading, icons, panel_title, side_panel},
     sampler::{CHIPS, chip_box, chip_face},
     sim::SimSystems,
     synced::Synced,

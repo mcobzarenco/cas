@@ -41,11 +41,11 @@ use cas_core::{
 
 use crate::{
     actions::KeyboardOwner,
-    catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture},
     kept::Collected,
     kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, caption, field_frame, group_digits, icon_button, icons, panel_title,
-        side_panel, tile, tile_label, tile_value,
+        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, caption, dial, field_frame,
+        group_digits, heading as column_title, icon_button, icons, mono, number, panel_title, picture, side_panel,
+        tile, tile_label, tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},

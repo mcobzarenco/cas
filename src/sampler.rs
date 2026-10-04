@@ -11,10 +11,9 @@ use std::sync::{
 };
 
 use bevy::{
-    feathers::{constants::fonts, cursor::EntityCursor, palette, theme::ThemeTextColor, tokens},
+    feathers::{cursor::EntityCursor, palette},
     picking::hover::Hovered,
     prelude::*,
-    text::{FontSourceTemplate, FontWeight, LetterSpacing},
     ui::Checked,
     ui_widgets::{Activate, ValueChange},
     window::SystemCursorIcon,
@@ -28,7 +27,9 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    kit::{self, Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons},
+    kit::{
+        self, Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons, section_title, tile_label,
+    },
     sim::SimSystems,
 };
 
@@ -239,16 +240,7 @@ pub fn sampler_section() -> impl Scene {
                                 Chevron
                                 template_value(Pickable::IGNORE)
                             ),
-                            (
-                                Text("RANDOM RULE")
-                                TextFont {
-                                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                                    font_size: FontSize::Px(11.0),
-                                    weight: FontWeight::BOLD,
-                                }
-                                ThemeTextColor(tokens::TEXT_DIM)
-                                template_value(Pickable::IGNORE)
-                            ),
+                            (section_title("RANDOM RULE") template_value(Pickable::IGNORE)),
                             (
                                 #RandomFamily
                                 caption("")
@@ -274,7 +266,7 @@ pub fn sampler_section() -> impl Scene {
                 }
                 Body
                 Children [
-                    heading("LOOKS THE SAME"),
+                    tile_label("LOOKS THE SAME"),
                     (
                         row()
                         Children [
@@ -284,9 +276,9 @@ pub fn sampler_section() -> impl Scene {
                             { mirrors },
                         ]
                     ),
-                    heading("CONSERVES"),
+                    tile_label("CONSERVES"),
                     (row() Children [ { keeps } ]),
-                    heading("THE TABLE"),
+                    tile_label("THE TABLE"),
                     (
                         row()
                         Children [
@@ -318,20 +310,6 @@ pub fn sampler_section() -> impl Scene {
                 ]
             ),
         ]
-    }
-}
-
-/// The name of a group of chips.
-fn heading(name: &'static str) -> impl Scene {
-    bsn! {
-        Text(name)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::BOLD),
-            font_size: FontSize::Px(9.0),
-            weight: FontWeight::BOLD,
-        }
-        template_value(LetterSpacing::Px(0.5))
-        TextColor(palette::LIGHT_GRAY_2)
     }
 }
 

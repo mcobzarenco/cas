@@ -16,7 +16,7 @@ use bevy::{
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
-    text::{EditableText, FontSource, FontSourceTemplate, FontWeight, TextEdit, TextEditChange},
+    text::{EditableText, FontSource, TextEdit, TextEditChange},
     ui_widgets::Activate,
     window::SystemCursorIcon,
 };
@@ -29,8 +29,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, panel_header,
-        panel_title, scrolling, section, side_panel, tile, tile_label as label, tile_value as value,
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, mono, panel_header,
+        panel_title, sans, scrolling, section, side_panel, tile, tile_label as label, tile_value as value,
     },
     library::RuleLibrary,
     sampler::sampler_section,
@@ -387,7 +387,12 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                         padding: UiRect { left: px(6) },
                     }
                     Children [
-                        (#RuleEspca mono("", 12.0, palette::LIGHT_GRAY_1) template_value(Finding::Espca)),
+                        (
+                            #RuleEspca
+                            mono("", 12.0, palette::LIGHT_GRAY_1)
+                            TextLayout { justify: Justify::Center }
+                            template_value(Finding::Espca)
+                        ),
                         (caption("") template_value(Finding::EspcaNote)),
                     ]
                 ),
@@ -547,19 +552,6 @@ fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> imp
     }
 }
 
-fn mono(text: &'static str, size: f32, color: Color) -> impl Scene {
-    bsn! {
-        Text(text)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::MONO),
-            font_size: FontSize::Px(size),
-            weight: FontWeight::NORMAL,
-        }
-        TextColor(color)
-        TextLayout { justify: Justify::Center }
-    }
-}
-
 /// The symmetry of the rule as a picture: a point and its images under the turns and mirrors
 /// that leave the rule as it is, with the axes of those mirrors.
 fn symmetry_picture() -> impl SceneList {
@@ -678,16 +670,7 @@ fn flow_picture() -> impl SceneList {
                     border_radius: px(2),
                 }
                 BackgroundColor(palette::GRAY_2)
-                Children [(
-                    Text("")
-                    TextFont {
-                        font: FontSourceTemplate::Handle(fonts::MONO),
-                        font_size: FontSize::Px(13.0),
-                        weight: FontWeight::NORMAL,
-                    }
-                    TextColor(ALIVE)
-                    template_value(finding)
-                )]
+                Children [ (mono("", 13.0, ALIVE) template_value(finding)) ]
             }
         })
         .collect();
@@ -875,15 +858,7 @@ fn case_card(input: u8) -> impl Scene {
         BackgroundColor(Color::NONE)
         Children [
             block(input, false),
-            (
-                Text("→")
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::REGULAR),
-                    font_size: FontSize::Px(12.0),
-                    weight: FontWeight::NORMAL,
-                }
-                TextColor(palette::LIGHT_GRAY_2)
-            ),
+            sans("→", 12.0, palette::LIGHT_GRAY_2),
             (
                 block(input, true)
                 template_value(name)

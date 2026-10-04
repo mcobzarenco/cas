@@ -9,11 +9,11 @@
 use std::path::PathBuf;
 
 use bevy::{
-    feathers::{constants::fonts, controls::FeathersTextInput, palette},
+    feathers::{controls::FeathersTextInput, palette},
     input_focus::{FocusCause, InputFocus},
     picking::hover::Hovered,
     prelude::*,
-    text::{EditableText, FontSourceTemplate, FontWeight, LineBreak, TextEdit, TextEditChange},
+    text::{EditableText, LineBreak, TextEdit, TextEditChange},
     ui::{Checked, UiGlobalTransform},
     ui_widgets::Activate,
 };
@@ -28,7 +28,7 @@ use cas_core::{
 use crate::{
     kit::{
         Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
-        panel_header, panel_title, scrolling, side_panel,
+        panel_header, panel_title, sans, scrolling, side_panel,
     },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
@@ -483,13 +483,7 @@ fn on_the_grid() -> impl Scene {
                     ),
                     (
                         #LibraryName
-                        Text("")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(fonts::REGULAR),
-                            font_size: FontSize::Px(14.0),
-                            weight: FontWeight::NORMAL,
-                        }
-                        TextColor(palette::WHITE)
+                        sans("", 14.0, palette::WHITE)
                         Node { display: Display::None, flex_grow: 1.0, flex_basis: px(0) }
                         template_value(Says::Name)
                         template_value(When::BuiltIn)
@@ -641,17 +635,7 @@ fn rule_row(position: usize, title: String, about: String, pin: Option<(usize, b
                 }
                 template_value(Pickable::IGNORE)
                 Children [
-                    (
-                        Text(title)
-                        TextFont {
-                            font: FontSourceTemplate::Handle(fonts::REGULAR),
-                            font_size: FontSize::Px(13.0),
-                            weight: FontWeight::NORMAL,
-                        }
-                        TextColor(palette::WHITE)
-                        TextLayout { linebreak: LineBreak::NoWrap }
-                        template_value(Pickable::IGNORE)
-                    ),
+                    (sans(title, 13.0, palette::WHITE) TextLayout { linebreak: LineBreak::NoWrap }),
                     (
                         caption(about)
                         TextLayout { linebreak: LineBreak::NoWrap }

@@ -16,11 +16,10 @@ use std::{
 
 use bevy::{
     clipboard::Clipboard,
-    feathers::{constants::fonts, controls::FeathersButton, palette},
+    feathers::{controls::FeathersButton, palette},
     platform::time::Instant,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
-    text::{FontSourceTemplate, FontWeight},
     ui_widgets::Activate,
 };
 
@@ -360,16 +359,7 @@ fn figure(label: &'static str, figure: Figure) -> impl Scene {
         }
         BackgroundColor(palette::GRAY_2)
         Children [
-            (
-                Text("0")
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::MONO),
-                    font_size: FontSize::Px(18.0),
-                    weight: FontWeight::NORMAL,
-                }
-                TextColor(palette::WHITE)
-                template_value(figure)
-            ),
+            (mono("0", 18.0, palette::WHITE) template_value(figure)),
             caption(label),
         ]
     }

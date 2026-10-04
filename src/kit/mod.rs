@@ -27,7 +27,7 @@ pub(crate) use controls::{
     icon_button_marked, keyed_button, menu_heading, scrolling, slider,
 };
 pub(crate) use lists::{CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, list_row, picture};
-pub(crate) use text::{caption, fitting, group_digits, heading, key_hint, mono, number, readout};
+pub(crate) use text::{caption, fitting, group_digits, heading, key_hint, mono, number, readout, sans, section_title};
 
 /// Sets the kit up: Feathers' widgets in the kit's theme, the icon font, and the systems that
 /// keep the elements looking as they should.

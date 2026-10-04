@@ -40,7 +40,7 @@ use crate::{
     kit::{
         ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button,
         button_marked, caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono,
-        number, panel_header, panel_title, picture, scrolling, side_panel, tile, tile_label, tile_value,
+        number, panel_header, panel_title, picture, sans, scrolling, side_panel, tile, tile_label, tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -776,16 +776,7 @@ fn pieces_line() -> impl Scene {
                 }
                 template_value(Pickable::IGNORE)
                 Children [
-                    (
-                        Text("PIECES")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(fonts::BOLD),
-                            font_size: FontSize::Px(10.0),
-                            weight: FontWeight::BOLD,
-                        }
-                        ThemeTextColor(tokens::TEXT_DIM)
-                        template_value(Pickable::IGNORE)
-                    ),
+                    (column_title("PIECES") template_value(Pickable::IGNORE)),
                     (
                         icons::icon(icons::OPENS, 10.0, palette::LIGHT_GRAY_2)
                         UiTransform
@@ -882,15 +873,7 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
                             column_gap: px(6),
                         }
                         Children [
-                            (
-                                Text(count(sort.count))
-                                TextFont {
-                                    font: FontSourceTemplate::Handle(fonts::REGULAR),
-                                    font_size: FontSize::Px(VALUE_SIZE),
-                                    weight: FontWeight::NORMAL,
-                                }
-                                TextColor(palette::WHITE)
-                            ),
+                            sans(count(sort.count), VALUE_SIZE, palette::WHITE),
                             tile_label(sort.label),
                         ]
                     ),
@@ -898,13 +881,7 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
                         // In a line of its own, under how many there are.
                         Node { display: named }
                         Children [(
-                            Text("")
-                            TextFont {
-                                font: FontSourceTemplate::Handle(fonts::REGULAR),
-                                font_size: FontSize::Px(VALUE_SIZE),
-                                weight: FontWeight::NORMAL,
-                            }
-                            TextColor(palette::LIGHT_GRAY_2)
+                            sans("", VALUE_SIZE, palette::LIGHT_GRAY_2)
                             Children [ {kinds} ]
                         )]
                     ),

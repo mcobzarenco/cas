@@ -6,7 +6,7 @@ use bevy::{
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
 };
 
-use super::{aspect::Aspect, controls::button};
+use super::{aspect::Aspect, controls::button, text::section_title};
 
 /// What cards are made of. They lie on the window's background, a shade darker than they are.
 pub(crate) const CARD: Color = palette::GRAY_1;
@@ -157,15 +157,7 @@ pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
             row_gap: px(6),
         }
         Children [
-            (
-                Text(title)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                    font_size: FontSize::Px(11.0),
-                    weight: FontWeight::BOLD,
-                }
-                ThemeTextColor(tokens::TEXT_DIM)
-            ),
+            section_title(title),
             { body },
         ]
     }

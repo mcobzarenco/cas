@@ -45,8 +45,36 @@ pub(crate) fn heading(title: &'static str) -> impl Scene {
     }
 }
 
+/// The title of a section: of a group of controls, or of a part that folds away.
+pub(crate) fn section_title(title: &'static str) -> impl Scene {
+    bsn! {
+        Text(title)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::BOLD),
+            font_size: FontSize::Px(11.0),
+            weight: FontWeight::BOLD,
+        }
+        ThemeTextColor(tokens::TEXT_DIM)
+    }
+}
+
+/// Text in the face of the interface, at any size and in any colour: a name, a count.
+/// Clicks go through it.
+pub(crate) fn sans(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
+    bsn! {
+        Text(text)
+        TextFont {
+            font: FontSourceTemplate::Handle(fonts::REGULAR),
+            font_size: FontSize::Px(size),
+            weight: FontWeight::NORMAL,
+        }
+        TextColor(color)
+        template_value(Pickable::IGNORE)
+    }
+}
+
 /// Text in the fixed-width face, as figures and speeds are set. Clicks go through it.
-pub(crate) fn mono(text: String, size: f32, color: Color) -> impl Scene {
+pub(crate) fn mono(text: impl Into<String>, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
         TextFont {

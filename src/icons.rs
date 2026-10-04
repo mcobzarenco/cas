@@ -56,6 +56,8 @@ pub const CHANGES: &str = "\u{e2de}";
 pub const WAY: &str = "\u{e08e}";
 /// What holds a rule in the rule menu.
 pub const PIN: &str = "\u{e3e2}";
+/// The mark of a pattern that is kept.
+pub const KEEP: &str = "\u{e0ea}";
 
 pub struct IconsPlugin;
 

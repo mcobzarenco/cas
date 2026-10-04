@@ -14,12 +14,16 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use cas_core::universe::{Rng, Universe};
+use cas_core::{
+    collection::Sort,
+    universe::{Rng, Universe},
+};
 
 use crate::{
     analysis::Analysis,
     catcher::Catcher,
     editor::RuleEditor,
+    kept::Collected,
     library::RuleLibrary,
     sim::{Playback, Settings, SimSystems},
     ui::{Aspect, Control},
@@ -58,6 +62,9 @@ pub enum Action {
     NextRule,
     /// Show or hide the list of the spaceships caught.
     Spaceships,
+    /// Show or hide the oscillators kept under the rule, and the still lifes.
+    Oscillators,
+    StillLifes,
     /// Show or hide the analysis panel; it opens choosing a pattern on the grid.
     Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
@@ -223,6 +230,7 @@ fn perform(
     mut editor: ResMut<RuleEditor>,
     mut library: ResMut<RuleLibrary>,
     mut catcher: ResMut<Catcher>,
+    mut collected: ResMut<Collected>,
     mut analysis: ResMut<Analysis>,
     mut stamp: ResMut<Stamp>,
 ) {
@@ -276,6 +284,8 @@ fn perform(
             }
         }
         Action::Spaceships => catcher.toggle(),
+        Action::Oscillators => collected.toggle(Sort::Oscillator),
+        Action::StillLifes => collected.toggle(Sort::StillLife),
         Action::Analysis => {
             analysis.toggle();
             if analysis.is_open() {

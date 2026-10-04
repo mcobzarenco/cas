@@ -9,6 +9,7 @@ mod analysis;
 mod catcher;
 mod editor;
 mod icons;
+mod kept;
 mod library;
 mod rig;
 mod sampler;
@@ -83,7 +84,8 @@ struct Args {
     shots: PathBuf,
     /// The file of the rule library: the rules that were kept, a rule to a line. Without
     /// this it is `rules.tsv` of the repository the program was built from; a scripted run
-    /// has no file unless it names one, and keeps what it changes to itself.
+    /// has no file unless it names one, and keeps what it changes to itself. The patterns
+    /// that were kept lie next to it, in `patterns.tsv`.
     #[arg(long)]
     library: Option<PathBuf>,
 }
@@ -176,6 +178,7 @@ fn main() -> AppExit {
         ..default()
     }))
     .insert_resource(ClearColor(view::BACKGROUND))
+    .insert_resource(kept::Collected::at(library.as_ref().map(|rules| rules.with_file_name("patterns.tsv"))))
     .insert_resource(library::RuleLibrary::at(library))
     .insert_resource(universe)
     .insert_resource(rng)
@@ -194,6 +197,7 @@ fn main() -> AppExit {
         ui::UiPlugin,
         editor::EditorPlugin,
         library::LibraryPlugin,
+        kept::KeptPlugin,
         catcher::CatcherPlugin,
         analysis::AnalysisPlugin,
         sampler::SamplerPlugin,

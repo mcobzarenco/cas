@@ -31,6 +31,7 @@ use bevy::{
 };
 
 use cas_core::{
+    collection::Sort,
     rules::{BlockRule, PRESETS},
     universe::Universe,
 };
@@ -40,6 +41,8 @@ use crate::{
     analysis::{ANALYSIS_WIDTH, Analysis, ChoosingMark, SelectHint, analysis_panel},
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
+    icons,
+    kept::{Collected, KEPT_WIDTH, oscillators_panel, still_lifes_panel},
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
@@ -341,6 +344,8 @@ fn root() -> impl Scene {
             library_panel(),
             editor_panel(),
             catcher_panel(),
+            oscillators_panel(),
+            still_lifes_panel(),
             analysis_panel(),
             grid_view(),
         ]
@@ -448,6 +453,8 @@ enum Side {
     Library,
     Editor,
     Spaceships,
+    Oscillators,
+    StillLifes,
     Analysis,
 }
 
@@ -459,6 +466,7 @@ fn make_room(
     mut library: ResMut<RuleLibrary>,
     mut editor: ResMut<RuleEditor>,
     mut catcher: ResMut<Catcher>,
+    mut collected: ResMut<Collected>,
     mut analysis: ResMut<Analysis>,
     mut open: Local<Vec<Side>>,
 ) {
@@ -467,6 +475,8 @@ fn make_room(
         (Side::Library, library.is_open()),
         (Side::Editor, editor.is_open()),
         (Side::Spaceships, catcher.is_open()),
+        (Side::Oscillators, collected.is_open(Sort::Oscillator)),
+        (Side::StillLifes, collected.is_open(Sort::StillLife)),
         (Side::Analysis, analysis.is_open()),
     ] {
         match (is_open, open.contains(&side)) {
@@ -479,6 +489,7 @@ fn make_room(
         Side::Library => LIBRARY_WIDTH,
         Side::Editor => EDITOR_WIDTH,
         Side::Spaceships => CATCHER_WIDTH,
+        Side::Oscillators | Side::StillLifes => KEPT_WIDTH,
         Side::Analysis => ANALYSIS_WIDTH,
     };
     let room = window.width() - PANEL_WIDTH - GRID_ROOM;
@@ -487,6 +498,8 @@ fn make_room(
             Side::Library => library.close(),
             Side::Editor => editor.close(),
             Side::Spaceships => catcher.close(),
+            Side::Oscillators => collected.close(Sort::Oscillator),
+            Side::StillLifes => collected.close(Sort::StillLife),
             Side::Analysis => analysis.close(),
         }
     }
@@ -712,6 +725,36 @@ pub(crate) fn tile_value(text: &'static str) -> impl Scene {
             weight: FontWeight::NORMAL,
         }
         TextColor(palette::LIGHT_GRAY_1)
+    }
+}
+
+/// A small square button with an icon on it, as the rows of the lists have them. In a row
+/// that takes clicks itself, whoever handles its click keeps the click from the row.
+pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
+    icon_button_marked(glyph, ink, Unmarked)
+}
+
+/// The mark of an icon that nobody needs to find again.
+#[derive(Component, Default, Clone)]
+pub(crate) struct Unmarked;
+
+/// Such a button with a mark on its icon, for whoever changes the icon's colour later.
+pub(crate) fn icon_button_marked<M: Component + Clone + Default + Unpin>(
+    glyph: &'static str,
+    ink: Color,
+    mark: M,
+) -> impl Scene {
+    bsn! {
+        @FeathersButton {
+            @caption: bsn! { icons::icon(glyph, 14.0, ink) template_value(mark) }
+        }
+        Node {
+            width: px(24),
+            min_width: px(24),
+            padding: px(0),
+            justify_content: JustifyContent::Center,
+            flex_shrink: 0.0,
+        }
     }
 }
 
@@ -1338,6 +1381,17 @@ fn pattern_card() -> impl Scene {
                         action_button("Spaceships", "Spaceships", Action::Spaceships)
                         Node { flex_grow: 0.0 }
                     ),
+                ]
+            ),
+            (
+                // What was kept of the patterns that stay where they are.
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(6),
+                }
+                Children [
+                    action_button("Oscillators", "Oscillators", Action::Oscillators),
+                    action_button("Still lifes", "StillLifes", Action::StillLifes),
                 ]
             ),
         ],

@@ -140,6 +140,9 @@ pub struct Piece {
     /// for a ship whichever way it flies and whenever it is met ([`Motion::canonical`]).
     /// Empty for a piece that does not come back.
     pub form: Vec<Cell>,
+    /// How far that form moves in a period: the way the kind is filed as flying, whichever
+    /// way this piece does.
+    pub moves: (i32, i32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -575,7 +578,9 @@ impl Analyser {
                 break;
             }
             if piece.len() > PIECE_CELLS {
-                pieces.push(Piece { cells: piece.len(), kind: PieceKind::Unexamined, form: Vec::new() });
+                let unexamined =
+                    Piece { cells: piece.len(), kind: PieceKind::Unexamined, form: Vec::new(), moves: (0, 0) };
+                pieces.push(unexamined);
                 continue;
             }
             let (piece, generations) = self.for_piece(piece, PIECE_GENERATIONS).piece(piece);
@@ -727,8 +732,11 @@ impl Analyser {
         };
         // What comes back is filed as the catcher files a ship: under one form, whichever way
         // it lies.
-        let form = self.filed(cells, 0, fate).map_or(Vec::new(), |(motion, _)| motion.canonical);
-        (Piece { cells: cells.len(), kind, form }, generations)
+        let (form, moves) = match self.filed(cells, 0, fate) {
+            Ok((motion, _)) => (motion.canonical, motion.displacement),
+            Err(_) => (Vec::new(), (0, 0)),
+        };
+        (Piece { cells: cells.len(), kind, form, moves }, generations)
     }
 
     /// The fate of a pattern; whether it kept still on the way; the power of time its cells

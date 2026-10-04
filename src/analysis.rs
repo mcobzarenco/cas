@@ -30,6 +30,7 @@ use bevy::{
 
 use cas_core::{
     census::Census,
+    collection::Sort,
     pattern::{
         Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, Watch,
         from_rle, to_rle, way,
@@ -40,14 +41,13 @@ use cas_core::{
 
 use crate::{
     actions::KeyboardOwner,
-    catcher::{
-        CAUGHT_COLUMN, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture,
-    },
+    catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture},
     icons,
+    kept::Collected,
     sim::{Settings, SimSystems},
     ui::{
-        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, group_digits, panel_title, side_panel, tile, tile_label,
-        tile_value,
+        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, group_digits, icon_button, panel_title, side_panel, tile,
+        tile_label, tile_value,
     },
     view::{ALIVE, DEAD, Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
 };
@@ -95,8 +95,10 @@ const NAME_COLUMN: f32 = 66.0;
 const NAME_GAP: f32 = 10.0;
 /// So many kinds of spaceship, and of oscillator, are listed among the pieces.
 const KINDS_LISTED: usize = 8;
-/// In the lines that sum the pieces up: the width of how many there are, and of what they are.
-const SORT_COLUMNS: (f32, f32) = (24.0, 62.0);
+/// The side of the box a sort of piece has its sign in, and the width of the column that
+/// says how many pieces are of a kind.
+const SORT_GLYPH: f32 = 36.0;
+const COUNT_COLUMN: f32 = 40.0;
 /// The findings are in tiles, two to a row: a tile is so wide at least, and takes a row to
 /// itself when it has much to say.
 const TILE: f32 = 170.0;
@@ -399,6 +401,21 @@ impl During {
 #[derive(Component, Default, Clone)]
 struct Row;
 
+/// The button that keeps the pattern on display, and its label, which says whether it is
+/// kept; the button that keeps all the kinds of piece; and the mark on a row of the list that
+/// keeps its kind: which row.
+#[derive(Component, Default, Clone)]
+struct KeepButton;
+
+#[derive(Component, Default, Clone)]
+struct KeepLabel;
+
+#[derive(Component, Default, Clone)]
+struct KeepAll;
+
+#[derive(Component, Default, Clone, Copy)]
+struct KeepPiece(usize);
+
 /// Where the pieces of a pattern are summed up, or listed kind by kind, and the mark on their
 /// line that turns as the list opens.
 #[derive(Component, Default, Clone)]
@@ -453,6 +470,7 @@ impl Plugin for AnalysisPlugin {
                     draw_small_world,
                     sync_text,
                     sync_panel,
+                    sync_keep,
                     sync_facts,
                     list_pieces,
                     show_status,
@@ -678,6 +696,16 @@ pub fn analysis_panel() -> impl Scene {
                                     Node { flex_grow: 1.0 }
                                     on(copy_subject)
                                 ),
+                                (
+                                    // There for what comes back to its shape, as one thing.
+                                    #AnalysisKeep
+                                    @FeathersButton {
+                                        @caption: bsn! { Text("Keep") ThemedText KeepLabel }
+                                    }
+                                    Node { display: Display::None, flex_grow: 1.0 }
+                                    KeepButton
+                                    on(keep_subject)
+                                ),
                             ]
                         ),
                         (#AnalysisNote caption("") Note),
@@ -778,16 +806,18 @@ fn fact_tile(label: &'static str, finding: Finding) -> impl Scene {
     }
 }
 
-/// The line of the pieces: its name, with the mark that turns as the list under it opens, and
-/// how many pieces there are. A click on the line opens the list or folds it away.
+/// The line of the pieces: its name, with the mark that turns as the list under it opens,
+/// how many pieces there are, and a button that keeps every kind of them. A click on the line
+/// opens the list or folds it away.
 fn pieces_line() -> impl Scene {
     let name = Name::new("StudyPieces");
     bsn! {
         #PiecesToggle
         Node {
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
+            align_items: AlignItems::Center,
             column_gap: px(NAME_GAP),
+            min_height: px(26),
         }
         Row
         Hovered
@@ -801,7 +831,6 @@ fn pieces_line() -> impl Scene {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
                     column_gap: px(5),
-                    margin: UiRect::top(px(3)),
                 }
                 template_value(Pickable::IGNORE)
                 Children [
@@ -839,26 +868,26 @@ fn pieces_line() -> impl Scene {
                 template_value(Finding::Pieces)
                 template_value(Pickable::IGNORE)
             ),
+            (
+                // Keeps every kind of piece that comes back to its shape, list open or not.
+                #PiecesKeep
+                @FeathersButton {
+                    @caption: bsn! { Text("Keep all") ThemedText }
+                }
+                Node { display: Display::None, flex_shrink: 0.0 }
+                KeepAll
+                on(keep_pieces)
+            ),
         ]
     }
 }
 
-/// A sort of piece in a line of its own, level with what the findings say: how many there
-/// are, what they are, and in dimmer letters the kinds among them.
-fn sort_line(index: usize, sort: &Sort) -> impl Scene {
+/// A sort of piece in a tile, as the findings are: its sign, its name, how many pieces are of
+/// it, and in dimmer letters the kinds among them. A sort with kinds to name has a row of the
+/// panel to itself.
+fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
     let name = Name::new(format!("PieceSort{index}"));
-    let (count, what) = (count(sort.count), sort.name);
-    let value = |text: String, color: Color| {
-        bsn! {
-            Text(text)
-            TextFont {
-                font: FontSourceTemplate::Handle(fonts::REGULAR),
-                font_size: FontSize::Px(VALUE_SIZE),
-                weight: FontWeight::NORMAL,
-            }
-            TextColor(color)
-        }
-    };
+    let basis = if sort.kinds.is_empty() { px(TILE) } else { percent(100) };
     // The arrows among the kinds are set in the face that has them all.
     let kinds: Vec<_> = runs(&sort.kinds)
         .into_iter()
@@ -875,29 +904,71 @@ fn sort_line(index: usize, sort: &Sort) -> impl Scene {
             }
         })
         .collect();
+    let named = if sort.kinds.is_empty() { Display::None } else { Display::Flex };
     bsn! {
+        tile()
         Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
-            column_gap: px(6),
-            margin: UiRect::left(px(NAME_COLUMN + NAME_GAP)),
-            flex_shrink: 0.0,
+            flex_grow: 1.0,
+            flex_basis: basis,
+            min_width: px(0),
         }
         template_value(name)
         Children [
             (
-                value(count, palette::LIGHT_GRAY_1)
-                TextLayout { justify: Justify::Right }
-                Node { width: px(SORT_COLUMNS.0), flex_shrink: 0.0 }
+                Node {
+                    width: px(SORT_GLYPH),
+                    height: px(SORT_GLYPH),
+                    flex_shrink: 0.0,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    border_radius: px(4),
+                }
+                BackgroundColor(DEAD)
+                Children [ icons::icon(sort.icon, 18.0, sort.ink) ]
             ),
             (
-                value(what.to_string(), palette::LIGHT_GRAY_1)
-                Node { min_width: px(SORT_COLUMNS.1), flex_shrink: 0.0 }
-            ),
-            (
-                value(String::new(), palette::LIGHT_GRAY_2)
-                Node { flex_grow: 1.0, flex_basis: px(0) }
-                Children [ {kinds} ]
+                Node {
+                    flex_grow: 1.0,
+                    flex_basis: px(0),
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                }
+                Children [
+                    (
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Baseline,
+                            column_gap: px(6),
+                        }
+                        Children [
+                            (
+                                Text(count(sort.count))
+                                TextFont {
+                                    font: FontSourceTemplate::Handle(fonts::REGULAR),
+                                    font_size: FontSize::Px(VALUE_SIZE),
+                                    weight: FontWeight::NORMAL,
+                                }
+                                TextColor(palette::WHITE)
+                            ),
+                            tile_label(sort.label),
+                        ]
+                    ),
+                    (
+                        // In a line of its own, under how many there are.
+                        Node { display: named }
+                        Children [(
+                            Text("")
+                            TextFont {
+                                font: FontSourceTemplate::Handle(fonts::REGULAR),
+                                font_size: FontSize::Px(VALUE_SIZE),
+                                weight: FontWeight::NORMAL,
+                            }
+                            TextColor(palette::LIGHT_GRAY_2)
+                            Children [ {kinds} ]
+                        )]
+                    ),
+                ]
             ),
         ]
     }
@@ -918,17 +989,21 @@ fn pieces_heading(title: &'static str, period: bool) -> impl Scene {
             (Node { flex_grow: 1.0, flex_basis: px(0) } Children [ column_title(title) ]),
             (Node { width: px(PERIOD_COLUMN), justify_content: JustifyContent::End } Children [ column_title(period) ]),
             (Node { width: px(CELLS_COLUMN), justify_content: JustifyContent::End } Children [ column_title("CELLS") ]),
-            (Node { width: px(CAUGHT_COLUMN), justify_content: JustifyContent::End } Children [ column_title("COUNT") ]),
+            (Node { width: px(COUNT_COLUMN), justify_content: JustifyContent::End } Children [ column_title("COUNT") ]),
+            (Node { width: px(24) }),
         ]
     }
 }
 
 /// One kind of piece, as the spaceship list shows a kind of spaceship: its picture, how it
 /// moves or how large it is, the dial of the ways its ships fly, its period, its cells, how
-/// many of it there are, and as a bar their share of the `of` pieces of its section. The
-/// picture of a kind is the form it is filed under, whichever way its pieces lie.
-fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
+/// many of it there are, the mark that keeps the kind, lit if it is kept, and as a bar the
+/// share of its pieces in the `of` pieces of its section. The picture of a kind is the form
+/// it is filed under, whichever way its pieces lie.
+fn piece_row(index: usize, kind: &Listed, of: usize, kept: bool) -> impl Scene {
     let name = Name::new(format!("Piece{index}"));
+    let (keep, keep_name) = (KeepPiece(index), Name::new(format!("PieceKeep{index}")));
+    let ink = if kept { Aspect::Pattern.color() } else { palette::LIGHT_GRAY_2 };
     let share = percent(100.0 * kind.count as f32 / of.max(1) as f32);
     let bar = Aspect::Pattern.color();
     let title = mono(kind.title.clone(), 14.0, palette::WHITE);
@@ -968,7 +1043,13 @@ fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
                     dial(&kind.ways, None),
                     number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(kind.cells.to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
-                    number(group_digits(kind.count as i64), CAUGHT_COLUMN, palette::WHITE),
+                    number(group_digits(kind.count as i64), COUNT_COLUMN, palette::WHITE),
+                    (
+                        icon_button(icons::KEEP, ink)
+                        template_value(keep_name)
+                        template_value(keep)
+                        on(keep_piece)
+                    ),
                 ]
             ),
             (
@@ -988,6 +1069,112 @@ fn piece_row(index: usize, kind: &Listed, of: usize) -> impl Scene {
             ),
         ]
     }
+}
+
+/// What of the pattern on display there is to keep: what it is, and the motion it is filed
+/// under. Only what comes back to its shape as one thing: of a pattern of many pieces the
+/// pieces are kept.
+fn keepable(subject: &Subject) -> Option<(Sort, &Motion)> {
+    let study = &subject.study;
+    let motion = study.motion.as_ref().filter(|_| study.parts <= 1)?;
+    Some((Sort::of(motion.displacement, study.still), motion))
+}
+
+/// Keeps the pattern on display among the patterns of its rule, or lets go of it if it is
+/// kept.
+fn keep_subject(_: On<Activate>, mut analysis: ResMut<Analysis>, mut collected: ResMut<Collected>) {
+    let Some(subject) = analysis.shown() else {
+        return;
+    };
+    let Some((sort, motion)) = keepable(subject) else {
+        return;
+    };
+    let kept = collected.keep_or_forget(&subject.rule, sort, &motion.canonical, motion.period, motion.displacement);
+    let sorts = sort.names();
+    analysis.note = Some(match kept {
+        true => format!("Kept among the {sorts} of its rule."),
+        false => format!("Let go of: it is no longer among the {sorts} kept."),
+    });
+}
+
+/// The kinds of piece that the list has a row for, in the order of the rows: of each sort so
+/// many at most.
+fn rows_of(kinds: &[Vec<Listed>; 3]) -> Vec<(Sort, &Listed)> {
+    let sorted = Sort::ALL.into_iter().zip(kinds);
+    sorted.flat_map(|(sort, kinds)| kinds.iter().take(KINDS_LISTED).map(move |kind| (sort, kind))).collect()
+}
+
+/// Keeps every kind of piece of the pattern on display that comes back to its shape: the
+/// spaceships, the oscillators and the still lifes among them. The click goes no further:
+/// the line would open its list.
+fn keep_pieces(mut click: On<Pointer<Click>>, mut analysis: ResMut<Analysis>, mut collected: ResMut<Collected>) {
+    click.propagate(false);
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let Some(subject) = analysis.shown() else {
+        return;
+    };
+    let kinds = listed(&subject.study.pieces);
+    let (mut new, mut known) = (0, 0);
+    for (sort, kinds) in Sort::ALL.into_iter().zip(&kinds) {
+        for kind in kinds {
+            match collected.keep(&subject.rule, sort, &kind.form, kind.period.unwrap_or(1), kind.moves) {
+                true => new += 1,
+                false => known += 1,
+            }
+        }
+    }
+    let kinds = match new {
+        1 => "one kind of piece".to_string(),
+        new => format!("{new} kinds of piece"),
+    };
+    let were = if known == 1 { "was" } else { "were" };
+    analysis.note = Some(match (new, known) {
+        (0, _) => "Every kind of them was kept already.".to_string(),
+        (_, 0) => format!("Kept {kinds}."),
+        _ => format!("Kept {kinds}, and {known} {were} kept already."),
+    });
+}
+
+/// The mark of a row keeps its kind of piece, or lets go of it.
+fn keep_piece(
+    mut click: On<Pointer<Click>>,
+    marks: Query<&KeepPiece>,
+    analysis: Res<Analysis>,
+    mut collected: ResMut<Collected>,
+) {
+    let Ok(&KeepPiece(index)) = marks.get(click.entity) else {
+        return;
+    };
+    click.propagate(false);
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let Some(subject) = analysis.shown() else {
+        return;
+    };
+    let kinds = listed(&subject.study.pieces);
+    if let Some(&(sort, kind)) = rows_of(&kinds).get(index) {
+        collected.keep_or_forget(&subject.rule, sort, &kind.form, kind.period.unwrap_or(1), kind.moves);
+    }
+}
+
+/// Shows the button that keeps the pattern while there is something to keep, and has it say
+/// whether that is kept.
+fn sync_keep(
+    analysis: Res<Analysis>,
+    collected: Res<Collected>,
+    mut button: Single<&mut Node, With<KeepButton>>,
+    mut label: Single<&mut Text, With<KeepLabel>>,
+) {
+    let thing = analysis.shown().and_then(|subject| Some((subject, keepable(subject)?.1)));
+    let display = if thing.is_some() { Display::Flex } else { Display::None };
+    if button.display != display {
+        button.display = display;
+    }
+    let kept = thing.is_some_and(|(subject, motion)| collected.is_kept(&subject.rule, &motion.canonical));
+    label.set_if_neq(Text(if kept { "Kept" } else { "Keep" }.to_string()));
 }
 
 /// The pattern goes back on the grid: picked up, to be put down wherever. Under another rule
@@ -1635,18 +1822,20 @@ fn heading(motion: &Motion) -> &'static str {
     }
 }
 
-/// A sort of piece, as a line of the summary has it: how many pieces are of it, what they are
-/// called, and a word on the kinds among them.
+/// A sort of piece, as a tile of the summary has it: how many pieces are of it, what they are
+/// called, their sign, and a word on the kinds among them.
 #[derive(Debug, PartialEq)]
-struct Sort {
+struct Summary {
     count: usize,
-    name: &'static str,
+    label: &'static str,
+    icon: &'static str,
+    ink: Color,
     kinds: String,
 }
 
 /// What the pieces of a pattern are, sort by sort: the spaceships with their speeds, the
 /// oscillators with their periods, the still lifes, and whatever else became of pieces.
-fn sorts(pieces: &[Piece], more: usize) -> Vec<Sort> {
+fn sorts(pieces: &[Piece], more: usize) -> Vec<Summary> {
     let [ships, ..] = listed(pieces);
     let mut flying: Vec<(String, usize)> = Vec::new();
     for kind in &ships {
@@ -1666,23 +1855,47 @@ fn sorts(pieces: &[Piece], more: usize) -> Vec<Sort> {
     let periods: Vec<(String, usize)> = periods.iter().map(|(period, count)| (period.to_string(), *count)).collect();
     let of = if periods.len() == 1 { "period" } else { "periods" };
     let so_many = |kinds: &[(String, usize)]| kinds.iter().map(|(_, count)| count).sum::<usize>();
+    let ink = Aspect::Pattern.color();
+    let came_back = [
+        (so_many(&flying), "SPACESHIP", "SPACESHIPS", icons::SHIP, commonest(&flying, "one more kind", "more kinds")),
+        (
+            so_many(&periods),
+            "OSCILLATOR",
+            "OSCILLATORS",
+            icons::OSCILLATES,
+            format!("{of} {}", commonest(&periods, "one more", "more")),
+        ),
+        (still, "STILL LIFE", "STILL LIFES", icons::STILL, String::new()),
+    ];
     let mut sorts = Vec::new();
-    for (count, one, many, kinds) in [
-        (so_many(&flying), "spaceship", "spaceships", commonest(&flying, "one more kind", "more kinds")),
-        (so_many(&periods), "oscillator", "oscillators", format!("{of} {}", commonest(&periods, "one more", "more"))),
-        (still, "still life", "still lifes", String::new()),
-    ] {
+    for (count, one, many, icon, kinds) in came_back {
         if count > 0 {
-            sorts.push(Sort { count, name: if count == 1 { one } else { many }, kinds });
+            sorts.push(Summary { count, label: if count == 1 { one } else { many }, icon, ink, kinds });
         }
     }
-    // "one that grows" is 1 "that grows" here, where the number has a column of its own.
-    let rest = others(pieces, more).into_iter().map(|(count, one, many)| Sort {
-        count,
-        name: if count == 1 { one.strip_prefix("one ").unwrap_or(one) } else { many },
-        kinds: String::new(),
-    });
-    sorts.extend(rest);
+    let dim = palette::LIGHT_GRAY_2;
+    let rest = [
+        (PieceKind::Grows, "THAT GROWS", "THAT GROW", icons::GROWS),
+        (PieceKind::Scatters, "THAT FLIES APART", "THAT FLY APART", icons::APART),
+        (PieceKind::Undecided, "STILL CHANGING", "STILL CHANGING", icons::UNDECIDED),
+        (PieceKind::Unexamined, "TOO BIG TO FOLLOW", "TOO BIG TO FOLLOW", icons::UNDECIDED),
+    ];
+    for (kind, one, many, icon) in rest {
+        let count = pieces.iter().filter(|piece| piece.kind == kind).count();
+        if count > 0 {
+            let label = if count == 1 { one } else { many };
+            sorts.push(Summary { count, label, icon, ink: dim, kinds: String::new() });
+        }
+    }
+    if more > 0 {
+        sorts.push(Summary {
+            count: more,
+            label: "MORE, NOT FOLLOWED",
+            icon: icons::UNDECIDED,
+            ink: dim,
+            kinds: String::new(),
+        });
+    }
     sorts
 }
 
@@ -1733,10 +1946,12 @@ struct Listed {
     period: Option<u32>,
     cells: usize,
     count: usize,
+    /// How far the form moves in a period, which is what a kind is kept with.
+    moves: (i32, i32),
 }
 
 /// The pieces that came back to their shape, kind by kind, the commonest first: the
-/// spaceships, the oscillators and the still lifes.
+/// spaceships, the oscillators and the still lifes, in the order of [`Sort::ALL`].
 fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
     let mut sorted: [Vec<Listed>; 3] = Default::default();
     for piece in pieces.iter().filter(|piece| !piece.form.is_empty()) {
@@ -1758,7 +1973,8 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
             Some(known) => known,
             None => {
                 let form = piece.form.clone();
-                kinds.push(Listed { form, title, note, ways: [0; 8], period, cells: piece.cells, count: 0 });
+                let (cells, moves) = (piece.cells, piece.moves);
+                kinds.push(Listed { form, title, note, ways: [0; 8], period, cells, count: 0, moves });
                 kinds.len() - 1
             }
         };
@@ -1774,18 +1990,20 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
 }
 
 /// Says what the pieces of the pattern on display are, under their line: sort by sort in a
-/// line each, or, with the list open, kind by kind with their pictures: the spaceships, the
+/// tile each, or, with the list open, kind by kind with their pictures: the spaceships, the
 /// oscillators, the still lifes, and a word on the rest.
 fn list_pieces(
     analysis: Res<Analysis>,
+    collected: Res<Collected>,
     list: Single<Entity, With<PiecesList>>,
+    keep_all: Single<Entity, With<KeepAll>>,
     mut chevron: Single<(Entity, &mut UiTransform), With<PiecesChevron>>,
     mut nodes: Query<&mut Node>,
-    mut shown: Local<Option<(Option<u64>, bool)>>,
+    mut shown: Local<Option<(Option<u64>, bool, u64)>>,
     mut commands: Commands,
 ) {
     let subject = analysis.shown();
-    let now = (subject.map(|subject| subject.number), analysis.listing);
+    let now = (subject.map(|subject| subject.number), analysis.listing, collected.revision());
     if shown.replace(now) == Some(now) {
         return;
     }
@@ -1796,7 +2014,8 @@ fn list_pieces(
     };
     let kinds = listed(pieces);
     let sorts = sorts(pieces, more);
-    // The list has the pieces that came back to their shape: without any, there is none.
+    // The list has the pieces that came back to their shape: without any, there is none, and
+    // nothing to keep.
     let any = kinds.iter().any(|kinds| !kinds.is_empty());
     let listing = any && analysis.listing;
     let mut show = |entity: Entity, shown: bool| {
@@ -1810,15 +2029,29 @@ fn list_pieces(
     // The mark is there while there is something to list, and points down while it is listed.
     let (mark, turned) = &mut *chevron;
     show(*mark, any);
+    show(*keep_all, any);
     turned.rotation = if listing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
     show(*list, !sorts.is_empty());
     commands.entity(*list).despawn_related::<Children>();
     let mut rows = Vec::new();
     if !listing {
-        rows.extend(sorts.iter().enumerate().map(|(index, sort)| commands.spawn_scene(sort_line(index, sort)).id()));
+        // The sorts in tiles, two to a row where they have little to say.
+        let tiles: Vec<_> = sorts.iter().enumerate().map(|(index, sort)| sort_tile(index, sort)).collect();
+        let summary = bsn! {
+            Node {
+                flex_direction: FlexDirection::Row,
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: px(6),
+                row_gap: px(6),
+            }
+            Children [ {tiles} ]
+        };
+        rows.push(commands.spawn_scene(summary).id());
         commands.entity(*list).add_children(&rows);
         return;
     }
+    let rule = subject.map(|subject| &subject.rule);
+    let is_kept = |kind: &Listed| rule.is_some_and(|rule| collected.is_kept(rule, &kind.form));
     let mut index = 0;
     for (title, kinds) in ["SPACESHIPS", "OSCILLATORS", "STILL LIFES"].into_iter().zip(&kinds) {
         if kinds.is_empty() {
@@ -1828,7 +2061,7 @@ fn list_pieces(
         let period = kinds.iter().any(|kind| kind.period.is_some());
         rows.push(commands.spawn_scene(pieces_heading(title, period)).id());
         for kind in kinds.iter().take(KINDS_LISTED) {
-            rows.push(commands.spawn_scene(piece_row(index, kind, of)).id());
+            rows.push(commands.spawn_scene(piece_row(index, kind, of, is_kept(kind))).id());
             index += 1;
         }
         if kinds.len() > KINDS_LISTED {
@@ -1931,15 +2164,16 @@ mod tests {
             cells: 4,
             kind: PieceKind::Spaceship { period: 12, displacement },
             form: ship.clone(),
+            moves: (2, 0),
         };
         let apart = [
             flying((2, 0)),
-            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
+            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)], moves: (0, 0) },
             flying((-2, 0)),
-            Piece { cells: 4, kind: PieceKind::StillLife, form: vec![(0, 1), (1, 1), (0, 2), (1, 2)] },
-            Piece { cells: 93, kind: PieceKind::Grows, form: Vec::new() },
+            Piece { cells: 4, kind: PieceKind::StillLife, form: vec![(0, 1), (1, 1), (0, 2), (1, 2)], moves: (0, 0) },
+            Piece { cells: 93, kind: PieceKind::Grows, form: Vec::new(), moves: (0, 0) },
             flying((2, 0)),
-            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)] },
+            Piece { cells: 1, kind: PieceKind::Oscillator { period: 4 }, form: vec![(0, 0)], moves: (0, 0) },
         ];
         let [ships, oscillators, still] = listed(&apart);
         // One kind of ship, two of them flying right and one left; what goes round, by its
@@ -1954,18 +2188,23 @@ mod tests {
             others(&apart, 2),
             [(1, "one that grows", "that grow"), (2, "one more not followed", "more not followed")]
         );
-        // And summed up, a line to each sort.
-        let sort = |count, name, kinds: &str| Sort { count, name, kinds: kinds.to_string() };
+        // And summed up, a tile to each sort, with its sign.
+        let said = |sort: &Summary| (sort.count, sort.label, sort.icon, sort.kinds.clone());
         assert_eq!(
-            sorts(&apart, 2),
+            sorts(&apart, 2).iter().map(said).collect::<Vec<_>>(),
             [
-                sort(3, "spaceships", "c/6"),
-                sort(2, "oscillators", "period 4"),
-                sort(1, "still life", ""),
-                sort(1, "that grows", ""),
-                sort(2, "more not followed", ""),
+                (3, "SPACESHIPS", icons::SHIP, "c/6".to_string()),
+                (2, "OSCILLATORS", icons::OSCILLATES, "period 4".to_string()),
+                (1, "STILL LIFE", icons::STILL, String::new()),
+                (1, "THAT GROWS", icons::GROWS, String::new()),
+                (2, "MORE, NOT FOLLOWED", icons::UNDECIDED, String::new()),
             ]
         );
+        // The rows of the list, in their order: what a mark on a row keeps.
+        let kinds = listed(&apart);
+        let rows: Vec<(Sort, usize, (i32, i32))> =
+            rows_of(&kinds).iter().map(|(sort, kind)| (*sort, kind.cells, kind.moves)).collect();
+        assert_eq!(rows, [(Sort::Spaceship, 4, (2, 0)), (Sort::Oscillator, 1, (0, 0)), (Sort::StillLife, 4, (0, 0))]);
     }
 
     #[test]

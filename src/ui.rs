@@ -31,7 +31,7 @@ use bevy::{
 };
 
 use cas_core::{
-    rules::{PRESETS, Source},
+    rules::{BlockRule, PRESETS},
     universe::Universe,
 };
 
@@ -40,6 +40,7 @@ use crate::{
     analysis::{ANALYSIS_WIDTH, Analysis, ChoosingMark, SelectHint, analysis_panel},
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
+    library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
     view::{ALIVE, DEAD, grid_view, wheel_notches},
 };
@@ -252,9 +253,20 @@ struct ToggleTick;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct PanelBody;
 
-/// The preset (an index into [`PRESETS`]) a rule-menu item selects.
-#[derive(Component, Clone, Copy, Debug, Default)]
-struct RuleChoice(usize);
+/// The rule an item of the rule menu puts on the grid.
+#[derive(Component, Clone, Debug)]
+struct RuleChoice(BlockRule);
+
+impl Default for RuleChoice {
+    fn default() -> Self {
+        Self(BlockRule::identity())
+    }
+}
+
+/// Where the items of the rule menu are: they come and go with what is pinned in the library
+/// and with the rules that were on the grid of late.
+#[derive(Component, Default, Clone)]
+struct RuleMenuItems;
 
 pub struct UiPlugin;
 
@@ -269,6 +281,8 @@ impl Plugin for UiPlugin {
                 (
                     (sync_widgets.run_if(rule_changed.or_eager(options_changed)), style_toggles).chain(),
                     (sync_sliders.run_if(options_changed), style_sliders).chain(),
+                    name_rule,
+                    list_rule_menu,
                     update_status,
                     show_scrollbars,
                     fit_menus,
@@ -324,6 +338,7 @@ fn root() -> impl Scene {
         ThemeBackgroundColor(tokens::WINDOW_BG)
         Children [
             panel(),
+            library_panel(),
             editor_panel(),
             catcher_panel(),
             analysis_panel(),
@@ -430,6 +445,7 @@ fn fit_menus(
 /// The side panels by name.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
+    Library,
     Editor,
     Spaceships,
     Analysis,
@@ -440,15 +456,19 @@ enum Side {
 /// a narrow window that is one panel at a time.
 fn make_room(
     window: Single<&Window, With<PrimaryWindow>>,
+    mut library: ResMut<RuleLibrary>,
     mut editor: ResMut<RuleEditor>,
     mut catcher: ResMut<Catcher>,
     mut analysis: ResMut<Analysis>,
     mut open: Local<Vec<Side>>,
 ) {
     // The panels that are open, in the order they were opened.
-    for (side, is_open) in
-        [(Side::Editor, editor.is_open()), (Side::Spaceships, catcher.is_open()), (Side::Analysis, analysis.is_open())]
-    {
+    for (side, is_open) in [
+        (Side::Library, library.is_open()),
+        (Side::Editor, editor.is_open()),
+        (Side::Spaceships, catcher.is_open()),
+        (Side::Analysis, analysis.is_open()),
+    ] {
         match (is_open, open.contains(&side)) {
             (true, false) => open.push(side),
             (false, true) => open.retain(|other| *other != side),
@@ -456,6 +476,7 @@ fn make_room(
         }
     }
     let width = |side: &Side| match side {
+        Side::Library => LIBRARY_WIDTH,
         Side::Editor => EDITOR_WIDTH,
         Side::Spaceships => CATCHER_WIDTH,
         Side::Analysis => ANALYSIS_WIDTH,
@@ -463,6 +484,7 @@ fn make_room(
     let room = window.width() - PANEL_WIDTH - GRID_ROOM;
     while open.len() > 1 && open.iter().map(width).sum::<f32>() > room {
         match open.remove(0) {
+            Side::Library => library.close(),
             Side::Editor => editor.close(),
             Side::Spaceships => catcher.close(),
             Side::Analysis => analysis.close(),
@@ -938,17 +960,32 @@ fn slider(name: &'static str, control: Control) -> impl Scene {
     }
 }
 
-/// The rule menu, a button for the editor, and what the current rule does.
+/// The rule menu, buttons for the library and the editor, and what the current rule does.
 fn rule_card() -> impl Scene {
-    let from = |source: Source| -> Vec<_> {
-        let listed = (0..PRESETS.len()).filter(|&index| PRESETS[index].source == source);
-        listed.map(rule_item).collect()
-    };
-    let (collections, morita, found) = (from(Source::Collections), from(Source::Morita), from(Source::Search));
     card(
         Aspect::Rule,
         None,
         bsn_list![
+            (
+                @FeathersMenu
+                Children [
+                    (
+                        #RuleMenu
+                        @FeathersMenuButton {
+                            @caption: bsn! { Text("") ThemedText template_value(Readout::RuleName) }
+                        }
+                        Node { flex_grow: 1.0 }
+                    ),
+                    (
+                        // Its height is the window's business: see `fit_menus`. Its items
+                        // are the library's: see `list_rule_menu`.
+                        @FeathersMenuPopup
+                        Node { overflow: Overflow::scroll_y(), min_width: percent(100) }
+                        ScrollArea
+                        RuleMenuItems
+                    ),
+                ]
+            ),
             (
                 Node {
                     flex_direction: FlexDirection::Row,
@@ -956,52 +993,8 @@ fn rule_card() -> impl Scene {
                     column_gap: px(6),
                 }
                 Children [
-                    (
-                        @FeathersMenu
-                        Node { flex_grow: 1.0 }
-                        Children [
-                            (
-                                #RuleMenu
-                                @FeathersMenuButton {
-                                    @caption: bsn! { Text("") ThemedText template_value(Readout::RuleName) }
-                                }
-                                Node { flex_grow: 1.0 }
-                            ),
-                            (
-                                // Its height is the window's business: see `fit_menus`.
-                                @FeathersMenuPopup
-                                Node { overflow: Overflow::scroll_y() }
-                                ScrollArea
-                                Children [
-                                    menu_heading("FROM THE COLLECTIONS"),
-                                    { collections },
-                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                    menu_heading("FROM MORITA'S BOOK"),
-                                    { morita },
-                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                    menu_heading("FOUND BY SEARCH"),
-                                    { found },
-                                    (@FeathersMenuDivider Node { flex_shrink: 0.0 }),
-                                    (
-                                        #RuleItemCustom
-                                        @FeathersMenuItem {
-                                            @caption: bsn! { Text("Custom…") ThemedText }
-                                        }
-                                        Node { flex_shrink: 0.0 }
-                                        on(|_: On<Activate>,
-                                            mut editor: ResMut<RuleEditor>,
-                                            mut universe: ResMut<Universe>| {
-                                            editor.open_custom(&mut universe);
-                                        })
-                                    ),
-                                ]
-                            ),
-                        ]
-                    ),
-                    (
-                        action_button("Edit", "EditRule", Action::EditRule)
-                        Node { flex_grow: 0.0 }
-                    ),
+                    action_button("Library", "Library", Action::Library),
+                    action_button("Edit", "EditRule", Action::EditRule),
                 ]
             ),
             (caption("") template_value(Readout::RuleBlurb)),
@@ -1029,11 +1022,10 @@ fn menu_heading(text: &'static str) -> impl Scene {
     }
 }
 
-fn rule_item(index: usize) -> impl Scene {
-    let preset = &PRESETS[index];
-    let label = preset.name;
-    let name = Name::new(format!("RuleItem:{}", preset.id));
-    let choice = RuleChoice(index);
+/// An item of the rule menu: a rule by the name it goes by. The rig knows it by `name`.
+fn rule_item(name: String, label: String, rule: &BlockRule) -> impl Scene {
+    let name = Name::new(name);
+    let choice = RuleChoice(rule.clone());
     bsn! {
         @FeathersMenuItem {
             @caption: bsn! { Text(label) ThemedText }
@@ -1043,9 +1035,92 @@ fn rule_item(index: usize) -> impl Scene {
         template_value(choice)
         on(|activate: On<Activate>, choices: Query<&RuleChoice>, mut universe: ResMut<Universe>| {
             if let Ok(choice) = choices.get(activate.entity) {
-                universe.set_rule(PRESETS[choice.0].rule());
+                universe.set_rule(choice.0.clone());
             }
         })
+    }
+}
+
+/// Keeps the rule menu to the few rules that are switched between: the ones pinned in the
+/// library, and the latest of the others that were on the grid. Every other rule is a click
+/// away in the library, which the last item opens.
+fn list_rule_menu(
+    library: Res<RuleLibrary>,
+    popup: Single<Entity, With<RuleMenuItems>>,
+    mut shown: Local<Option<u64>>,
+    mut commands: Commands,
+) {
+    if shown.replace(library.revision()) == Some(library.revision()) {
+        return;
+    }
+    let (pinned, recent) = library.offered();
+    let mut items = Vec::new();
+    if !pinned.is_empty() {
+        items.push(commands.spawn_scene(menu_heading("PINNED")).id());
+    }
+    let mut kept = 0;
+    for entry in pinned {
+        // A built-in rule by its id, as ever; a kept one by its place among the pinned.
+        let name = match PRESETS.iter().find(|preset| !entry.kept() && preset.table == *entry.rule.table()) {
+            Some(preset) => format!("RuleItem:{}", preset.id),
+            None => {
+                kept += 1;
+                format!("RulePinned{}", kept - 1)
+            }
+        };
+        items.push(commands.spawn_scene(rule_item(name, entry.name.clone(), &entry.rule)).id());
+    }
+    if !recent.is_empty() {
+        if !items.is_empty() {
+            items.push(commands.spawn_scene(bsn! { @FeathersMenuDivider Node { flex_shrink: 0.0 } }).id());
+        }
+        items.push(commands.spawn_scene(menu_heading("OF LATE")).id());
+    }
+    for (place, rule) in recent.into_iter().enumerate() {
+        items.push(commands.spawn_scene(rule_item(format!("RuleRecent{place}"), library.label(rule), rule)).id());
+    }
+    if !items.is_empty() {
+        items.push(commands.spawn_scene(bsn! { @FeathersMenuDivider Node { flex_shrink: 0.0 } }).id());
+    }
+    let to_library = bsn! {
+        #RuleItemLibrary
+        @FeathersMenuItem {
+            @caption: bsn! { Text("Library…") ThemedText }
+        }
+        Node { flex_shrink: 0.0 }
+        on(|_: On<Activate>, mut library: ResMut<RuleLibrary>| library.show())
+    };
+    items.push(commands.spawn_scene(to_library).id());
+    commands.entity(*popup).despawn_related::<Children>();
+    commands.entity(*popup).add_children(&items);
+}
+
+/// The name of the rule on the grid and what it does, on the rule card: as the library has
+/// them, or as its table tells.
+fn name_rule(
+    library: Res<RuleLibrary>,
+    universe: Res<Universe>,
+    mut readouts: Query<(&Readout, &mut Text)>,
+    mut shown: Local<Option<(u64, BlockRule)>>,
+) {
+    let now = (library.revision(), universe.rule().clone());
+    if shown.as_ref() == Some(&now) {
+        return;
+    }
+    *shown = Some(now);
+    let rule = universe.rule();
+    let entry = library.entry(rule);
+    for (readout, mut text) in &mut readouts {
+        let content = match readout {
+            Readout::RuleName => entry.map_or("Custom".to_string(), |entry| entry.name.clone()),
+            // What was written of a kept rule, if anything was.
+            Readout::RuleBlurb => match entry.filter(|entry| entry.kept() && !entry.note.is_empty()) {
+                Some(entry) => entry.note.clone(),
+                None => describe(rule),
+            },
+            _ => continue,
+        };
+        text.set_if_neq(Text(content));
     }
 }
 
@@ -1338,9 +1413,9 @@ fn sync_widgets(
         let content = match readout {
             Readout::PlayPauseLabel if playback.playing => "Pause".to_string(),
             Readout::PlayPauseLabel => "Play".to_string(),
-            Readout::RuleName => universe.rule().name().to_string(),
-            Readout::RuleBlurb => describe(universe.rule()),
             Readout::GridSize => format!("{} × {}", universe.width, universe.height),
+            // The rule's name and what it does follow the library as well: see `name_rule`.
+            Readout::RuleName | Readout::RuleBlurb => continue,
             Readout::Generation | Readout::Transport | Readout::Population => continue,
         };
         text.set_if_neq(Text(content));

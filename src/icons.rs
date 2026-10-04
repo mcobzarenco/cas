@@ -54,6 +54,8 @@ pub const PERIOD: &str = "\u{e492}";
 pub const CHANGES: &str = "\u{e2de}";
 /// A way to go: up, to be turned.
 pub const WAY: &str = "\u{e08e}";
+/// What holds a rule in the rule menu.
+pub const PIN: &str = "\u{e3e2}";
 
 pub struct IconsPlugin;
 

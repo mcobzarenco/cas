@@ -20,6 +20,7 @@ use crate::{
     analysis::Analysis,
     catcher::Catcher,
     editor::RuleEditor,
+    library::RuleLibrary,
     sim::{Playback, Settings, SimSystems},
     ui::{Aspect, Control},
     view::{Stamp, ViewState, WHEEL_ZOOM},
@@ -50,6 +51,11 @@ pub enum Action {
     /// Make the grid this many cells wide and high.
     Resize(usize),
     EditRule,
+    /// Show or hide the rule library.
+    Library,
+    /// With the library open: put the rule of the row before, or after, on the grid.
+    PreviousRule,
+    NextRule,
     /// Show or hide the list of the spaceships caught.
     Spaceships,
     /// Show or hide the analysis panel; it opens choosing a pattern on the grid.
@@ -98,7 +104,7 @@ impl Toggle {
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 25] = [
+const KEYS: [(&str, Action); 28] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -123,6 +129,9 @@ const KEYS: [(&str, Action); 25] = [
     ("k", Action::Flip(Toggle::Catching)),
     ("s", Action::Spaceships),
     ("e", Action::EditRule),
+    ("l", Action::Library),
+    ("↑", Action::PreviousRule),
+    ("↓", Action::NextRule),
     ("a", Action::Analysis),
 ];
 
@@ -135,6 +144,8 @@ impl Action {
             Key::Space => "space".to_string(),
             Key::ArrowLeft => "←".to_string(),
             Key::ArrowRight => "→".to_string(),
+            Key::ArrowUp => "↑".to_string(),
+            Key::ArrowDown => "↓".to_string(),
             Key::Home => "home".to_string(),
             _ => return None,
         };
@@ -210,6 +221,7 @@ fn perform(
     mut view: ResMut<ViewState>,
     mut rng: ResMut<Rng>,
     mut editor: ResMut<RuleEditor>,
+    mut library: ResMut<RuleLibrary>,
     mut catcher: ResMut<Catcher>,
     mut analysis: ResMut<Analysis>,
     mut stamp: ResMut<Stamp>,
@@ -255,6 +267,14 @@ fn perform(
             view.fit = true;
         }
         Action::EditRule => editor.toggle(),
+        Action::Library => library.toggle(),
+        Action::PreviousRule | Action::NextRule if !library.is_open() => {}
+        Action::PreviousRule | Action::NextRule => {
+            let by = if *action == Action::NextRule { 1 } else { -1 };
+            if let Some(rule) = library.step(universe.rule(), by) {
+                universe.set_rule(rule);
+            }
+        }
         Action::Spaceships => catcher.toggle(),
         Action::Analysis => {
             analysis.toggle();
@@ -375,6 +395,8 @@ mod tests {
                 "space" => Key::Space,
                 "←" => Key::ArrowLeft,
                 "→" => Key::ArrowRight,
+                "↑" => Key::ArrowUp,
+                "↓" => Key::ArrowDown,
                 "home" => Key::Home,
                 "−" => Key::Character("-".into()),
                 character => Key::Character(character.into()),

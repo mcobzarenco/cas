@@ -35,6 +35,7 @@ use cas_core::{
 
 use crate::{
     icons,
+    library::RuleLibrary,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},
     ui::{
@@ -59,8 +60,6 @@ pub struct RuleEditor {
     open: bool,
     /// The case whose outcome is waiting for a partner to swap with.
     selected: Option<u8>,
-    /// The last rule that was not a preset; "Custom…" in the rule menu brings it back.
-    custom: Option<BlockRule>,
     /// What the last button or swap did, and the rule it was about: it is dropped as soon as
     /// the rule moves on.
     note: Option<(String, BlockRule)>,
@@ -86,14 +85,6 @@ impl RuleEditor {
         if self.open {
             self.toggle();
         }
-    }
-
-    /// Opens the editor on the last hand-made rule (or on the current rule if there is none yet).
-    pub fn open_custom(&mut self, universe: &mut Universe) {
-        if let Some(rule) = &self.custom {
-            universe.set_rule(rule.clone());
-        }
-        self.open = true;
     }
 }
 
@@ -479,6 +470,17 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                             }
                             Node { flex_grow: 1.0 }
                             on(paste_rule)
+                        ),
+                        (
+                            // Into the library, which opens to give the rule its name.
+                            #RuleKeep
+                            @FeathersButton {
+                                @caption: bsn! { Text("Keep") ThemedText }
+                            }
+                            Node { flex_grow: 1.0 }
+                            on(|_: On<Activate>, universe: Res<Universe>, mut library: ResMut<RuleLibrary>| {
+                                library.keep(universe.rule());
+                            })
                         ),
                     ]
                 ),
@@ -1108,12 +1110,9 @@ fn use_monospace(add: On<Add, RuleStringInput>, assets: Res<AssetServer>, mut co
     });
 }
 
-/// A new rule: keep it for "Custom…" if it is hand-made, and drop what was about the old one.
+/// A new rule: what was about the old one is dropped.
 fn follow_rule(universe: Res<Universe>, mut editor: ResMut<RuleEditor>) {
     let rule = universe.rule();
-    if rule.preset().is_none() {
-        editor.custom = Some(rule.clone());
-    }
     editor.selected = None;
     if editor.note.as_ref().is_some_and(|(_, about)| about != rule) {
         editor.note = None;

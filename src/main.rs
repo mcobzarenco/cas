@@ -9,6 +9,7 @@ mod analysis;
 mod catcher;
 mod editor;
 mod icons;
+mod library;
 mod rig;
 mod sampler;
 mod sim;
@@ -79,6 +80,11 @@ struct Args {
     /// Where the test rig saves screenshots.
     #[arg(long, default_value = "shots")]
     shots: PathBuf,
+    /// The file of the rule library: the rules that were kept, a rule to a line. Without
+    /// this it is `rules.tsv` of the repository the program was built from; a scripted run
+    /// has no file unless it names one, and keeps what it changes to itself.
+    #[arg(long)]
+    library: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -138,6 +144,14 @@ fn main() -> AppExit {
     };
     let script = script.map(|script| rig::parse_script(&script).unwrap_or_else(|e| fail(&format!("bad script: {e}"))));
 
+    // The library is the repository's own file, wherever the program is run from; a script
+    // is to find the same rules every time, and to leave that file alone.
+    let library = match (args.library, &script) {
+        (Some(path), _) => Some(path),
+        (None, Some(_)) => None,
+        (None, None) => Some(cas_core::library::usual_file()),
+    };
+
     let mut rng = Rng::new(args.seed);
     let mut universe = Universe::new(args.width, args.height, args.rule);
     match args.init {
@@ -161,6 +175,7 @@ fn main() -> AppExit {
         ..default()
     }))
     .insert_resource(ClearColor(view::BACKGROUND))
+    .insert_resource(library::RuleLibrary::at(library))
     .insert_resource(universe)
     .insert_resource(rng)
     .insert_resource(Settings {
@@ -177,6 +192,7 @@ fn main() -> AppExit {
         actions::ActionsPlugin,
         ui::UiPlugin,
         editor::EditorPlugin,
+        library::LibraryPlugin,
         catcher::CatcherPlugin,
         analysis::AnalysisPlugin,
         sampler::SamplerPlugin,

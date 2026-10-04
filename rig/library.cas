@@ -1,0 +1,71 @@
+# The rule library: the rules that go by a name, in a panel of their own. Expects the default
+# start-up. A scripted run has no library file: it begins with the built-in rules, the usual
+# ones pinned, and what it keeps is gone when it ends.
+wait 25
+
+# The key opens the panel. The rule on the grid is told at the top, and its row is outlined.
+key l; wait 8
+expect_shown RuleLibrary on
+expect_text LibraryName Single rotation
+expect_text LibraryRow0 Single rotation Blocks with exactly one live cell rotate 90° clockwise. Population is conserved and the vacuum is stable.
+shot library-1-open
+
+# A click on a row puts its rule on the grid, and the arrow keys go through the rows.
+click LibraryRow4; wait 4; expect_rule hpp-gas
+key ArrowDown; wait 4; expect_rule tron
+key ArrowUp; wait 3; key ArrowUp; wait 4; expect_rule bounce-gas
+
+# The rule menu has the pinned rules, and after them the latest of the others that were on
+# the grid. A pin, on a row or at the top, holds a rule there or lets it go.
+click RuleMenu; wait 4
+expect_text RuleRecent0 Bounce gas
+expect_text RuleRecent1 HPP gas
+key Escape; wait 3
+click LibraryRowPin3; wait 4
+click RuleMenu; wait 4
+expect_text RuleItem:bounce-gas Bounce gas
+expect_text RuleRecent0 HPP gas
+key Escape; wait 3
+click LibraryPin; wait 4
+click RuleMenu; wait 4; expect_text RuleRecent0 Bounce gas; key Escape; wait 3
+
+# A rule without a name goes by the beginning of its table, and by what it has. Keep puts it
+# in the library, and its name is there to be typed over at once.
+rule 0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15; wait 6
+expect_text LibraryAbout Not in the library. Keep puts it there, under the name typed.
+expect_text LibraryRow0 0,2,8,6,1,5,3,7,4,9… conserving · parity · stable-vacuum
+shot library-2-not-kept
+click LibraryKeep; wait 6
+expect_text LibraryStatus Kept as “Unnamed 1”.
+type Lone gun; wait 4
+expect_text RuleMenu Lone gun
+key Escape; wait 3
+click KeptTags; wait 3; type guns, found; wait 2; key Escape; wait 3
+click KeptNote; wait 3; type fires four ways; wait 2; key Escape; wait 4
+expect_text LibraryRow0 Lone gun guns · found — fires four ways
+shot library-3-kept
+
+# The same rule in another form is in the library already: the editor's Keep says so too.
+key e; wait 6; click RuleCanonical; wait 4
+expect_text LibraryAbout Not in the library as it is: it is “Lone gun” in another form, turned, mirrored or begun later.
+click RuleKeep; wait 4
+expect_text LibraryStatus It is in the library already, as “Lone gun”, in another form: turned, mirrored or begun later.
+key e; wait 4
+
+# Words narrow the list: of a name, a tag or a note, and of what a rule has.
+click LibraryFind; wait 3; type gun; wait 6
+expect_text LibraryRow0 Lone gun guns · found — fires four ways
+expect_text LibraryRow2 Four-way gun A single cell is a gun: four streams of small spaceships leave it along the diagonals. A blob turns to noise. This is ESPCA-f6b580.
+key Ctrl+a; type turning linear; wait 6
+expect_text LibraryRow0 Swap on diagonal Every block turns by 180°: each cell swaps with the one diagonally opposite, so particles fly diagonally and never interact.
+shot library-4-found
+key Ctrl+a; key Backspace; wait 3; key Escape; wait 4
+
+# What was kept can be forgotten; the rule stays on the grid, without its name.
+click LibraryRow1; wait 4; expect_text RuleMenu Lone gun
+click LibraryForget; wait 4
+expect_text LibraryStatus Forgot “Lone gun”.
+expect_text RuleMenu Custom
+click LibraryClose; wait 4
+expect_shown RuleLibrary off
+quit

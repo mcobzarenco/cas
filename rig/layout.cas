@@ -28,11 +28,20 @@ shot layout-3-scrolled
 click Spaceships; wait 6; expect_shown Catcher on
 key s; wait 4
 
-# The rule menu reaches down to the edge of the window and scrolls on from there.
+# A menu reaches down to the edge of the window and scrolls on from there: the sizes of the
+# grid, opened from low in the panel.
 scroll PanelBody 12; wait 6
-click RuleMenu; wait 6
-scroll RuleItem:critters -30; wait 6
+click GridSize; wait 6
+scroll GridSize:64 -30; wait 6
 shot layout-4-menu
-click RuleItem:diagonal-traffic; wait 6; expect_rule diagonal-traffic
+click GridSize:4096; wait 6; expect_size 4096 4096
+click GridSize; wait 6; scroll GridSize:4096 30; wait 6; click GridSize:256; wait 6; expect_size 256 256
+# The rule library scrolls its list, and a rule far down it is a click away.
+key l; wait 6
+expect_shown RuleLibrary on
+scroll LibraryList -60; wait 6
+shot layout-5-library
+click LibraryRow25; wait 6; expect_rule diagonal-traffic
+key l; wait 4
 window 1440 900; wait 12
 quit

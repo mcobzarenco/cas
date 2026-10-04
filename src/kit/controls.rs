@@ -25,7 +25,17 @@ use super::{KitSystems, aspect::Aspect, cards::GUTTER, icons, text::key_hint};
 
 /// The systems that keep the controls looking as they should.
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (style_toggles, style_sliders, show_scrollbars, fit_menus).in_set(KitSystems));
+    app.add_systems(Update, (style_toggles, style_sliders, style_chips, show_scrollbars, fit_menus).in_set(KitSystems));
+}
+
+/// Brings the `Checked` of a checkbox or of a chip in line with what it stands for: `is` says
+/// whether it has it, `should` whether it should.
+pub(crate) fn check(commands: &mut Commands, entity: Entity, is: bool, should: bool) {
+    match (should, is) {
+        (true, false) => commands.entity(entity).insert(Checked),
+        (false, true) => commands.entity(entity).remove::<Checked>(),
+        _ => return,
+    };
 }
 
 /// The caption of a button that has a key: its label and the key that does the same.
@@ -54,7 +64,7 @@ pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
     icon_button_marked(glyph, ink, Unmarked)
 }
 
-/// The mark of an icon that nobody needs to find again.
+/// The mark of what nobody needs to find again.
 #[derive(Component, Default, Clone)]
 pub(crate) struct Unmarked;
 
@@ -89,7 +99,7 @@ struct ToggleBox;
 struct ToggleTick;
 
 /// A checkbox ticked in the colour of an aspect, with the key that flips it, if it has one.
-/// Whoever makes it keeps its `Checked` in step with what it stands for.
+/// Whoever makes it keeps its `Checked` in step with what it stands for ([`check`]).
 pub(crate) fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, key: &'static str) -> impl Scene {
     let name = Name::new(name);
     bsn! {
@@ -285,8 +295,17 @@ pub(crate) enum Sign {
     Written(&'static str),
 }
 
-/// The box of a chip or of a step: a small button that lights up under the pointer.
-pub(crate) fn chip_box() -> impl Scene {
+/// The marks of a [`chip_box`] and of the sign of a [`chip`].
+#[derive(Component, Default, Clone)]
+struct ChipBox;
+
+#[derive(Component, Default, Clone)]
+struct ChipSign;
+
+/// The box of a chip, or of a small button among chips. It lights up under the pointer, and
+/// while it is `Checked` it is outlined in the colour of an aspect. Whoever makes it keeps
+/// its `Checked` in step with what it stands for ([`check`]).
+pub(crate) fn chip_box(aspect: Aspect) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -300,12 +319,24 @@ pub(crate) fn chip_box() -> impl Scene {
         BorderColor::all(Color::NONE)
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
+        ChipBox
+        template_value(aspect)
     }
 }
 
 /// A chip: its box, its sign, and a word or two, or none where the sign says it all. The
-/// sign is marked with `mark`, for whoever lights the chip up when it is on.
-pub(crate) fn chip<M: Component + Clone + Default + Unpin>(sign: Sign, label: &'static str, mark: M) -> impl Scene {
+/// sign is bright while the chip is on.
+pub(crate) fn chip(sign: Sign, label: &'static str, aspect: Aspect) -> impl Scene {
+    chip_marked(sign, label, aspect, Unmarked)
+}
+
+/// Such a chip with a mark on its sign, for whoever writes something else there later.
+pub(crate) fn chip_marked<M: Component + Clone + Default + Unpin>(
+    sign: Sign,
+    label: &'static str,
+    aspect: Aspect,
+    mark: M,
+) -> impl Scene {
     // A sign alone needs no word next to it, and less room around it.
     let (shown, sides) = if label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
     let (glyph, font, size, degrees): (_, _, f32, f32) = match sign {
@@ -315,7 +346,7 @@ pub(crate) fn chip<M: Component + Clone + Default + Unpin>(sign: Sign, label: &'
     };
     let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
     bsn! {
-        chip_box()
+        chip_box(aspect)
         Node { padding: UiRect::axes(px(sides), px(3)) }
         Children [
             (
@@ -326,6 +357,7 @@ pub(crate) fn chip<M: Component + Clone + Default + Unpin>(sign: Sign, label: &'
                     weight: FontWeight::NORMAL,
                 }
                 TextColor(palette::LIGHT_GRAY_2)
+                ChipSign
                 template_value(turned)
                 template_value(mark)
                 template_value(Pickable::IGNORE)
@@ -342,6 +374,29 @@ pub(crate) fn chip<M: Component + Clone + Default + Unpin>(sign: Sign, label: &'
                 template_value(Pickable::IGNORE)
             ),
         ]
+    }
+}
+
+/// Lights the chips: the box under the pointer, and the outline and the sign of one that is
+/// on.
+fn style_chips(
+    mut chips: Query<
+        (&Aspect, &Hovered, Has<Checked>, &mut BackgroundColor, &mut BorderColor, Option<&Children>),
+        With<ChipBox>,
+    >,
+    mut signs: Query<&mut TextColor, With<ChipSign>>,
+) {
+    for (aspect, hovered, on, mut fill, mut border, children) in &mut chips {
+        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
+        fill.set_if_neq(BackgroundColor(color));
+        let outline = if on { aspect.color() } else { Color::NONE };
+        border.set_if_neq(BorderColor::all(outline));
+        let ink = if on { palette::WHITE } else { palette::LIGHT_GRAY_2 };
+        for &child in children.into_iter().flatten() {
+            if let Ok(mut color) = signs.get_mut(child) {
+                color.set_if_neq(TextColor(ink));
+            }
+        }
     }
 }
 

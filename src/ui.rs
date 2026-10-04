@@ -36,7 +36,7 @@ use crate::{
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     kit::{
-        self, Aspect, GUTTER, Scrolls, button, caption, checkbox, group_digits, key_hint, menu_heading, readout,
+        self, Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, menu_heading, readout,
         scrolling,
     },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
@@ -874,11 +874,7 @@ fn sync_widgets(
         let Action::Flip(toggle) = does.0 else {
             continue;
         };
-        match (toggle.get(&playback, &settings, &universe), checked) {
-            (true, false) => commands.entity(entity).insert(Checked),
-            (false, true) => commands.entity(entity).remove::<Checked>(),
-            _ => continue,
-        };
+        check(&mut commands, entity, checked, toggle.get(&playback, &settings, &universe));
     }
     for (readout, mut text) in &mut readouts {
         let content = match readout {

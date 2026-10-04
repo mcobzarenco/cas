@@ -19,7 +19,7 @@ use bevy::{
     picking::hover::Hovered,
     prelude::*,
     text::{EditableText, FontSourceTemplate, FontWeight, LineBreak, TextEdit, TextEditChange},
-    ui::UiGlobalTransform,
+    ui::{Checked, UiGlobalTransform},
     ui_widgets::Activate,
 };
 
@@ -32,7 +32,8 @@ use cas_core::{
 
 use crate::{
     kit::{
-        Aspect, Scrolls, caption, chip_box, field_frame, heading, icons, list_row, panel_title, scrolling, side_panel,
+        Aspect, Scrolls, caption, check, chip_box, field_frame, heading, icons, list_row, panel_title, scrolling,
+        side_panel,
     },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
@@ -318,13 +319,10 @@ struct RowPin(usize);
 #[derive(Component, Default, Clone)]
 struct CardPin;
 
-/// A chip that narrows the list to the rules with a property, and its sign; the button that
-/// unfolds the chips, with its mark; and the box they are in.
+/// A chip that narrows the list to the rules with a property; the button that unfolds the
+/// chips, with its mark; and the box they are in.
 #[derive(Component, Default, Clone, Copy)]
-struct Has(usize);
-
-#[derive(Component, Default, Clone, Copy)]
-struct HasSign(usize);
+struct HasChip(usize);
 
 #[derive(Component, Default, Clone)]
 struct Unfolds;
@@ -436,7 +434,7 @@ pub fn library_panel() -> impl Scene {
                     (
                         // Unfolds the properties to ask for; outlined while any is asked for.
                         #LibraryHas
-                        chip_box()
+                        chip_box(Aspect::Rule)
                         Node { flex_shrink: 0.0 }
                         Unfolds
                         on(|_: On<Pointer<Click>>, mut library: ResMut<RuleLibrary>| library.choosing = !library.choosing)
@@ -562,13 +560,13 @@ fn on_the_grid() -> impl Scene {
 /// asked for with, in the editor.
 fn property_chip(index: usize) -> impl Scene {
     let name = Name::new(format!("Has:{}", CHIPS[index].name));
-    let has = Has(index);
+    let has = HasChip(index);
     bsn! {
-        chip_face(index, HasSign(index))
+        chip_face(index)
         template_value(name)
         template_value(has)
-        on(|click: On<Pointer<Click>>, chips: Query<&Has>, mut library: ResMut<RuleLibrary>| {
-            if let Ok(&Has(index)) = chips.get(click.entity) {
+        on(|click: On<Pointer<Click>>, chips: Query<&HasChip>, mut library: ResMut<RuleLibrary>| {
+            if let Ok(&HasChip(index)) = chips.get(click.entity) {
                 library.wanted[index] = !library.wanted[index];
                 library.top = true;
                 library.revision += 1;
@@ -577,32 +575,24 @@ fn property_chip(index: usize) -> impl Scene {
     }
 }
 
-/// Lights the chips that are on, and the button that unfolds them while any is; and shows
-/// the chips or folds them away.
+/// Says which chips are on, and the button that unfolds them while any is, for the kit to
+/// light them; and shows the chips or folds them away.
 fn light_chips(
     library: Res<RuleLibrary>,
-    mut chips: Query<(&Has, &Hovered, &mut BackgroundColor, &mut BorderColor), Without<Unfolds>>,
-    mut signs: Query<(&HasSign, &mut TextColor)>,
-    mut unfolds: Single<(&Hovered, &mut BackgroundColor, &mut BorderColor), With<Unfolds>>,
+    chips: Query<(Entity, &HasChip, Has<Checked>)>,
+    unfolds: Single<(Entity, Has<Checked>), With<Unfolds>>,
     mut mark: Single<&mut UiTransform, With<UnfoldMark>>,
     mut chip_box: Single<&mut Node, With<ChipBox>>,
+    mut commands: Commands,
 ) {
     if !library.open {
         return;
     }
-    let fill = |hovered: &Hovered| BackgroundColor(if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 });
-    let outline = |on: bool| BorderColor::all(if on { Aspect::Rule.color() } else { Color::NONE });
-    for (&Has(index), hovered, mut background, mut border) in &mut chips {
-        background.set_if_neq(fill(hovered));
-        border.set_if_neq(outline(library.wanted[index]));
+    for (chip, &HasChip(index), on) in &chips {
+        check(&mut commands, chip, on, library.wanted[index]);
     }
-    for (&HasSign(index), mut color) in &mut signs {
-        let ink = if library.wanted[index] { palette::WHITE } else { palette::LIGHT_GRAY_2 };
-        color.set_if_neq(TextColor(ink));
-    }
-    let (hovered, background, border) = &mut *unfolds;
-    background.set_if_neq(fill(hovered));
-    border.set_if_neq(outline(library.wanted.contains(&true)));
+    let (button, on) = *unfolds;
+    check(&mut commands, button, on, library.wanted.contains(&true));
     let turned = if library.choosing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
     if mark.rotation != turned {
         mark.rotation = turned;

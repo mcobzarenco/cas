@@ -35,7 +35,7 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    kit::{self, Aspect, Sign, caption, checkbox, chip_box, group_digits, icons},
+    kit::{self, Aspect, Sign, caption, check, checkbox, chip_box, group_digits, icons},
     sim::SimSystems,
 };
 
@@ -201,12 +201,9 @@ pub struct SamplerPlugin;
 
 impl Plugin for SamplerPlugin {
     fn build(&self, app: &mut App) {
-        let chip_hovered = |chips: Query<(), (With<Want>, Changed<Hovered>)>| !chips.is_empty();
         app.init_resource::<Sampler>().add_systems(
             Update,
-            (hear_counts, show.run_if(resource_changed::<Sampler>.or_eager(chip_hovered)))
-                .chain()
-                .in_set(SimSystems::Present),
+            (hear_counts, show.run_if(resource_changed::<Sampler>)).chain().in_set(SimSystems::Present),
         );
     }
 }
@@ -372,7 +369,7 @@ fn chip_scene(index: usize) -> impl Scene {
     let name = Name::new(format!("Want:{}", CHIPS[index].name));
     let want = Want(index);
     bsn! {
-        chip_face(index, WantSign(index))
+        kit::chip_marked(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule, WantSign(index))
         template_value(name)
         template_value(want)
         on(|click: On<Pointer<Click>>, chips: Query<&Want>, mut sampler: ResMut<Sampler>| {
@@ -391,17 +388,16 @@ fn chip_scene(index: usize) -> impl Scene {
     }
 }
 
-/// The chip of a property, by its place in [`CHIPS`]. Its sign is marked with `sign`, for
-/// whoever lights the chip up when it is on.
-pub(crate) fn chip_face<M: Component + Clone + Default + Unpin>(index: usize, sign: M) -> impl Scene {
-    kit::chip(CHIPS[index].sign, CHIPS[index].label, sign)
+/// The chip of a property, by its place in [`CHIPS`], as the library shows it too.
+pub(crate) fn chip_face(index: usize) -> impl Scene {
+    kit::chip(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule)
 }
 
 /// A small button that makes the number of the sparse chip one less or one more.
 fn step(name: &'static str, sign: &'static str, by: i8) -> impl Scene {
     let name = Name::new(name);
     bsn! {
-        chip_box()
+        chip_box(Aspect::Rule)
         template_value(name)
         on(move |_: On<Pointer<Click>>, mut sampler: ResMut<Sampler>| {
             let sparse = sampler.sparse.saturating_add_signed(by).clamp(2, 16);
@@ -480,8 +476,8 @@ fn show(
     sampler: Res<Sampler>,
     mut body: Single<&mut Node, With<Body>>,
     mut chevron: Single<&mut UiTransform, With<Chevron>>,
-    mut chips: Query<(&Want, &Hovered, &mut BackgroundColor, &mut BorderColor)>,
-    mut signs: Query<(&WantSign, &mut Text, &mut TextColor), (Without<FamilyName>, Without<Counted>)>,
+    chips: Query<(Entity, &Want, Has<Checked>)>,
+    mut signs: Query<(&WantSign, &mut Text), (Without<FamilyName>, Without<Counted>)>,
     mut family_name: Single<&mut Text, (With<FamilyName>, Without<Counted>, Without<WantSign>)>,
     mut counted: Single<&mut Text, (With<Counted>, Without<FamilyName>, Without<WantSign>)>,
     canonical: Single<(Entity, Has<Checked>), With<CanonicalBox>>,
@@ -496,18 +492,14 @@ fn show(
     if chevron.rotation != turned {
         chevron.rotation = turned;
     }
-    for (&Want(index), hovered, mut fill, mut border) in &mut chips {
-        let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
-        fill.set_if_neq(BackgroundColor(color));
-        let color = if sampler.wanted[index] { Aspect::Rule.color() } else { Color::NONE };
-        border.set_if_neq(BorderColor::all(color));
+    // A chip that is asked for is on: the kit outlines it and brightens its sign.
+    for (chip, &Want(index), on) in &chips {
+        check(&mut commands, chip, on, sampler.wanted[index]);
     }
-    for (&WantSign(index), mut text, mut color) in &mut signs {
+    for (&WantSign(index), mut text) in &mut signs {
         if index == SPARSE {
             text.set_if_neq(Text(format!("≤{}", sampler.sparse)));
         }
-        let ink = if sampler.wanted[index] { palette::WHITE } else { palette::LIGHT_GRAY_2 };
-        color.set_if_neq(TextColor(ink));
     }
     let family = sampler.family();
     let asked_for = match family.constraints() {
@@ -530,9 +522,5 @@ fn show(
     };
     counted.set_if_neq(Text(count));
     let (checkbox, checked) = *canonical;
-    match (sampler.canonical, checked) {
-        (true, false) => commands.entity(checkbox).insert(Checked),
-        (false, true) => commands.entity(checkbox).remove::<Checked>(),
-        _ => return,
-    };
+    check(&mut commands, checkbox, checked, sampler.canonical);
 }

@@ -35,7 +35,7 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    icons,
+    kit::icons,
     sim::SimSystems,
     ui::{Aspect, caption, checkbox, group_digits},
 };

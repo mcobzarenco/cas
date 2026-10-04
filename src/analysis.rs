@@ -42,8 +42,8 @@ use cas_core::{
 use crate::{
     actions::KeyboardOwner,
     catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture},
-    icons,
     kept::Collected,
+    kit::icons,
     sim::{Settings, SimSystems},
     ui::{
         AXES, Aspect, GLYPH, ORBIT, caption, field_frame, group_digits, icon_button, panel_title, side_panel, tile,

@@ -68,7 +68,7 @@ impl Plugin for IconsPlugin {
         app.world().resource::<EmbeddedAssetRegistry>().insert_asset(
             PathBuf::from("assets/fonts/Phosphor-Bold.ttf"),
             Path::new("cas/fonts/Phosphor-Bold.ttf"),
-            include_bytes!("../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
+            include_bytes!("../../assets/fonts/Phosphor-Bold.ttf") as &'static [u8],
         );
     }
 }

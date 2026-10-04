@@ -44,8 +44,8 @@ use cas_core::{
 use crate::{
     actions::Toggle,
     analysis::Analysis,
-    icons,
     kept::Collected,
+    kit::icons,
     sim::{SimSystems, rule_changed},
     ui::{Aspect, caption, group_digits, icon_button_marked, panel_title, side_panel, toggle},
     view::{ALIVE, BLOCKS, DEAD, Stamp},

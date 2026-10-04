@@ -31,7 +31,7 @@ use cas_core::{
 use crate::{
     analysis::{self, Analysis},
     catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, dial, heading, mono, number, picture},
-    icons,
+    kit::icons,
     library::LOOKS_EVERY,
     sim::SimSystems,
     synced::Synced,

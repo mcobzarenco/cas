@@ -34,7 +34,7 @@ use cas_core::{
 };
 
 use crate::{
-    icons,
+    kit::icons,
     library::RuleLibrary,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},

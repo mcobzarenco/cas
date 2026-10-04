@@ -34,7 +34,7 @@ use cas_core::{
 
 use crate::{
     catcher::heading,
-    icons,
+    kit::icons,
     sampler::{CHIPS, chip_box, chip_face},
     sim::SimSystems,
     synced::Synced,

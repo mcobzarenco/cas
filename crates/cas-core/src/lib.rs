@@ -1,9 +1,10 @@
 //! Reversible block cellular automata, without the app: the rules, the grid and its stepping,
 //! patterns and what they do when left alone, counting the spaceships a rule produces,
-//! measuring the rules of a family to find the interesting ones, and the library of the rules
-//! that were kept.
+//! measuring the rules of a family to find the interesting ones, the library of the rules
+//! that were kept, and the collection of the patterns that were.
 
 pub mod census;
+pub mod collection;
 pub mod families;
 pub mod library;
 pub mod pattern;

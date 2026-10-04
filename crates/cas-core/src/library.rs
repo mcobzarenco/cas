@@ -183,10 +183,7 @@ impl Library {
     /// Writes the file, whole or not at all: beside itself first, and then in its place, so
     /// that whoever reads it meanwhile reads all of the old one or all of the new.
     pub fn write(&self, path: &Path) -> io::Result<()> {
-        let mut beside = path.as_os_str().to_owned();
-        beside.push(".new");
-        fs::write(&beside, self.to_string())?;
-        fs::rename(&beside, path)
+        write_whole(path, &self.to_string())
     }
 
     pub fn entries(&self) -> &[Entry] {
@@ -298,6 +295,14 @@ impl fmt::Display for Library {
 pub fn usual_file() -> PathBuf {
     let core = Path::new(env!("CARGO_MANIFEST_DIR"));
     core.ancestors().nth(2).unwrap_or(core).join("rules.tsv")
+}
+
+/// Writes a file whole or not at all: beside itself first, and then in its place.
+pub(crate) fn write_whole(path: &Path, text: &str) -> io::Result<()> {
+    let mut beside = path.as_os_str().to_owned();
+    beside.push(".new");
+    fs::write(&beside, text)?;
+    fs::rename(&beside, path)
 }
 
 /// Today's date as the library writes it down: year, month and day.

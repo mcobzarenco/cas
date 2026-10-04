@@ -1240,7 +1240,7 @@ fn sync_panel(
             }
             (None, Some(studying)) => {
                 let cells = if studying.cells == 1 { "cell" } else { "cells" };
-                format!("{} {cells}, for {} at most", count(studying.cells), generations(GENERATIONS))
+                format!("{} {cells}, for {} at most", count(studying.cells), generations(patience(studying.cells)))
             }
             _ => String::new(),
         };

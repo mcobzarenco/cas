@@ -3,13 +3,10 @@
 //!
 //! The rules and their file are the core's ([`cas_core::library`]). Here are the panel, the
 //! few rules the rule menu offers (the pinned ones, and those that were on the grid of late),
-//! and the keeping of the file: it is written at every change, and read again whenever
-//! something else wrote it, a search that keeps its finds or an editor.
+//! and the keeping of the file ([`Synced`]): it is written at every change, and read again
+//! whenever something else wrote it, a search that keeps its finds or an editor.
 
-use std::{
-    path::{Path, PathBuf},
-    time::SystemTime,
-};
+use std::path::PathBuf;
 
 use bevy::{
     feathers::{
@@ -40,6 +37,7 @@ use crate::{
     icons,
     sampler::{CHIPS, chip_box, chip_face},
     sim::SimSystems,
+    synced::Synced,
     ui::{Aspect, caption, field_frame, panel_title, side_panel},
 };
 
@@ -51,30 +49,14 @@ const OFFERED: usize = 6;
 /// The outcomes of so many blocks, of the sixteen, name a rule that has no name.
 const TABLE_SHOWN: usize = 10;
 /// Every so many seconds the file is looked at, for what something else wrote there.
-const LOOKS_EVERY: f32 = 0.5;
-
-/// What tells a file that was written from one that was not: when it was written, and how
-/// long it is. None for a file that is not there.
-type Stamp = Option<(SystemTime, u64)>;
-
-fn stamp(path: &Path) -> Stamp {
-    let file = std::fs::metadata(path).ok()?;
-    Some((file.modified().ok()?, file.len()))
-}
+pub const LOOKS_EVERY: f32 = 0.5;
 
 #[derive(Resource)]
 pub struct RuleLibrary {
     open: bool,
-    library: Library,
-    /// The file the kept rules are in. A scripted run has none, and keeps to itself.
-    path: Option<PathBuf>,
-    /// The file as it was when it was last read or written here.
-    stamp: Stamp,
-    /// Why the file could not be read, if it could not: it is left as it is then, and
-    /// nothing is written.
-    unreadable: Option<String>,
-    /// Why the file could not be written, the last time it was to be.
-    unwritten: Option<String>,
+    /// The library, and the file the kept rules are in. A scripted run has none, and keeps
+    /// to itself.
+    library: Synced<Library>,
     /// The rules that were on the grid of late, the latest first. One that comes back keeps
     /// its place: going through them does not shuffle them.
     recent: Vec<BlockRule>,
@@ -115,13 +97,9 @@ impl RuleLibrary {
     /// The library of the file at `path`, or the built-in rules alone where there is no such
     /// file yet. Without a path the library is written nowhere.
     pub fn at(path: Option<PathBuf>) -> Self {
-        let mut library = Self {
+        Self {
             open: false,
-            library: Library::new(),
-            path,
-            stamp: None,
-            unreadable: None,
-            unwritten: None,
+            library: Synced::at(path),
             recent: Vec::new(),
             filter: String::new(),
             wanted: [false; CHIPS.len()],
@@ -133,52 +111,22 @@ impl RuleLibrary {
             focus: None,
             reveal: 0,
             top: false,
-        };
-        library.read_again();
-        library
+        }
     }
 
-    /// Reads the file if it is not as it was last seen here: something else wrote it. True if
-    /// it was read. A file that cannot be read changes nothing, and is said to be wrong for
-    /// as long as it is.
+    /// Reads the file if something else wrote it: true if it was read.
     fn read_again(&mut self) -> bool {
-        let Some(path) = &self.path else {
-            return false;
-        };
-        let stamp = stamp(path);
-        if stamp == self.stamp {
-            return false;
-        }
-        self.stamp = stamp;
-        match Library::read(path) {
-            Ok(library) => {
-                self.library = library;
-                self.unreadable = None;
-            }
-            Err(error) => {
-                let file = path.display();
-                self.unreadable = Some(format!("{file}: {error}. Nothing is written until that is put right."));
-            }
-        }
-        self.revision += 1;
-        true
+        let read = self.library.read_again();
+        self.revision += read as u64;
+        read
     }
 
-    /// Changes the library, and writes the file at once if `change` says that it did change
-    /// something. What is changed is the library as the file has it now: what something else
-    /// wrote there meanwhile is read first, and so is not lost.
+    /// Changes the library, in the file as well, if `change` says that it did change
+    /// something.
     fn edit(&mut self, change: impl FnOnce(&mut Library) -> bool) {
-        self.read_again();
-        if !change(&mut self.library) {
-            return;
-        }
+        // The file may have been read again before the change, which shows too.
+        self.library.edit(change);
         self.revision += 1;
-        let Some(path) = self.path.as_ref().filter(|_| self.unreadable.is_none()) else {
-            return;
-        };
-        self.unwritten =
-            self.library.write(path).err().map(|error| format!("{} could not be written: {error}.", path.display()));
-        self.stamp = stamp(path);
     }
 
     pub fn toggle(&mut self) {
@@ -993,13 +941,11 @@ fn show_library(
                 None => "Not in the library. Keep puts it there, under the name typed.".to_string(),
             },
             // What is wrong with the file is said for as long as it is.
-            (Says::Status, _) => {
-                [&library.unreadable, &library.unwritten, &library.note].into_iter().find_map(Clone::clone).unwrap_or(
-                    "A click puts a rule on the grid, and ↑ and ↓ go through the list. Words narrow it: of a name, a \
+            (Says::Status, _) => library.library.trouble().map(str::to_string).or(library.note.clone()).unwrap_or(
+                "A click puts a rule on the grid, and ↑ and ↓ go through the list. Words narrow it: of a name, a \
                  tag, a note, or what a rule has, as conserving or half-turn."
-                        .to_string(),
-                )
-            }
+                    .to_string(),
+            ),
         };
         // The name is there for a built-in rule, which a kept one has a field for.
         if *says != Says::Name {
@@ -1135,7 +1081,7 @@ fn watch_file(mut library: ResMut<RuleLibrary>, time: Res<Time>, mut since: Loca
     }
     *since = 0.0;
     let library = library.bypass_change_detection();
-    if library.read_again() && library.unreadable.is_none() {
+    if library.read_again() && library.library.readable() {
         library.note = Some("The file of the library was written from outside, and read again.".to_string());
     }
 }
@@ -1201,7 +1147,7 @@ mod tests {
         assert!(!path.exists());
         library.keep(&gun);
         assert_eq!(library.note.as_deref(), Some("Kept as “Unnamed 1”."));
-        assert_eq!(on_disk(), library.library);
+        assert_eq!(on_disk(), *library.library);
         library.write_about(&gun, Field::Name, "A gun");
         library.write_about(&gun, Field::Tags, "gun, found");
         let kept = on_disk();
@@ -1223,7 +1169,7 @@ mod tests {
         library.forget(&first);
         assert_eq!(library.note.as_deref(), Some("Forgot “A find”."));
         let file = on_disk();
-        assert_eq!(file, library.library);
+        assert_eq!(file, *library.library);
         assert!(file.entries()[file.of(&gun).unwrap()].pinned);
         assert_eq!((file.of(&first), file.of(&second).is_some()), (None, true));
         // Only what was kept is forgotten.
@@ -1234,12 +1180,12 @@ mod tests {
         // it is read again.
         std::fs::write(&path, "0,1,2\tHalf a rule\n").unwrap();
         library.pin(&gun);
-        assert!(library.unreadable.as_deref().is_some_and(|said| said.contains("line 1")));
+        assert!(library.library.trouble().is_some_and(|said| said.contains("line 1")));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "0,1,2\tHalf a rule\n");
         assert_eq!(library.label(&gun), "A gun");
         file.write(&path).unwrap();
         assert!(library.read_again());
-        assert_eq!((library.unreadable.as_deref(), &library.library), (None, &file));
+        assert_eq!((library.library.trouble(), &*library.library), (None, &file));
         let _ = std::fs::remove_dir_all(&folder);
     }
 }

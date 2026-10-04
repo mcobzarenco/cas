@@ -13,6 +13,7 @@ mod library;
 mod rig;
 mod sampler;
 mod sim;
+mod synced;
 mod ui;
 mod view;
 

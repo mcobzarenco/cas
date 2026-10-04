@@ -69,7 +69,7 @@ pub struct Departure {
 }
 
 /// Live cells this close to each other, along both axes, belong to the same pattern.
-const PATTERN_REACH: i32 = 4;
+pub const PATTERN_REACH: i32 = 4;
 /// Something with this many cells or more is debris, not a pattern; unless it is a dense
 /// stream of ships, which lie within reach of each other without ever meeting. Then what is
 /// within so far of the cell at the edge, up to so many cells, is followed for so many

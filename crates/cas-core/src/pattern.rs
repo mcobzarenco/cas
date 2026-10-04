@@ -343,14 +343,22 @@ impl Analyser {
     /// lies: the form it is filed under travels right or down, whichever way the pattern
     /// was going when it was found.
     pub fn analyse_as_found(&self, cells: &[Cell], phase: usize) -> Option<(Motion, (i32, i32))> {
-        // Nothing at all is no pattern, and what does not come back has no form to be filed
-        // under: that is found out first, since most of what is asked about does not.
+        // Nothing at all is no pattern.
         if cells.is_empty() {
             return None;
         }
+        self.motion_or_fate(cells, phase).ok()
+    }
+
+    /// As [`Analyser::analyse_as_found`], for a pattern of at least one cell; and of one that
+    /// has no form to be filed under, what became of it instead: whether it got out of hand,
+    /// or was only not followed for long enough.
+    pub fn motion_or_fate(&self, cells: &[Cell], phase: usize) -> Result<(Motion, (i32, i32)), Fate> {
+        // What does not come back is found out first, since most of what is asked about
+        // does not.
         let returns = self.fate(cells, phase);
         let Fate::Returns { period, displacement: moved } = returns else {
-            return None;
+            return Err(returns);
         };
         // Then through its period once more. How far the pattern moves is the same at every
         // phase, so of each orientation the form to keep is known as the forms come: a long
@@ -364,15 +372,16 @@ impl Analyser {
                 }
             }
         };
+        // Only someone who says to stop keeps the second time round from ending as the first.
         if self.run(cells, phase, keep, |_, _, _| {}) != returns {
-            return None;
+            return Err(Fate::Undecided);
         }
         let seen = least.into_iter().zip(&self.orientations);
         let seen = seen.filter_map(|(form, &i)| Some((form?, reorient(&[], moved, &ORIENTATIONS[i]).1)));
-        let (canonical, displacement) = seen.min_by(|(a, a_moved), (b, b_moved)| {
-            Reverse(a_moved).cmp(&Reverse(b_moved)).then_with(|| in_order(a, b))
-        })?;
-        Some((Motion { period, displacement, canonical }, moved))
+        let least = seen
+            .min_by(|(a, a_moved), (b, b_moved)| Reverse(a_moved).cmp(&Reverse(b_moved)).then_with(|| in_order(a, b)));
+        let (canonical, displacement) = least.ok_or(Fate::Undecided)?;
+        Ok((Motion { period, displacement, canonical }, moved))
     }
 
     /// What becomes of the pattern, without working out its canonical form: the quick way to

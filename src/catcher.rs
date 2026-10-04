@@ -4,8 +4,15 @@
 //! edge are taken out of the world and handed over as [`Departure`]s. Here they are identified
 //! and counted by kind ([`Census`]), a little every frame, and listed. Every rule has a haul of
 //! its own. A click on a kind picks it up, to be put back on the grid ([`Stamp`]).
+//!
+//! A catch that does not repeat in the time a frame can spare is followed for much longer on
+//! another thread, one catch at a time: there are spaceships that take thousands of
+//! generations, or millions, to be back in their shape.
 
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use bevy::{
     clipboard::Clipboard,
@@ -20,14 +27,15 @@ use bevy::{
     picking::hover::Hovered,
     platform::time::Instant,
     prelude::*,
+    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
     text::{FontSourceTemplate, FontWeight},
     ui_widgets::{Activate, ControlOrientation, ScrollArea},
     window::SystemCursorIcon,
 };
 
 use cas_core::{
-    census::{Census, Kind},
-    pattern::{Analyser, Cell, Heading, WAYS, to_rle},
+    census::{self, Census, Found, Kind},
+    pattern::{Analyser, Cell, Heading, WAYS, Watch, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
 };
@@ -52,11 +60,20 @@ const LISTED: usize = 200;
 
 /// When more than this many departures wait to be identified, the oldest are let go.
 const QUEUE: usize = 4096;
+/// A catch that has not repeated in the time a census gives it is followed for so many
+/// generations on another thread: a few seconds of work for a handful of cells, and enough
+/// for a spaceship of several million generations.
+const PATIENCE: u32 = 1 << 23;
+/// So many catches at most wait for that longer look. Of more, the oldest are counted as no
+/// spaceships: whatever leaves them faster than they can be followed is not ships.
+const FOLLOWED: usize = 64;
 
 /// Column widths of the list, shared by its header and its rows; the speed takes the rest,
 /// which must be room enough for the likes of `2c/184 ↘`, or the row would widen the panel.
 pub(crate) const PICTURE: (f32, f32) = (64.0, 44.0);
 pub(crate) const PERIOD_COLUMN: f32 = 40.0;
+/// What those columns leave the speed, next to its dial.
+const SPEED_ROOM: f32 = 62.0;
 pub(crate) const CELLS_COLUMN: f32 = 30.0;
 pub(crate) const CAUGHT_COLUMN: f32 = 48.0;
 const ANALYSE_COLUMN: f32 = 24.0;
@@ -106,6 +123,31 @@ struct Haul {
     /// Tells this haul from every other, also from an earlier one of the same rule.
     number: u64,
     census: Census,
+    /// Catches that did not repeat in time, waiting for a longer look; and the one that is
+    /// having it.
+    slow: VecDeque<Departure>,
+    following: Option<Following>,
+}
+
+/// A catch being followed for longer, on another thread.
+struct Following {
+    departure: Departure,
+    watch: Arc<Watch>,
+    task: Task<Found>,
+}
+
+/// Nobody waits for it any more: the list was cleared, or the program ends.
+impl Drop for Following {
+    fn drop(&mut self) {
+        self.watch.stop();
+    }
+}
+
+impl Haul {
+    /// How many catches are yet to be told for what they are.
+    fn unsettled(&self) -> usize {
+        self.slow.len() + self.following.is_some() as usize
+    }
 }
 
 /// A kind's part of `ships` caught in all, from 0 to 1.
@@ -161,7 +203,7 @@ impl Plugin for CatcherPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Catcher>().add_systems(
             Update,
-            (drop_the_queue.run_if(rule_changed), identify, show_panel, sync_list, light_rows)
+            (drop_the_queue.run_if(rule_changed), identify, follow_the_slow, show_panel, sync_list, light_rows)
                 .chain()
                 .in_set(SimSystems::Present),
         );
@@ -191,14 +233,46 @@ fn identify(mut universe: ResMut<Universe>, mut catcher: ResMut<Catcher>) {
     let Catcher { waiting, hauls, begun, .. } = &mut *catcher;
     let haul = hauls.entry(universe.rule().clone()).or_insert_with(|| {
         *begun += 1;
-        Haul { number: *begun, census: Census::new(universe.rule()) }
+        Haul { number: *begun, census: Census::new(universe.rule()), slow: VecDeque::new(), following: None }
     });
     while let Some(departure) = waiting.pop_front() {
-        haul.census.record(departure);
+        if let Some(slow) = haul.census.record_or_defer(departure) {
+            haul.slow.push_back(slow);
+            if haul.slow.len() > FOLLOWED
+                && let Some(oldest) = haul.slow.pop_front()
+            {
+                haul.census.count(&oldest, Vec::new());
+            }
+        }
         if started.elapsed() >= BUDGET {
             break;
         }
     }
+}
+
+/// Gives the catches that did not repeat at once a longer look, one at a time and on another
+/// thread, and counts each for what it turned out to be.
+fn follow_the_slow(universe: Res<Universe>, mut catcher: ResMut<Catcher>) {
+    let Some(haul) = catcher.bypass_change_detection().hauls.get_mut(universe.rule()) else {
+        return;
+    };
+    if let Some(following) = &mut haul.following {
+        let Some(found) = check_ready(&mut following.task) else {
+            return;
+        };
+        haul.census.count(&following.departure, found.ships);
+        haul.following = None;
+    }
+    let Some(departure) = haul.slow.pop_front() else {
+        return;
+    };
+    let watch = Arc::new(Watch::default());
+    let mut patient = Analyser::new(universe.rule());
+    patient.max_generations = PATIENCE;
+    patient.watch = Some(watch.clone());
+    let (cells, phase) = (departure.cells.clone(), departure.phase);
+    let task = AsyncComputeTaskPool::get().spawn(async move { census::identify(&patient, &cells, phase) });
+    haul.following = Some(Following { departure, watch, task });
 }
 
 pub fn catcher_panel() -> impl Scene {
@@ -355,6 +429,14 @@ pub(crate) fn heading(title: &'static str) -> impl Scene {
     }
 }
 
+/// The size at which so many letters of the fixed-width face fit in so much room, and no
+/// larger than `most`. The period of a slow spaceship has seven figures, and its speed more:
+/// they are set smaller rather than cut short.
+fn fitting(letters: usize, room: f32, most: f32) -> f32 {
+    // A letter of that face is six tenths of its size wide.
+    (room / (0.6 * letters.max(1) as f32)).clamp(8.0, most)
+}
+
 pub(crate) fn mono(text: String, size: f32, color: Color) -> impl Scene {
     bsn! {
         Text(text)
@@ -384,6 +466,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
         (1, period) => format!("c/{period}"),
         (travelled, period) => format!("{travelled}c/{period}"),
     };
+    let speed_size = fitting(speed.chars().count(), SPEED_ROOM, 14.0);
     let heading = match motion.heading() {
         Heading::Orthogonal => "orthogonal",
         Heading::Diagonal => "diagonal",
@@ -429,7 +512,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                         }
                         template_value(Pickable::IGNORE)
                         Children [
-                            mono(speed, 14.0, palette::WHITE),
+                            mono(speed, speed_size, palette::WHITE),
                             caption(heading),
                         ]
                     ),
@@ -541,8 +624,9 @@ fn glow(ways: &[u64; 8], way: usize) -> Color {
 
 /// A figure set to the right of its column.
 pub(crate) fn number(text: String, column: f32, color: Color) -> impl Scene {
+    let size = fitting(text.chars().count(), column, 12.0);
     bsn! {
-        mono(text, 12.0, color)
+        mono(text, size, color)
         TextLayout { justify: Justify::Right }
         Node { width: px(column) }
     }
@@ -721,6 +805,8 @@ struct Shown {
     haul: Option<u64>,
     caught: u64,
     kinds: usize,
+    /// Catches still being followed.
+    unsettled: usize,
     catching: bool,
     held: Option<(u64, usize)>,
     note: Option<String>,
@@ -753,6 +839,7 @@ fn sync_list(
         haul: haul.map(|haul| haul.number),
         caught: census.map_or(0, |census| census.ships() + census.others()),
         kinds: census.map_or(0, |census| census.kinds().len()),
+        unsettled: haul.map_or(0, Haul::unsettled),
         catching: universe.catching,
         held: stamp.kind,
         note: catcher.note.clone(),
@@ -765,6 +852,9 @@ fn sync_list(
         (true, ..) => {
             "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
         }
+        // A slow spaceship takes its time to show that it is one.
+        _ if now.unsettled == 1 => "A catch has not repeated yet: it is followed further.",
+        _ if now.unsettled > 1 => "Some catches have not repeated yet: they are followed further.",
         (false, 0, false) => "Catching is off.",
         (false, 0, true) => "No spaceships yet: let a blob run.",
         _ => "Click a pattern to pick it up, or shift-click it to copy it as text.",

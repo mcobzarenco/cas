@@ -50,7 +50,17 @@ click Grid -100 60; wait 3; expect_population 8
 key Escape; wait 3; expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
 click Grid 100 -60; wait 3; expect_population 9
 
+# A slow spaceship: a loose cloud of five to seven cells that is back in its shape after
+# 13 774 generations, four cells on along the diagonal. It leaves whole, and is known for
+# what it is once it has been followed for long enough, which another thread does.
+rule 15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0; clear; wait 3
+place 4bo$3bo2$5bobo2$bo2$5bobo 236 222
+step 60000; wait 3; expect_population 0
+until expect_caught 1 1
+shot catcher-5-slow
+rule single-rotation; wait 3
+
 # Forgetting empties the list of this rule; the key closes the panel.
 click CatcherForget; wait 20; expect_caught 0 0
-key s; wait 4; shot catcher-5-closed
+key s; wait 4; shot catcher-6-closed
 quit

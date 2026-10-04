@@ -6,18 +6,40 @@ use bevy::{
         controls::{FeathersButton, FeathersMenuPopup, FeathersTextInputContainer},
         cursor::EntityCursor,
         palette,
-        theme::{ThemeBackgroundColor, ThemeTextColor},
+        theme::{ThemeBackgroundColor, ThemeTextColor, ThemedText},
         tokens,
     },
     picking::hover::Hovered,
     prelude::*,
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
     ui::{Checked, UiGlobalTransform},
-    ui_widgets::{Checkbox, Scrollbar},
+    ui_widgets::{
+        Checkbox, Scrollbar, Slider, SliderDragState, SliderOrientation, SliderThumb, SliderValue, TrackClick,
+    },
     window::{PrimaryWindow, SystemCursorIcon},
 };
 
 use super::{aspect::Aspect, icons, text::key_hint};
+
+/// The caption of a button or checkbox: its label and the key that does the same.
+fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> {
+    bsn_list![
+        (Text(label) ThemedText),
+        key_hint(key),
+    ]
+    .into()
+}
+
+/// A button with the key that does the same after its label. It takes its share of the row
+/// it is in.
+pub(crate) fn button(label: &'static str, key: &'static str) -> impl Scene {
+    bsn! {
+        @FeathersButton {
+            @caption: {label_with_key(label, key)},
+        }
+        Node { flex_grow: 1.0 }
+    }
+}
 
 /// A small square button with an icon on it, as the rows of the lists have them. In a row
 /// that takes clicks itself, whoever handles its click keeps the click from the row.
@@ -132,6 +154,105 @@ pub(crate) fn style_toggles(
         ink.set_if_neq(BorderColor::all(aspect.ink()));
         let shown = if checked { Visibility::Inherited } else { Visibility::Hidden };
         visibility.set_if_neq(shown);
+    }
+}
+
+const SLIDER_HEIGHT: f32 = 18.0;
+const THUMB: f32 = 14.0;
+const RAIL: f32 = 4.0;
+
+/// The filled part of a slider's rail.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub(crate) struct SliderFill;
+
+/// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: clicking
+/// the rail jumps there, dragging follows the pointer. The fill has the colour of an aspect.
+/// The thumb travels inside a box that is one thumb narrower than the slider, so plain
+/// percentages place it.
+pub(crate) fn slider(aspect: Aspect) -> impl Scene {
+    let fill = aspect.color();
+    bsn! {
+        Node {
+            height: px(SLIDER_HEIGHT),
+            align_items: AlignItems::Center,
+        }
+        Slider {
+            track_click: TrackClick::Snap,
+            orientation: SliderOrientation::Horizontal,
+        }
+        Hovered
+        EntityCursor::System(SystemCursorIcon::Pointer)
+        Children [
+            (
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    right: px(0),
+                    height: px(RAIL),
+                    border_radius: BorderRadius::MAX,
+                }
+                BackgroundColor(palette::GRAY_3)
+            ),
+            (
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    right: px(THUMB),
+                    top: px(0),
+                    bottom: px(0),
+                    align_items: AlignItems::Center,
+                }
+                Children [
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(0),
+                            width: percent(0),
+                            height: px(RAIL),
+                            border_radius: BorderRadius::MAX,
+                        }
+                        BackgroundColor(fill)
+                        SliderFill
+                    ),
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: percent(0),
+                            width: px(THUMB),
+                            height: px(THUMB),
+                            border_radius: BorderRadius::MAX,
+                        }
+                        BackgroundColor(palette::LIGHT_GRAY_1)
+                        SliderThumb
+                    ),
+                ]
+            ),
+        ]
+    }
+}
+
+/// Places each slider's thumb and fill, and highlights the thumb while hovered or dragged.
+pub(crate) fn style_sliders(
+    sliders: Query<
+        (Entity, &SliderValue, &Hovered, &SliderDragState),
+        (With<Slider>, Or<(Changed<SliderValue>, Changed<Hovered>, Changed<SliderDragState>)>),
+    >,
+    children: Query<&Children>,
+    mut thumbs: Query<(&mut Node, &mut BackgroundColor), (With<SliderThumb>, Without<SliderFill>)>,
+    mut fills: Query<&mut Node, (With<SliderFill>, Without<SliderThumb>)>,
+) {
+    for (slider, value, hovered, drag) in &sliders {
+        let position = percent(100.0 * value.0.clamp(0.0, 1.0));
+        let color = if hovered.0 || drag.dragging { palette::WHITE } else { palette::LIGHT_GRAY_1 };
+        for child in children.iter_descendants(slider) {
+            if let Ok((mut node, mut background)) = thumbs.get_mut(child) {
+                node.left = position;
+                background.0 = color;
+            }
+            if let Ok(mut node) = fills.get_mut(child) {
+                node.width = position;
+            }
+        }
     }
 }
 

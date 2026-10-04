@@ -13,9 +13,39 @@ pub(crate) const CARD: Color = palette::GRAY_1;
 /// The room between cards, and around them.
 pub(crate) const GUTTER: f32 = 8.0;
 
+/// A card: the controls of one aspect under its name. `figure` is what the card has to show
+/// of its own, if anything; it goes next to the name.
+pub(crate) fn card(aspect: Aspect, figure: impl SceneList, body: impl SceneList) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(6),
+            padding: UiRect::axes(px(12), px(10)),
+            border_radius: px(8),
+        }
+        BackgroundColor(CARD)
+        Children [
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    margin: UiRect { bottom: px(2) },
+                }
+                Children [
+                    title(aspect, aspect.title()),
+                    { figure },
+                ]
+            ),
+            { body },
+        ]
+    }
+}
+
 /// The name of a card with the mark of its aspect in front. The mark carries the colour; the
 /// text stays text-coloured and legible.
-pub(crate) fn title(aspect: Aspect, text: &'static str) -> impl Scene {
+fn title(aspect: Aspect, text: &'static str) -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,

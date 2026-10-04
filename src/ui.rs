@@ -13,20 +13,15 @@ use bevy::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
             FeathersMenuPopup, FeathersScrollbar,
         },
-        cursor::EntityCursor,
         palette,
         theme::{ThemeBackgroundColor, ThemedText, UiTheme},
         tokens,
     },
-    picking::hover::Hovered,
     prelude::*,
     text::{FontSourceTemplate, FontWeight},
     ui::Checked,
-    ui_widgets::{
-        Activate, ActivateOnPress, ControlOrientation, ScrollArea, Slider, SliderDragState, SliderOrientation,
-        SliderThumb, SliderValue, TrackClick, ValueChange,
-    },
-    window::{PrimaryWindow, SystemCursorIcon},
+    ui_widgets::{Activate, ActivateOnPress, ControlOrientation, ScrollArea, SliderValue, ValueChange},
+    window::PrimaryWindow,
 };
 
 use cas_core::{
@@ -42,8 +37,8 @@ use crate::{
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
     kit::{
-        Aspect, CARD, GUTTER, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading, readout,
-        show_scrollbars, style_toggles, theme, title,
+        self, Aspect, GUTTER, button, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading, readout,
+        show_scrollbars, style_sliders, style_toggles, theme,
     },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
@@ -57,10 +52,6 @@ const GRID_ROOM: f32 = 320.0;
 
 /// The grid sizes on offer: so many cells each way.
 const GRID_SIDES: [usize; 8] = [32, 64, 128, 256, 512, 1024, 2048, 4096];
-
-const SLIDER_HEIGHT: f32 = 18.0;
-const THUMB: f32 = 14.0;
-const RAIL: f32 = 4.0;
 
 /// Text nodes whose content mirrors the simulation state.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -184,10 +175,6 @@ impl Control {
 /// The text showing a slider's value.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct ValueLabel(Control);
-
-/// The filled part of a slider's rail.
-#[derive(Component, Clone, Copy, Debug, Default)]
-struct SliderFill;
 
 /// The cards of the control panel, which scroll in a window too low for them.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -411,47 +398,14 @@ fn header() -> impl Scene {
     }
 }
 
-/// A card: the controls of one aspect under its name. `figure` is the number the card has to
-/// show, if any; it goes next to the name.
+/// A card of the control panel. `figure` is the number the card has to show, if any: a
+/// readout next to its name.
 fn card(aspect: Aspect, figure: Option<Readout>, body: impl SceneList) -> impl Scene {
     let figure: Box<dyn SceneList> = match figure {
         Some(figure) => bsn_list![(readout("") template_value(figure))].into(),
         None => bsn_list![].into(),
     };
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(6),
-            padding: UiRect::axes(px(12), px(10)),
-            border_radius: px(8),
-        }
-        BackgroundColor(CARD)
-        Children [
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                    margin: UiRect { bottom: px(2) },
-                }
-                Children [
-                    title(aspect, aspect.title()),
-                    { figure },
-                ]
-            ),
-            { body },
-        ]
-    }
-}
-
-/// The caption of a button or checkbox: its label and the key that does the same.
-fn label_with_key(label: &'static str, action: Action) -> Box<dyn SceneList> {
-    bsn_list![
-        (Text(label) ThemedText),
-        key_hint(action.key()),
-    ]
-    .into()
+    kit::card(aspect, figure, body)
 }
 
 /// A button that triggers `action`, labelled with its shortcut.
@@ -465,10 +419,7 @@ fn action_button_hinted(label: &'static str, name: &'static str, action: Action,
     let name = Name::new(name);
     let does = Does(action);
     bsn! {
-        @FeathersButton {
-            @caption: {label_with_key(label, hinted)},
-        }
-        Node { flex_grow: 1.0 }
+        button(label, hinted.key())
         template_value(name)
         template_value(does)
     }
@@ -511,73 +462,16 @@ fn slider_row(label: &'static str, name: &'static str, control: Control, keys: S
     }
 }
 
-/// A slider with a rail, a fill and a thumb, on top of the headless `Slider` widget: clicking
-/// the rail jumps there, dragging follows the pointer, the wheel steps. The thumb travels
-/// inside a box that is one thumb narrower than the slider, so plain percentages place it.
+/// The slider of a control, filled in the colour of its aspect: its value goes to the
+/// control's resource, and the wheel steps it.
 fn slider(name: &'static str, control: Control) -> impl Scene {
     let name = Name::new(name);
-    let fill = control.aspect().color();
     bsn! {
-        Node {
-            height: px(SLIDER_HEIGHT),
-            align_items: AlignItems::Center,
-        }
+        kit::slider(control.aspect())
         template_value(name)
         template_value(control)
-        Slider {
-            track_click: TrackClick::Snap,
-            orientation: SliderOrientation::Horizontal,
-        }
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
         on(slider_changed)
         on(slider_scrolled)
-        Children [
-            (
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    right: px(0),
-                    height: px(RAIL),
-                    border_radius: BorderRadius::MAX,
-                }
-                BackgroundColor(palette::GRAY_3)
-            ),
-            (
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    right: px(THUMB),
-                    top: px(0),
-                    bottom: px(0),
-                    align_items: AlignItems::Center,
-                }
-                Children [
-                    (
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(0),
-                            width: percent(0),
-                            height: px(RAIL),
-                            border_radius: BorderRadius::MAX,
-                        }
-                        BackgroundColor(fill)
-                        SliderFill
-                    ),
-                    (
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: percent(0),
-                            width: px(THUMB),
-                            height: px(THUMB),
-                            border_radius: BorderRadius::MAX,
-                        }
-                        BackgroundColor(palette::LIGHT_GRAY_1)
-                        SliderThumb
-                    ),
-                ]
-            ),
-        ]
     }
 }
 
@@ -1053,31 +947,6 @@ fn sync_sliders(
     for (label, mut text) in &mut labels {
         let content = label.0.format(label.0.get(&playback, &settings));
         text.set_if_neq(Text(content));
-    }
-}
-
-/// Places each slider's thumb and fill, and highlights the thumb while hovered or dragged.
-fn style_sliders(
-    sliders: Query<
-        (Entity, &SliderValue, &Hovered, &SliderDragState),
-        (With<Control>, Or<(Changed<SliderValue>, Changed<Hovered>, Changed<SliderDragState>)>),
-    >,
-    children: Query<&Children>,
-    mut thumbs: Query<(&mut Node, &mut BackgroundColor), (With<SliderThumb>, Without<SliderFill>)>,
-    mut fills: Query<&mut Node, (With<SliderFill>, Without<SliderThumb>)>,
-) {
-    for (slider, value, hovered, drag) in &sliders {
-        let position = percent(100.0 * value.0.clamp(0.0, 1.0));
-        let color = if hovered.0 || drag.dragging { palette::WHITE } else { palette::LIGHT_GRAY_1 };
-        for child in children.iter_descendants(slider) {
-            if let Ok((mut node, mut background)) = thumbs.get_mut(child) {
-                node.left = position;
-                background.0 = color;
-            }
-            if let Ok(mut node) = fills.get_mut(child) {
-                node.width = position;
-            }
-        }
     }
 }
 

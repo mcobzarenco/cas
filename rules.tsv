@@ -1,0 +1,11 @@
+# The rules kept for cas, a rule to a line, with tabs in between: the rule (its table, or
+# the id of a built-in rule, or Morita's number), its name, a * if it is pinned to the rule
+# menu, its tags, the day it was kept, and a note. A line about a built-in rule only says
+# whether it is pinned.
+rule	name	pinned	tags	added	note
+single-rotation		*
+critters		*
+bbm		*
+tron		*
+espca-01c5ef		*
+four-way-gun		*

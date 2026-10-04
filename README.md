@@ -382,13 +382,13 @@ their note, where they are from, or their table. What a rule has counts too, by 
 unfolds the same properties as chips to click, the ones a random rule is asked for with in the
 editor.
 
-The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a
-plain text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags, the
-day it was kept and a note, with tabs in between), there to be read, edited by hand, and kept
-under version control with the findings it holds. `--library FILE` names another file. The file
-is written at every change, and read again whenever something else wrote it: a search that keeps
-its finds, an editor, a checkout. One that cannot be read is left as it is, and the panel says
-what is wrong with it.
+The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a plain
+text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags, the day it
+was kept and a note, with tabs in between), there to be read, edited by hand, and kept under version
+control with the findings it holds; what was found out about some of the rules is written down next
+to it, in [`rules.md`](rules.md). `--library FILE` names another file. The file is written at every
+change, and read again whenever something else wrote it: a search that keeps its finds, an editor, a
+checkout. One that cannot be read is left as it is, and the panel says what is wrong with it.
 
 <p align="center">
   <img src="docs/library.png" width="368" alt="The rule library. At the top the rule on the grid, Rotate and half-turn, with its pin, its tags and its note. Under the field that narrows the list: a rule that was on the grid of late and has no name, three kept rules, two of them as a search named them, and the first of the rules that come with the program, the pinned ones marked.">
@@ -484,12 +484,17 @@ each finding, as the rule editor shows the properties of a rule.
   small dial next to a spaceship has the ways its ships fly lit, as in the spaceship list.
   Another click folds the list away again.
 
-Every pattern is followed as far: for 131 072 generations, unless it is back in its shape before,
-or has four times its cells by then (a small one: more than 1024), or is twice as wide (a small
-one: wider than 512 cells); one that is known by its pieces, until the slowest of them is back.
-The study is made in the background, so a large pattern, or one that is slow to make up its
-mind, holds nothing up: the panel then says how far the study has got, and **Stop** takes what
-is known by then.
+A pattern is followed for 131 072 generations, and a small one for longer: for as long as its
+cells times the generations stay under 268 million, and for 67 million generations at most.
+There are oscillators and spaceships of a handful of cells that take millions of generations to
+be back: under `15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0` the four cells `bobo$obo` are a
+spaceship that is back, eight cells further up, after 7 328 092. A pattern is followed no
+further once it is back in its shape, or has four times its cells (a small one: more than
+1024), or is twice as wide (a small one: wider than 512 cells); one that is known by its pieces,
+until the slowest of them is back. The study is made in the background, so a large pattern, or
+one that is slow to make up its mind, holds nothing up: the panel then says how far the study
+has got, and **Stop** takes what is known by then. A pattern that is back is gone through once
+more, for the form it is filed under, which takes as long again and is not stopped.
 
 The panel shows the pattern living in a small world of its own, a torus just big enough for it,
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it

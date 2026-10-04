@@ -14,6 +14,7 @@ use std::{
 
 use cas_core::{
     families::{self, ENUMERABLE, Family},
+    library::{Library, today, usual_file},
     rules::{BlockRule, Population},
     search::{self, Effort, Report},
     universe::Rng,
@@ -67,6 +68,15 @@ struct Args {
     /// How many of the best rules to print at the end.
     #[arg(long, default_value_t = 20)]
     top: usize,
+    /// Keep so many of the best rules in the rule library of the app, each named after what
+    /// was searched and numbered, with what was measured as its note. A rule whose world the
+    /// library has already is passed over.
+    #[arg(long, default_value_t = 0)]
+    keep: usize,
+    /// The file of the rule library, for --keep: `rules.tsv` of the repository the program
+    /// was built from, which is the app's, unless another is named.
+    #[arg(long)]
+    library: Option<PathBuf>,
     /// Threads to search on.
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
@@ -313,6 +323,9 @@ fn main() {
             let cells = COLUMNS.iter().zip(line).map(|(name, cell)| format!("{name:<12}{cell}"));
             println!("{}\n", cells.collect::<Vec<_>>().join("\n"));
         }
+        let mut measured = measured;
+        measured.sort_by_key(|line| Reverse(merit(line)));
+        store(&args, &measured);
         return;
     }
     lines.extend(measured);
@@ -334,6 +347,83 @@ fn main() {
         &best(1),
         &["rule", "espca", "growing", "growth", "spaceships", "blob"],
     );
+
+    println!();
+    store(&args, &lines);
+}
+
+/// Keeps the best of the rules, which come best first, in the file of the rule library, if
+/// that was asked for, and says what became of each.
+fn store(args: &Args, lines: &[Vec<String>]) {
+    if args.keep == 0 {
+        return;
+    }
+    // What was searched names what is kept: the table the rules are from, or the family. Rules
+    // that were given go by the name the app gives one kept without a name.
+    let searched = match (args.rules.is_empty(), &args.from) {
+        (false, _) => "Unnamed".to_string(),
+        (true, Some(path)) => path.file_stem().map_or("search".to_string(), |stem| stem.to_string_lossy().to_string()),
+        (true, None) => {
+            let asked = args.family.iter().flat_map(|family| family.constraints());
+            match asked.map(|constraint| constraint.to_string()).collect::<Vec<_>>() {
+                names if names.is_empty() => "random".to_string(),
+                names => names.join("+"),
+            }
+        }
+    };
+    let file = args.library.clone().unwrap_or_else(usual_file);
+    let read = Library::read(&file).unwrap_or_else(|error| fail(&format!("{}: {error}", file.display())));
+    let mut library = read.clone();
+    let said = keep(&mut library, lines, args.keep, &searched, &today());
+    if said.is_empty() {
+        println!("nothing to keep: none of the rules is a find");
+    }
+    for said in said {
+        println!("{said}");
+    }
+    // A file nothing was added to is left as it is.
+    if library != read {
+        library.write(&file).unwrap_or_else(|error| fail(&format!("cannot write {}: {error}", file.display())));
+    }
+}
+
+/// Keeps the best of the rules, which come best first, in the library: so many at most, and
+/// only finds. Says what became of each.
+fn keep(library: &mut Library, lines: &[Vec<String>], most: usize, searched: &str, today: &str) -> Vec<String> {
+    let finds = lines.iter().filter(|line| merit(line).0 > 0).take(most);
+    let cell = |line: &[String], name: &str| line[column(name)].clone();
+    let counted = |count: String, one: &str, many: &str| format!("{count} {}", if count == "1" { one } else { many });
+    let mut said = Vec::new();
+    for line in finds {
+        let Ok(rule) = cell(line, "rule").parse::<BlockRule>() else {
+            continue;
+        };
+        let name = library.unused(searched);
+        match library.keep(rule, &name, today) {
+            Ok(kept) => {
+                library.tag(kept, "search");
+                library.annotate(
+                    kept,
+                    &format!(
+                        "{}: {}, {}, the longest {}",
+                        cell(line, "character"),
+                        counted(cell(line, "spaceships"), "kind of spaceship", "kinds of spaceship"),
+                        counted(cell(line, "periods"), "period", "periods"),
+                        cell(line, "longest")
+                    ),
+                );
+                said.push(format!("kept {} as “{name}”", cell(line, "rule")));
+            }
+            Err(known) => {
+                said.push(format!(
+                    "{} is in the library already, as “{}”",
+                    cell(line, "rule"),
+                    library.entries()[known].name
+                ));
+            }
+        }
+    }
+    said
 }
 
 /// Prints some columns of some lines, under a title; nothing if there are no lines.
@@ -378,6 +468,46 @@ fn fail(message: &str) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_best_finds_are_kept_once() {
+        let line = |rule: &str, character: &str, spaceships: &str| {
+            let mut line = vec![String::new(); COLUMNS.len()];
+            line[column("rule")] = rule.to_string();
+            line[column("character")] = character.to_string();
+            line[column("spaceships")] = spaceships.to_string();
+            line[column("periods")] = "3".to_string();
+            line[column("longest")] = "48".to_string();
+            line
+        };
+        // Best first: a world with ships, Critters (which the library has), what explodes, and
+        // a world with one kind of ship.
+        let lines = [
+            line("0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15", "spaceships", "5"),
+            line("15,14,13,3,11,5,6,1,7,9,10,2,12,4,8,0", "spaceships", "4"),
+            line("0,3,13,1,11,10,6,7,12,9,5,4,8,2,14,15", "explosive", "0"),
+            line("0,4,8,3,1,5,6,7,2,9,10,11,12,13,14,15", "spaceships", "1"),
+        ];
+        let mut library = Library::new();
+        let said = keep(&mut library, &lines, 5, "half-turn", "2026-10-04");
+        // The names are numbered as the rules are kept, whatever their places.
+        assert_eq!(
+            said,
+            [
+                "kept 0,2,8,6,1,5,3,7,4,9,10,11,12,13,14,15 as “half-turn 1”",
+                "15,14,13,3,11,5,6,1,7,9,10,2,12,4,8,0 is in the library already, as “Critters”",
+                "kept 0,4,8,3,1,5,6,7,2,9,10,11,12,13,14,15 as “half-turn 2”",
+            ]
+        );
+        let kept: Vec<_> = library.entries().iter().filter(|entry| entry.kept()).collect();
+        assert_eq!((kept[0].name.as_str(), kept[0].added.as_str()), ("half-turn 1", "2026-10-04"));
+        assert_eq!(kept[0].tags, ["search"]);
+        assert_eq!(kept[0].note, "spaceships: 5 kinds of spaceship, 3 periods, the longest 48");
+        assert_eq!(kept[1].note, "spaceships: 1 kind of spaceship, 3 periods, the longest 48");
+        // A second run keeps nothing twice.
+        assert_eq!(keep(&mut library, &lines, 1, "half-turn", "2026-10-05").len(), 1);
+        assert_eq!(library.entries().iter().filter(|entry| entry.kept()).count(), 2);
+    }
 
     /// A place for the tables of one test.
     fn folder(test: &str) -> PathBuf {

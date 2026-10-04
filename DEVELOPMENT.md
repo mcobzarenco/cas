@@ -125,6 +125,11 @@ the kit's `list_row` with what a click on it does. A panel says what an element 
 `Checked` of a checkbox or of a chip, the value of a slider) and the kit's systems, which run
 after the panels', make it look that way; what lights up under the pointer is the kit's alone.
 
+![The elements of the kit, as its gallery shows them](docs/gallery.png)
+
+The picture is the gallery's own: `cargo run --release -p cas-ui --example gallery --
+shots/gallery.png`, then shrunk as the screenshots of the README are (`docs/tour.cas` says how).
+
 ## Known gaps
 
 The limitations users meet are in the README. Besides those:

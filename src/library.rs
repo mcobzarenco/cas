@@ -12,7 +12,6 @@ use bevy::{
     feathers::{
         constants::fonts,
         controls::{FeathersButton, FeathersTextInput},
-        cursor::EntityCursor,
         palette,
         theme::ThemedText,
     },
@@ -22,7 +21,6 @@ use bevy::{
     text::{EditableText, FontSourceTemplate, FontWeight, LineBreak, TextEdit, TextEditChange},
     ui::UiGlobalTransform,
     ui_widgets::Activate,
-    window::SystemCursorIcon,
 };
 
 use cas_core::{
@@ -33,7 +31,9 @@ use cas_core::{
 };
 
 use crate::{
-    kit::{Aspect, Scrolls, caption, chip_box, field_frame, heading, icons, panel_title, scrolling, side_panel},
+    kit::{
+        Aspect, Scrolls, caption, chip_box, field_frame, heading, icons, list_row, panel_title, scrolling, side_panel,
+    },
     sampler::{CHIPS, chip_face},
     sim::SimSystems,
     synced::Synced,
@@ -659,19 +659,14 @@ fn rule_row(position: usize, title: String, about: String, pin: Option<(usize, b
     let pin = pinned.0;
     let second = if about.is_empty() { Display::None } else { Display::Flex };
     bsn! {
+        list_row()
         Node {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             column_gap: px(6),
             padding: UiRect::axes(px(8), px(5)),
-            border: px(1),
-            border_radius: px(5),
-            flex_shrink: 0.0,
         }
-        BackgroundColor(palette::GRAY_2)
         BorderColor::all(outline)
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
         template_value(name)
         template_value(row)
         on(pick_row)

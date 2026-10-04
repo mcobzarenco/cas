@@ -38,7 +38,7 @@ use crate::{
     kit::{
         Aspect, CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, Scrolls, button, caption, dial, fitting, glow,
         group_digits, heading, icon_button_marked, icons, list_row, mono, number, panel_header, panel_title, picture,
-        scrolling, side_panel,
+        scrolling, share_bar_marked, side_panel,
     },
     sim::{SimSystems, rule_changed},
     ui::toggle,
@@ -374,7 +374,6 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
     let (caught, share) = (Figure::Caught(index), Share(index));
     let (analyse, analyse_name) = (AnalyseKind(index), Name::new(format!("AnalyseKind{index}")));
     let (keep, keep_name) = (KeepKind(index), Name::new(format!("KeepKind{index}")));
-    let bar = Aspect::Pattern.color();
     // The picture is of the form the kind is filed under, which flies right or down; the ways
     // its ships were going when they were caught are on the dial.
     let speed = match motion.speed() {
@@ -470,24 +469,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                     ),
                 ]
             ),
-            (
-                Node {
-                    height: px(3),
-                    border_radius: BorderRadius::MAX,
-                }
-                BackgroundColor(palette::GRAY_0)
-                template_value(Pickable::IGNORE)
-                Children [(
-                    Node {
-                        width: percent(100.0 * share_of(kind, ships)),
-                        height: percent(100),
-                        border_radius: BorderRadius::MAX,
-                    }
-                    BackgroundColor(bar)
-                    template_value(Pickable::IGNORE)
-                    template_value(share)
-                )]
-            ),
+            share_bar_marked(share_of(kind, ships), Aspect::Pattern, share),
         ]
     }
 }

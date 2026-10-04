@@ -30,7 +30,8 @@ use cas_core::{
 use crate::{
     kit::{
         ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, Scrolls, button, caption, field_frame, icons, mono, panel_header,
-        panel_title, sans, scrolling, section, side_panel, tile, tile_label as label, tile_value as value,
+        panel_title, sans, scrolling, section, side_panel, tile, tile_label as label, tile_picture,
+        tile_value as value,
     },
     library::RuleLibrary,
     sampler::sampler_section,
@@ -524,18 +525,7 @@ fn finding(name: &'static str, finding: Finding, picture: impl SceneList) -> imp
             flex_basis: px(0),
         }
         Children [
-            (
-                Node {
-                    width: px(GLYPH),
-                    height: px(GLYPH),
-                    flex_shrink: 0.0,
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    border_radius: px(4),
-                }
-                BackgroundColor(DEAD)
-                Children [ { picture } ]
-            ),
+            (tile_picture(GLYPH) Children [ { picture } ]),
             (
                 Node {
                     flex_grow: 1.0,

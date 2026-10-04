@@ -6,7 +6,11 @@ use bevy::{
     text::{FontSourceTemplate, FontWeight, LetterSpacing},
 };
 
-use super::{aspect::Aspect, controls::button, text::section_title};
+use super::{
+    aspect::{Aspect, DEAD},
+    controls::button,
+    text::section_title,
+};
 
 /// What cards are made of. They lie on the window's background, a shade darker than they are.
 pub(crate) const CARD: Color = palette::GRAY_1;
@@ -175,6 +179,21 @@ pub(crate) const ORBIT: [(f32, f32); 8] =
 /// The axes of the mirrors among those, left to right, top to bottom, and the two diagonals:
 /// which of the eight each is, and how far a bar through the middle is turned to lie along it.
 pub(crate) const AXES: [(usize, f32); 4] = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)];
+
+/// The dark box a tile has its picture in, so much a side.
+pub(crate) fn tile_picture(side: f32) -> impl Scene {
+    bsn! {
+        Node {
+            width: px(side),
+            height: px(side),
+            flex_shrink: 0.0,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border_radius: px(4),
+        }
+        BackgroundColor(DEAD)
+    }
+}
 
 /// The box a finding is shown in: of a rule in the editor, of a pattern in the analysis.
 pub(crate) fn tile() -> impl Scene {

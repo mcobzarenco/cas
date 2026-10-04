@@ -38,9 +38,10 @@ use crate::{
     actions::KeyboardOwner,
     kept::Collected,
     kit::{
-        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, DEAD, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button,
-        button_marked, caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono,
-        number, panel_header, panel_title, picture, sans, scrolling, side_panel, tile, tile_label, tile_value,
+        ALIVE, AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, GLYPH, ORBIT, PERIOD_COLUMN, Scrolls, button, button_marked,
+        caption, dial, field_frame, group_digits, heading as column_title, icon_button, icons, mono, number,
+        panel_header, panel_title, picture, sans, scrolling, share_bar, side_panel, tile, tile_label, tile_picture,
+        tile_value,
     },
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -713,18 +714,7 @@ fn fact_tile(label: &'static str, finding: Finding) -> impl Scene {
         template_value(name)
         template_value(this)
         Children [
-            (
-                Node {
-                    width: px(GLYPH),
-                    height: px(GLYPH),
-                    flex_shrink: 0.0,
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    border_radius: px(4),
-                }
-                BackgroundColor(DEAD)
-                template_value(drawn)
-            ),
+            (tile_picture(GLYPH) template_value(drawn)),
             (
                 Node {
                     flex_grow: 1.0,
@@ -845,18 +835,7 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
         }
         template_value(name)
         Children [
-            (
-                Node {
-                    width: px(SORT_GLYPH),
-                    height: px(SORT_GLYPH),
-                    flex_shrink: 0.0,
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    border_radius: px(4),
-                }
-                BackgroundColor(DEAD)
-                Children [ icons::icon(sort.icon, 18.0, sort.ink) ]
-            ),
+            (tile_picture(SORT_GLYPH) Children [ icons::icon(sort.icon, 18.0, sort.ink) ]),
             (
                 Node {
                     flex_grow: 1.0,
@@ -921,8 +900,7 @@ fn piece_row(index: usize, kind: &Listed, of: usize, kept: bool) -> impl Scene {
     let name = Name::new(format!("Piece{index}"));
     let (keep, keep_name) = (KeepPiece(index), Name::new(format!("PieceKeep{index}")));
     let ink = if kept { Aspect::Pattern.color() } else { palette::LIGHT_GRAY_2 };
-    let share = percent(100.0 * kind.count as f32 / of.max(1) as f32);
-    let bar = Aspect::Pattern.color();
+    let share = kind.count as f32 / of.max(1) as f32;
     let title = mono(kind.title.clone(), 14.0, palette::WHITE);
     let about: Box<dyn SceneList> =
         if kind.note.is_empty() { bsn_list![title].into() } else { bsn_list![title, caption(kind.note)].into() };
@@ -969,21 +947,7 @@ fn piece_row(index: usize, kind: &Listed, of: usize, kept: bool) -> impl Scene {
                     ),
                 ]
             ),
-            (
-                Node {
-                    height: px(3),
-                    border_radius: BorderRadius::MAX,
-                }
-                BackgroundColor(palette::GRAY_0)
-                Children [(
-                    Node {
-                        width: share,
-                        height: percent(100),
-                        border_radius: BorderRadius::MAX,
-                    }
-                    BackgroundColor(bar)
-                )]
-            ),
+            share_bar(share, Aspect::Pattern),
         ]
     }
 }

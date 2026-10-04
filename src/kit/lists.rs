@@ -11,6 +11,7 @@ use bevy::{
 use super::{
     KitSystems,
     aspect::{ALIVE, Aspect, BLOCKS, DEAD},
+    controls::Unmarked,
     icons,
 };
 
@@ -49,6 +50,39 @@ fn light_rows(mut rows: Query<(&Hovered, &mut BackgroundColor), With<Row>>) {
         if background.0 != color {
             background.0 = color;
         }
+    }
+}
+
+/// A thin bar under what a row says: so much of it, from 0 to 1, is filled in the colour of
+/// an aspect.
+pub(crate) fn share_bar(share: f32, aspect: Aspect) -> impl Scene {
+    share_bar_marked(share, aspect, Unmarked)
+}
+
+/// Such a bar with a mark on the part that is filled, for whoever changes its width later.
+pub(crate) fn share_bar_marked<M: Component + Clone + Default + Unpin>(
+    share: f32,
+    aspect: Aspect,
+    mark: M,
+) -> impl Scene {
+    let fill = aspect.color();
+    bsn! {
+        Node {
+            height: px(3),
+            border_radius: BorderRadius::MAX,
+        }
+        BackgroundColor(palette::GRAY_0)
+        template_value(Pickable::IGNORE)
+        Children [(
+            Node {
+                width: percent(100.0 * share),
+                height: percent(100),
+                border_radius: BorderRadius::MAX,
+            }
+            BackgroundColor(fill)
+            template_value(Pickable::IGNORE)
+            template_value(mark)
+        )]
     }
 }
 

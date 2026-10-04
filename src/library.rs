@@ -34,11 +34,10 @@ use cas_core::{
 
 use crate::{
     catcher::heading,
-    kit::icons,
+    kit::{Aspect, caption, field_frame, icons, panel_title, side_panel},
     sampler::{CHIPS, chip_box, chip_face},
     sim::SimSystems,
     synced::Synced,
-    ui::{Aspect, caption, field_frame, panel_title, side_panel},
 };
 
 pub const LIBRARY_WIDTH: f32 = 376.0;

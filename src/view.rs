@@ -28,12 +28,10 @@ use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
 
 use crate::{
     analysis::Analysis,
+    kit::{ALIVE, Aspect, DEAD},
     sim::{Settings, SimSystems},
-    ui::Aspect,
 };
 
-pub const ALIVE: Color = Color::srgb(1.0, 0.769, 0.42);
-pub const DEAD: Color = Color::srgb(0.055, 0.059, 0.078);
 pub const BACKGROUND: Color = Color::srgb(0.122, 0.122, 0.141);
 /// The outline of the grid: the edge of the world, in the colour of the world; in that of the
 /// pattern while it catches cells.

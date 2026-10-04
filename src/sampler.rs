@@ -35,9 +35,8 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    kit::icons,
+    kit::{Aspect, caption, checkbox, group_digits, icons},
     sim::SimSystems,
-    ui::{Aspect, caption, checkbox, group_digits},
 };
 
 /// Rules are counted up to so many, and a family that can be counted is kept, to draw from

@@ -34,15 +34,13 @@ use cas_core::{
 };
 
 use crate::{
-    kit::icons,
+    kit::{
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, caption, field_frame, icons, panel_title, section, side_panel, tile,
+        tile_label as label, tile_value as value,
+    },
     library::RuleLibrary,
     sampler::sampler_section,
     sim::{SimSystems, rule_changed},
-    ui::{
-        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, panel_title, section, side_panel, tile, tile_label as label,
-        tile_value as value,
-    },
-    view::{ALIVE, DEAD},
 };
 
 pub const EDITOR_WIDTH: f32 = 376.0;

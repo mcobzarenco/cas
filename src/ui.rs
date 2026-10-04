@@ -11,21 +11,20 @@ use bevy::{
         constants::fonts,
         controls::{
             ButtonVariant, FeathersButton, FeathersMenu, FeathersMenuButton, FeathersMenuDivider, FeathersMenuItem,
-            FeathersMenuPopup, FeathersScrollbar, FeathersTextInputContainer,
+            FeathersMenuPopup, FeathersScrollbar,
         },
         cursor::EntityCursor,
-        dark_theme::create_dark_theme,
         palette,
-        theme::{ThemeBackgroundColor, ThemeProps, ThemeTextColor, ThemedText, UiTheme},
+        theme::{ThemeBackgroundColor, ThemedText, UiTheme},
         tokens,
     },
     picking::hover::Hovered,
     prelude::*,
-    text::{FontSourceTemplate, FontWeight, LetterSpacing},
-    ui::{Checked, UiGlobalTransform},
+    text::{FontSourceTemplate, FontWeight},
+    ui::Checked,
     ui_widgets::{
-        Activate, ActivateOnPress, Checkbox, ControlOrientation, ScrollArea, Scrollbar, Slider, SliderDragState,
-        SliderOrientation, SliderThumb, SliderValue, TrackClick, ValueChange,
+        Activate, ActivateOnPress, ControlOrientation, ScrollArea, Slider, SliderDragState, SliderOrientation,
+        SliderThumb, SliderValue, TrackClick, ValueChange,
     },
     window::{PrimaryWindow, SystemCursorIcon},
 };
@@ -42,10 +41,13 @@ use crate::{
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
-    kit::icons,
+    kit::{
+        Aspect, CARD, GUTTER, caption, checkbox, fit_menus, group_digits, key_hint, menu_heading, readout,
+        show_scrollbars, style_toggles, theme, title,
+    },
     library::{LIBRARY_WIDTH, RuleLibrary, library_panel},
     sim::{Pace, Playback, Settings, SimSystems, rule_changed},
-    view::{ALIVE, DEAD, grid_view, wheel_notches},
+    view::{grid_view, wheel_notches},
 };
 
 pub const PANEL_WIDTH: f32 = 300.0;
@@ -53,70 +55,12 @@ pub const PANEL_WIDTH: f32 = 300.0;
 /// more are put away, the one opened longest ago first.
 const GRID_ROOM: f32 = 320.0;
 
-/// What cards are made of. They lie on the window's background, a shade darker than they are.
-pub(crate) const CARD: Color = palette::GRAY_1;
-/// The room between cards, and around them.
-pub(crate) const GUTTER: f32 = 8.0;
-
 /// The grid sizes on offer: so many cells each way.
 const GRID_SIDES: [usize; 8] = [32, 64, 128, 256, 512, 1024, 2048, 4096];
 
 const SLIDER_HEIGHT: f32 = 18.0;
 const THUMB: f32 = 14.0;
 const RAIL: f32 = 4.0;
-/// The side of the box of a [`toggle`].
-const TICK_BOX: f32 = 18.0;
-
-/// Shortcut reminders are legible on a button of any colour, and quiet.
-const KEY_HINT: Color = Color::srgba(1.0, 1.0, 1.0, 0.45);
-
-/// What a control is about. Every aspect has its card in the panel and its colour.
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Aspect {
-    /// The law: the table that rewrites the blocks.
-    #[default]
-    Rule,
-    /// The space the cells live in: its size, and what its edge does.
-    World,
-    Time,
-    /// How the grid is drawn. The automaton knows nothing of it, hence no colour of its own.
-    View,
-    /// What is on the grid: the cells.
-    Pattern,
-}
-
-impl Aspect {
-    fn title(self) -> &'static str {
-        match self {
-            Aspect::Rule => "RULE",
-            Aspect::World => "WORLD",
-            Aspect::Time => "TIME",
-            Aspect::View => "VIEW",
-            Aspect::Pattern => "PATTERN",
-        }
-    }
-
-    /// Lightness, chroma and hue. The hues are far apart and the lightnesses staggered, which
-    /// keeps the four colours distinct to colour-blind eyes as well; the pattern's is the
-    /// colour of the cells themselves.
-    pub const fn color(self) -> Color {
-        match self {
-            Aspect::Rule => Color::oklch(0.62, 0.17, 355.0),
-            Aspect::World => Color::oklch(0.72, 0.12, 195.0),
-            Aspect::Time => Color::oklch(0.58, 0.16, 257.0),
-            Aspect::View => Color::oklch(0.68, 0.015, 265.0),
-            Aspect::Pattern => ALIVE,
-        }
-    }
-
-    /// What to draw in on top of the aspect's colour: dark on the light ones.
-    fn ink(self) -> Color {
-        match self {
-            Aspect::World | Aspect::View | Aspect::Pattern => DEAD,
-            Aspect::Rule | Aspect::Time => palette::WHITE,
-        }
-    }
-}
 
 /// Text nodes whose content mirrors the simulation state.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -245,13 +189,6 @@ struct ValueLabel(Control);
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SliderFill;
 
-/// The box of a [`toggle`], and the tick in it.
-#[derive(Component, Clone, Copy, Debug, Default)]
-struct ToggleBox;
-
-#[derive(Component, Clone, Copy, Debug, Default)]
-struct ToggleTick;
-
 /// The cards of the control panel, which scroll in a window too low for them.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct PanelBody;
@@ -293,24 +230,6 @@ impl Plugin for UiPlugin {
                     .in_set(SimSystems::Present),
             );
     }
-}
-
-/// The feathers dark theme, with its one accent colour handed out by aspect: the play button
-/// is about time, the text field about the rule, and what belongs to no aspect is grey.
-fn theme() -> ThemeProps {
-    let mut theme = create_dark_theme();
-    let (time, rule) = (Aspect::Time.color(), Aspect::Rule.color());
-    theme.color.extend([
-        (tokens::BUTTON_PRIMARY_BG, time),
-        (tokens::BUTTON_PRIMARY_BG_HOVER, time.lighter(0.05)),
-        (tokens::BUTTON_PRIMARY_BG_PRESSED, time.lighter(0.1)),
-        (tokens::TEXT_INPUT_CURSOR, rule.lighter(0.2)),
-        (tokens::TEXT_INPUT_SELECTION, rule),
-        (tokens::FOCUS_RING, palette::LIGHT_GRAY_2.with_alpha(0.5)),
-        (tokens::SCROLLBAR_THUMB, palette::LIGHT_GRAY_2),
-        (tokens::SCROLLBAR_THUMB_HOVER, palette::LIGHT_GRAY_1),
-    ]);
-    theme
 }
 
 /// Has anything a checkbox, a slider or the size menu shows changed?
@@ -409,42 +328,6 @@ fn panel() -> impl Scene {
                 ]
             ),
         ]
-    }
-}
-
-/// A scrollbar is there while there is something to scroll: what it scrolls is higher than
-/// the room it has.
-fn show_scrollbars(areas: Query<&ComputedNode>, mut bars: Query<(&Scrollbar, &mut Node)>) {
-    for (bar, mut node) in &mut bars {
-        let Ok(area) = areas.get(bar.target) else {
-            continue;
-        };
-        let scrolls = area.content_size().y > area.size().y + 0.5;
-        let display = if scrolls { Display::Flex } else { Display::None };
-        if node.display != display {
-            node.display = display;
-        }
-    }
-}
-
-/// A menu reaches down as far as the window does, and scrolls beyond that: it hangs under
-/// its button, which may be anywhere in a window of any height.
-fn fit_menus(
-    window: Single<&Window, With<PrimaryWindow>>,
-    menus: Query<(&ComputedNode, &UiGlobalTransform)>,
-    mut popups: Query<(&mut Node, &ChildOf), With<FeathersMenuPopup>>,
-) {
-    /// The room between the button and its menu, and between the menu and the window's edge.
-    const MARGINS: f32 = 12.0;
-    for (mut popup, menu) in &mut popups {
-        let Ok((node, transform)) = menus.get(menu.parent()) else {
-            continue;
-        };
-        let bottom = (transform.translation.y + 0.5 * node.size.y) * node.inverse_scale_factor;
-        let room = px((window.height() - bottom - MARGINS).max(4.0 * MARGINS));
-        if popup.max_height != room {
-            popup.max_height = room;
-        }
     }
 }
 
@@ -562,257 +445,6 @@ fn card(aspect: Aspect, figure: Option<Readout>, body: impl SceneList) -> impl S
     }
 }
 
-/// The name of a card with the mark of its aspect in front. The mark carries the colour; the
-/// text stays text-coloured and legible.
-fn title(aspect: Aspect, text: &'static str) -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(7),
-        }
-        Children [
-            mark(aspect, 12.0),
-            (
-                Text(text)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                    font_size: FontSize::Px(11.0),
-                    weight: FontWeight::BOLD,
-                }
-                template_value(LetterSpacing::Px(0.6))
-                ThemeTextColor(tokens::TEXT_MAIN)
-            ),
-        ]
-    }
-}
-
-/// A short bar in the colour of an aspect.
-fn mark(aspect: Aspect, height: f32) -> impl Scene {
-    let color = aspect.color();
-    bsn! {
-        Node {
-            width: px(4),
-            height: px(height),
-            border_radius: px(2),
-        }
-        BackgroundColor(color)
-    }
-}
-
-/// A side panel: one tall card beside the control panel, hidden until it is asked for.
-pub(crate) fn side_panel(width: f32, body: impl SceneList) -> impl Scene {
-    bsn! {
-        Node {
-            display: Display::None,
-            width: px(width),
-            height: percent(100),
-            flex_shrink: 0.0,
-            padding: UiRect { top: px(GUTTER), bottom: px(GUTTER), right: px(GUTTER) },
-        }
-        Children [(
-            // A card is as wide as its panel, whatever is in it: content that does not fit
-            // overflows the card, rather than the card the panel.
-            Node {
-                flex_grow: 1.0,
-                flex_basis: px(0),
-                min_width: px(0),
-                flex_direction: FlexDirection::Column,
-                padding: px(14),
-                row_gap: px(12),
-                border_radius: px(8),
-            }
-            BackgroundColor(CARD)
-            Children [ { body } ]
-        )]
-    }
-}
-
-/// The name of a side panel, marked with the aspect the panel is about.
-pub(crate) fn panel_title(aspect: Aspect, text: &'static str) -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(8),
-        }
-        Children [
-            mark(aspect, 16.0),
-            (
-                Text(text)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                    font_size: FontSize::Px(16.0),
-                    weight: FontWeight::BOLD,
-                }
-                TextColor(palette::WHITE)
-            ),
-        ]
-    }
-}
-
-/// A titled group of controls.
-pub(crate) fn section(title: &'static str, body: impl SceneList) -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(6),
-        }
-        Children [
-            (
-                Text(title)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::BOLD),
-                    font_size: FontSize::Px(11.0),
-                    weight: FontWeight::BOLD,
-                }
-                ThemeTextColor(tokens::TEXT_DIM)
-            ),
-            { body },
-        ]
-    }
-}
-
-/// The side of the box a tile has its picture in.
-pub(crate) const GLYPH: f32 = 48.0;
-
-/// A symmetry as a picture in such a box. Where a point just right of the top of a square
-/// ends up under each way of turning and mirroring it, as `(x, y)` from the middle: first as
-/// it is, then in the order of `TURNS_AND_MIRRORS`. The ones a rule or a pattern is itself
-/// under are a picture of its symmetry.
-pub(crate) const ORBIT: [(f32, f32); 8] =
-    [(6.0, -16.0), (16.0, 6.0), (-6.0, 16.0), (-16.0, -6.0), (-6.0, -16.0), (6.0, 16.0), (-16.0, 6.0), (16.0, -6.0)];
-/// The axes of the mirrors among those, left to right, top to bottom, and the two diagonals:
-/// which of the eight each is, and how far a bar through the middle is turned to lie along it.
-pub(crate) const AXES: [(usize, f32); 4] = [(4, 90.0), (5, 0.0), (6, 45.0), (7, -45.0)];
-
-/// The box a finding is shown in: of a rule in the editor, of a pattern in the analysis.
-pub(crate) fn tile() -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(8),
-            padding: px(6),
-            border_radius: px(5),
-        }
-        BackgroundColor(palette::GRAY_2)
-    }
-}
-
-/// The name of a finding.
-pub(crate) fn tile_label(name: &'static str) -> impl Scene {
-    bsn! {
-        Text(name)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::BOLD),
-            font_size: FontSize::Px(9.0),
-            weight: FontWeight::BOLD,
-        }
-        template_value(LetterSpacing::Px(0.5))
-        TextColor(palette::LIGHT_GRAY_2)
-    }
-}
-
-/// What was found, in words.
-pub(crate) fn tile_value(text: &'static str) -> impl Scene {
-    bsn! {
-        Text(text)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::REGULAR),
-            font_size: FontSize::Px(12.0),
-            weight: FontWeight::NORMAL,
-        }
-        TextColor(palette::LIGHT_GRAY_1)
-    }
-}
-
-/// A small square button with an icon on it, as the rows of the lists have them. In a row
-/// that takes clicks itself, whoever handles its click keeps the click from the row.
-pub(crate) fn icon_button(glyph: &'static str, ink: Color) -> impl Scene {
-    icon_button_marked(glyph, ink, Unmarked)
-}
-
-/// The mark of an icon that nobody needs to find again.
-#[derive(Component, Default, Clone)]
-pub(crate) struct Unmarked;
-
-/// Such a button with a mark on its icon, for whoever changes the icon's colour later.
-pub(crate) fn icon_button_marked<M: Component + Clone + Default + Unpin>(
-    glyph: &'static str,
-    ink: Color,
-    mark: M,
-) -> impl Scene {
-    bsn! {
-        @FeathersButton {
-            @caption: bsn! { icons::icon(glyph, 14.0, ink) template_value(mark) }
-        }
-        Node {
-            width: px(24),
-            min_width: px(24),
-            padding: px(0),
-            justify_content: JustifyContent::Center,
-            flex_shrink: 0.0,
-        }
-    }
-}
-
-/// The frame of a text field: a well in its card, which shows while there is nothing in the
-/// field, with the text a little way in from its edges.
-pub(crate) fn field_frame() -> impl Scene {
-    bsn! {
-        @FeathersTextInputContainer
-        ThemeBackgroundColor(tokens::WINDOW_BG)
-        Node {
-            border: UiRect::ZERO,
-            padding: UiRect::horizontal(px(6)),
-        }
-    }
-}
-
-/// Small dim explanatory text.
-pub(crate) fn caption(text: impl Into<String>) -> impl Scene {
-    bsn! {
-        Text(text)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::REGULAR),
-            font_size: FontSize::Px(12.0),
-            weight: FontWeight::NORMAL,
-        }
-        ThemeTextColor(tokens::TEXT_DIM)
-    }
-}
-
-/// Monospace readout text.
-pub(crate) fn readout(text: impl Into<String>) -> impl Scene {
-    bsn! {
-        Text(text)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::MONO),
-            font_size: FontSize::Px(12.0),
-            weight: FontWeight::NORMAL,
-        }
-        ThemeTextColor(tokens::TEXT_MAIN)
-    }
-}
-
-/// A quiet reminder of a shortcut, placed right after the label of its control.
-fn key_hint(keys: impl Into<String>) -> impl Scene {
-    bsn! {
-        Text(keys)
-        TextFont {
-            font: FontSourceTemplate::Handle(fonts::MONO),
-            font_size: FontSize::Px(10.0),
-            weight: FontWeight::NORMAL,
-        }
-        TextColor(KEY_HINT)
-        Node {
-            margin: UiRect { left: px(6) },
-        }
-    }
-}
-
 /// The caption of a button or checkbox: its label and the key that does the same.
 fn label_with_key(label: &'static str, action: Action) -> Box<dyn SceneList> {
     bsn_list![
@@ -850,60 +482,6 @@ pub(crate) fn toggle(label: &'static str, name: &'static str, option: Toggle) ->
     bsn! {
         checkbox(label, name, aspect, key)
         template_value(does)
-    }
-}
-
-/// A checkbox ticked in the colour of an aspect, with the key that flips it, if it has one.
-/// Whoever makes it keeps its `Checked` in step with what it stands for.
-pub(crate) fn checkbox(label: &'static str, name: &'static str, aspect: Aspect, key: &'static str) -> impl Scene {
-    let name = Name::new(name);
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-        }
-        Checkbox
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
-        template_value(name)
-        template_value(aspect)
-        Children [
-            (
-                Node {
-                    width: px(TICK_BOX),
-                    height: px(TICK_BOX),
-                    flex_shrink: 0.0,
-                    margin: UiRect { right: px(8) },
-                    border_radius: px(4),
-                }
-                BackgroundColor(palette::GRAY_3)
-                ToggleBox
-                Children [(
-                    // The tick: two sides of a rectangle, turned by an eighth.
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(6),
-                        top: px(2),
-                        width: px(6),
-                        height: px(11),
-                        border: UiRect { bottom: px(2), right: px(2) },
-                    }
-                    UiTransform::from_rotation(Rot2::FRAC_PI_4)
-                    Visibility::Hidden
-                    ToggleTick
-                )]
-            ),
-            (
-                Text(label)
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::REGULAR),
-                    font_size: FontSize::Px(14.0),
-                    weight: FontWeight::NORMAL,
-                }
-                ThemeTextColor(tokens::TEXT_MAIN)
-            ),
-            key_hint(key),
-        ]
     }
 }
 
@@ -1043,26 +621,6 @@ fn rule_card() -> impl Scene {
             (caption("") template_value(Readout::RuleBlurb)),
         ],
     )
-}
-
-/// The name of a group of items in a menu.
-fn menu_heading(text: &'static str) -> impl Scene {
-    bsn! {
-        Node {
-            padding: UiRect { left: px(8), right: px(8), top: px(5), bottom: px(2) },
-            flex_shrink: 0.0,
-        }
-        Children [(
-            Text(text)
-            TextFont {
-                font: FontSourceTemplate::Handle(fonts::BOLD),
-                font_size: FontSize::Px(9.0),
-                weight: FontWeight::BOLD,
-            }
-            template_value(LetterSpacing::Px(0.5))
-            ThemeTextColor(tokens::TEXT_DIM)
-        )]
-    }
 }
 
 /// An item of the rule menu: a rule by the name it goes by. The rig knows it by `name`.
@@ -1478,28 +1036,6 @@ fn sync_widgets(
     }
 }
 
-/// Colours the toggles: a ticked one has the colour of its aspect.
-fn style_toggles(
-    toggles: Query<(&Aspect, &Hovered, Has<Checked>, &Children), With<Checkbox>>,
-    mut boxes: Query<(&mut BackgroundColor, &Children), With<ToggleBox>>,
-    mut ticks: Query<(&mut BorderColor, &mut Visibility), With<ToggleTick>>,
-) {
-    for (aspect, hovered, checked, children) in &toggles {
-        let Some((mut fill, children)) = children.first().and_then(|&child| boxes.get_mut(child).ok()) else {
-            continue;
-        };
-        let color = if checked { aspect.color() } else { palette::GRAY_3 };
-        let color = if hovered.0 { color.lighter(0.06) } else { color };
-        fill.set_if_neq(BackgroundColor(color));
-        let Some((mut ink, mut visibility)) = children.first().and_then(|&child| ticks.get_mut(child).ok()) else {
-            continue;
-        };
-        ink.set_if_neq(BorderColor::all(aspect.ink()));
-        let shown = if checked { Visibility::Inherited } else { Visibility::Hidden };
-        visibility.set_if_neq(shown);
-    }
-}
-
 /// Moves the sliders and their value labels to where the resources say they are.
 fn sync_sliders(
     playback: Res<Playback>,
@@ -1594,23 +1130,6 @@ fn format_rate(generations_per_second: f32) -> String {
     }
 }
 
-/// `1234567` → `1 234 567`, for a number of any width.
-pub(crate) fn group_digits(n: impl TryInto<i128>) -> String {
-    let n = n.try_into().unwrap_or(i128::MAX);
-    let digits = n.unsigned_abs().to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
-    if n < 0 {
-        out.push('-');
-    }
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(' ');
-        }
-        out.push(c);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1682,8 +1201,6 @@ mod tests {
         assert_eq!(Control::Density.format(0.025), "2.5 %");
         assert_eq!(Control::Density.format(0.001), "0.10 %");
         assert_eq!(Control::Density.format(0.0001), "0.010 %");
-        assert_eq!(group_digits(-1234567), "-1 234 567");
-        assert_eq!(group_digits(69_481_732_320_u128), "69 481 732 320");
         assert_eq!(format_rate(122_880.0), "122 880");
         assert_eq!(format_rate(0.5), "0.5");
     }

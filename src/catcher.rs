@@ -45,10 +45,10 @@ use crate::{
     actions::Toggle,
     analysis::Analysis,
     kept::Collected,
-    kit::icons,
+    kit::{ALIVE, Aspect, DEAD, caption, group_digits, icon_button_marked, icons, panel_title, side_panel},
     sim::{SimSystems, rule_changed},
-    ui::{Aspect, caption, group_digits, icon_button_marked, panel_title, side_panel, toggle},
-    view::{ALIVE, BLOCKS, DEAD, Stamp},
+    ui::toggle,
+    view::{BLOCKS, Stamp},
 };
 
 pub const CATCHER_WIDTH: f32 = 396.0;

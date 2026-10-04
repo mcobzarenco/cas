@@ -24,9 +24,10 @@ use crate::{
     catcher::Catcher,
     editor::RuleEditor,
     kept::Collected,
+    kit::Aspect,
     library::RuleLibrary,
     sim::{Playback, Settings, SimSystems},
-    ui::{Aspect, Control},
+    ui::Control,
     view::{Stamp, ViewState, WHEEL_ZOOM},
 };
 

@@ -43,13 +43,12 @@ use crate::{
     actions::KeyboardOwner,
     catcher::{CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, dial, heading as column_title, mono, number, picture},
     kept::Collected,
-    kit::icons,
-    sim::{Settings, SimSystems},
-    ui::{
-        AXES, Aspect, GLYPH, ORBIT, caption, field_frame, group_digits, icon_button, panel_title, side_panel, tile,
-        tile_label, tile_value,
+    kit::{
+        ALIVE, AXES, Aspect, DEAD, GLYPH, ORBIT, caption, field_frame, group_digits, icon_button, icons, panel_title,
+        side_panel, tile, tile_label, tile_value,
     },
-    view::{ALIVE, DEAD, Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
+    sim::{Settings, SimSystems},
+    view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
 };
 
 pub const ANALYSIS_WIDTH: f32 = 396.0;

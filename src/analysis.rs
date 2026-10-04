@@ -68,10 +68,15 @@ const KINDS_NAMED: usize = 3;
 /// in any case wide enough for the pattern as it set out.
 const ROOM: i32 = 3;
 const WORLD_SIDES: (usize, usize) = (32, 256);
-/// How far a pattern is followed, whatever it is: for so many generations; or until it has so
-/// many times the cells it set out with, or is so many times as wide, which for a small
-/// pattern is so many cells and so wide at least.
+/// How far a pattern is followed, whatever it is: for so many generations, and a small one
+/// for more, as long as following it is no more work than this, in cells times generations,
+/// and for no more than so many. There are oscillators and spaceships of a handful of cells
+/// that take millions of generations to be back. Or until it has so many times the cells it
+/// set out with, or is so many times as wide, which for a small pattern is so many cells and
+/// so wide at least.
 const GENERATIONS: u32 = 16 * 8192;
+const WORK: u64 = 1 << 28;
+const MOST_GENERATIONS: u32 = 1 << 26;
 const MOST_CELLS: (usize, usize) = (4, 1024);
 const WIDEST: (i32, i32) = (2, 512);
 /// A study is made on another thread, and most are done before the next frame. One that is
@@ -155,7 +160,7 @@ impl Subject {
     fn of(number: u64, cells: &[Cell], phase: usize, rule: BlockRule, watch: Arc<Watch>) -> Option<Self> {
         let (width, height) = bounding_box(cells);
         let mut analyser = Analyser::new(&rule);
-        analyser.max_generations = GENERATIONS;
+        analyser.max_generations = patience(cells.len());
         analyser.max_cells = (MOST_CELLS.0 * cells.len()).max(MOST_CELLS.1);
         analyser.max_extent = (WIDEST.0 * width.max(height)).max(WIDEST.1);
         analyser.watch = Some(watch);
@@ -278,6 +283,12 @@ impl Analysis {
     fn shown(&self) -> Option<&Subject> {
         self.subject.as_ref().filter(|_| self.busy().is_none())
     }
+}
+
+/// For how many generations a pattern of so many cells is followed.
+fn patience(cells: usize) -> u32 {
+    let affordable = WORK / cells.max(1) as u64;
+    affordable.clamp(GENERATIONS as u64, MOST_GENERATIONS as u64) as u32
 }
 
 /// A torus with room for the pattern, the pattern in the middle of it. The world is at
@@ -1272,7 +1283,10 @@ fn show_status(analysis: Res<Analysis>, mut status: Single<&mut Text, With<Small
         // A study on its way: how far it has got.
         (Some(studying), _) => {
             let generation = format!("generation {}", group_digits(studying.watch.generation() as i64));
-            if studying.watch.stopped() {
+            if studying.watch.back() {
+                // Not to be stopped: it takes as long again, and then all is known.
+                format!("{generation}: it is back, and is gone through once more")
+            } else if studying.watch.stopped() {
                 format!("{generation}, stopping")
             } else if studying.watch.taking_apart() {
                 format!("{generation}, and what it became is being taken apart")
@@ -1895,6 +1909,19 @@ mod tests {
         assert_eq!(runs("↖↗ both"), [run("↖↗", true), run(" both", false)]);
         assert_eq!(runs("a mirror"), [run("a mirror", false)]);
         assert!(runs("").is_empty());
+    }
+
+    #[test]
+    fn a_small_pattern_is_followed_for_longer() {
+        // As far as any pattern was, at the least: the many cells of what a blob leaves.
+        assert_eq!((patience(100_000), patience(2048)), (GENERATIONS, GENERATIONS));
+        // A hundred cells for millions of generations, a handful for tens of millions: the
+        // spaceship of 7 328 092 generations and the oscillator of 32 782 820 have eight
+        // cells at most.
+        assert_eq!(patience(100), 2_684_354);
+        assert!(patience(8) > 32_782_820);
+        // And no pattern for longer than that.
+        assert_eq!((patience(4), patience(1), patience(0)), (MOST_GENERATIONS, MOST_GENERATIONS, MOST_GENERATIONS));
     }
 
     #[test]

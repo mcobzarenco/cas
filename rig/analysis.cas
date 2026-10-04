@@ -242,4 +242,18 @@ expect_shown StudyPeriod off
 shot analysis-11-stopped
 click Analyse; wait 3
 expect_text SelectHint on the grid, or from the list
+
+# A handful of cells is followed for as long as it takes, within reason. These six are an
+# oscillator of 1 068 762 generations, under a rule whose patterns take their time; and four
+# others a spaceship that is back, eight cells further up, after 7 328 092.
+rule 15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0; wait 3
+click StudyText; wait 3; key Ctrl+a; type $bo2$bo$2bo$bo2b2o; wait 3
+until expect_text StudyPeriod PERIOD 1 068 762 generations
+expect_text StudyWhat WHAT Oscillator
+key Ctrl+a; type bobo$obo; wait 30
+expect_shown AnalysisStop on
+until expect_text StudyPeriod PERIOD 7 328 092 generations moving (0, -8)
+expect_text StudyWhat WHAT Spaceship 2c/1832023 orthogonal ↑
+shot analysis-12-slow
+key Escape; wait 3
 quit

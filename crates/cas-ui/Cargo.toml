@@ -18,7 +18,8 @@ bevy = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-# The example in the crate's documentation is an app: it opens a window and draws.
+# The gallery, and the example in the crate's documentation, are apps: they open a window
+# and draw.
 bevy = { workspace = true, features = [
   "default_app",
   "multi_threaded",

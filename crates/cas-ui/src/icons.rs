@@ -59,6 +59,38 @@ pub const PIN: &str = "\u{e3e2}";
 /// The mark of a pattern that is kept.
 pub const KEEP: &str = "\u{e0ea}";
 
+/// Every icon with its name, as the gallery shows them.
+pub const ALL: [(&str, &str); 28] = [
+    ("TURN", TURN),
+    ("MIRROR", MIRROR),
+    ("FLIP", FLIP),
+    ("CELLS", CELLS),
+    ("WEIGHT", WEIGHT),
+    ("PARITY", PARITY),
+    ("MOMENTUM", MOMENTUM),
+    ("LINEAR", LINEAR),
+    ("INVERSE", INVERSE),
+    ("STATES", STATES),
+    ("EMPTY", EMPTY),
+    ("EQUAL", EQUAL),
+    ("UNEQUAL", UNEQUAL),
+    ("LOOK", LOOK),
+    ("OPENS", OPENS),
+    ("LESS", LESS),
+    ("MORE", MORE),
+    ("STILL", STILL),
+    ("OSCILLATES", OSCILLATES),
+    ("SHIP", SHIP),
+    ("GROWS", GROWS),
+    ("APART", APART),
+    ("UNDECIDED", UNDECIDED),
+    ("PERIOD", PERIOD),
+    ("CHANGES", CHANGES),
+    ("WAY", WAY),
+    ("PIN", PIN),
+    ("KEEP", KEEP),
+];
+
 /// Registers the font.
 pub(super) fn plugin(app: &mut App) {
     // Not `embedded_asset!`: that is for files next to the source, and names them after

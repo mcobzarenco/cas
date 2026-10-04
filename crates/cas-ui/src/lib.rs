@@ -31,6 +31,8 @@
 //!     ));
 //! }
 //! ```
+//!
+//! `cargo run --release -p cas-ui --example gallery` shows every element on one page.
 
 // Queries spell out what they touch in their types; the usual threshold doesn't fit (bevy
 // itself allows this).

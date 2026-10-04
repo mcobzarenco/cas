@@ -269,9 +269,9 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | grid size: 32 to 4096 cells each way; the pattern stays in the middle, what no longer fits is cut off | *Grid size* menu | |
 | open border: what reaches the edge of the grid leaves the world, instead of coming back on the other side | *Open border* | `o` |
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
-| show / hide the list of spaceships caught | **Spaceships** | `s` |
+| show / hide the list of spaceships caught | **Caught** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
-| show / hide the oscillators kept under the rule, and the still lifes | **Oscillators**, **Still lifes** | |
+| show / hide the spaceships kept under the rule, the oscillators, the still lifes | **Spaceships**, **Oscillators**, **Still lifes** | |
 | keep a pattern among those of its rule, or let go of it | **Keep** in the analysis panel; the mark in a row of a list; **Keep all** | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
 | choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list; or its text, typed or pasted into the panel | left-drag |
@@ -385,11 +385,11 @@ unfolds the same properties as chips to click, the ones a random rule is asked f
 editor.
 
 The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a plain
-text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags, the day it
-was kept and a note, with tabs in between), there to be read, edited by hand, and kept under version
-control with the findings it holds; what was found out about some of the rules is written down next
-to it, in [`rules.md`](rules.md). `--library FILE` names another file. The file is written at every
-change, and read again whenever something else wrote it: a search that keeps its finds, an editor, a
+text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags and a note,
+with tabs in between), there to be read, edited by hand, and kept under version control with the
+findings it holds; what was found out about some of the rules is written down next to it, in
+[`rules.md`](rules.md). `--library FILE` names another file. The file is written at every change,
+and read again whenever something else wrote it: a search that keeps its finds, an editor, a
 checkout. One that cannot be read is left as it is, and the panel says what is wrong with it.
 
 <p align="center">
@@ -430,7 +430,7 @@ border lets everything else pass. The grid is then outlined in the colour of the
   symmetric under, by a fixed order (travelling right, then down; smallest bounding box; cells
   in reading order).
 
-**Spaceships** (`s`) opens the list for the current rule; every rule has a list of its own. A row
+**Caught** (`s`) opens the list for the current rule; every rule has a list of its own. A row
 shows the pattern, its speed as a fraction of *c* (a cell per generation), the ways its ships were
 flying, its period, its number of cells, how often it was caught, and as a bar its share of all
 catches. The picture shows the blocks the pattern lies on: how a pattern sits on the blocks is
@@ -451,8 +451,8 @@ instead (`b2o2$b2o`: `b` dead, `o` alive, `$` next row, written from a corner of
 next step rewrites). **Clear list** forgets what was caught under the current rule.
 
 The mark in a row [keeps the kind](#keeping-patterns), and is lit while it is kept; **Keep all**
-keeps every kind of the list. The spaceships kept under a rule are in its list from the start,
-with a count of none until one is caught, and they stay when the list is cleared.
+keeps every kind of the list. The list itself is of what was caught since the program started,
+or since it was cleared: what is kept is in a panel of its own.
 
 What left or was caught is gone: stepping backwards does not bring it back.
 
@@ -535,20 +535,19 @@ the drag does nothing. `a` puts the panel away, as
 
 What comes back to its shape can be kept with the rule it is a pattern of: a spaceship, an
 oscillator, a still life. Nothing is kept by itself: **Keep** in the analysis panel keeps the
-pattern on display, **Keep all** the kinds of its pieces, and the mark in a row of the
-spaceship list, or of the pieces, its kind. A second click lets go again. A kind is kept once,
+pattern on display, **Keep all** the kinds of its pieces, and the mark in a row of the list of
+what was caught, or of the pieces, its kind. A second click lets go again. A kind is kept once,
 by the form it is filed under, whichever way and whenever it was found.
 
-The spaceships kept under a rule are in its spaceship list. **Oscillators** and **Still lifes**
-open a panel each for the others: a row shows the pattern, its size, its period and its cells; a
-click picks it up to be put down on the grid, the magnifying glass sends it to the analysis, and
-its mark lets go of it. Each rule has its own, and a rule in another form (turned, mirrored, or
-begun a generation later) has its own too.
+**Spaceships**, **Oscillators** and **Still lifes** open a panel each with what is kept under
+the rule on the grid: a row shows the pattern, its speed and the way it flies or its size, its
+period and its cells; a click picks it up to be put down on the grid, the magnifying glass sends
+it to the analysis, and its mark lets go of it. Each rule has its own, and a rule in another
+form (turned, mirrored, or begun a generation later) has its own too.
 
 They are in `patterns.tsv`, next to the library's `rules.tsv`: a pattern to a line, with tabs in
-between (the rule, the sort, the pattern as text, its period, how far it moves, a name, the day
-it was kept and a note), to be read, edited by hand, and added to by whatever else looks at
-rules. Like the library's file it is written at every change and read again whenever something
+between (the rule, the sort, the pattern as text, its period, how far it moves, a name and a
+note), to be read, edited by hand, and added to by whatever else looks at rules. Like the library's file it is written at every change and read again whenever something
 else wrote it, and a scripted run has none.
 
 ## Searching for rules
@@ -695,7 +694,7 @@ generations and 11 after 128 000.
 * Spaceships that follow each other closely are one pattern to the catcher as well, and a long
   train of them is debris. The gun of ESPCA-09457f fires such trains: an open border wears them
   down cell by cell, and what is left blows up. Watch it with the border closed.
-* The spaceship list lives as long as the program; it is not saved.
+* The list of what was caught lives as long as the program; what is to stay is kept.
 * Buttons give up the keyboard focus so that Space and the arrows always drive the simulation,
   so there is no Tab navigation.
 * Under GNOME the clipboard goes through XWayland; pasting into a native Wayland application is

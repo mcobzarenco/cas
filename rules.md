@@ -17,7 +17,7 @@ the right and y down; a speed of c/N is a cell in N generations.
 
 ## Weighted Undecided 0
 
-`15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0`, kept on 2026-10-04.
+`15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0`, in the library under this name.
 
 Of the 20 729 rules of the `weighted` family it had the most undecided seeds (23 %) in
 
@@ -131,7 +131,7 @@ after 8 192, 185×230 after 131 072 and 252×296 after 2 097 152, its right edge
 Its cells go from 1 210 to 1 655, heavy ones falling into light ones. The search's 8 000
 generations end before any of it has come to the edge of a grid of 256.
 
-**The catcher and the analysis panel** know these patterns since 2026-10-04: a catch that does
+**The catcher and the analysis panel** know these patterns: a catch that does
 not repeat at once is followed for up to eight million generations, and a small pattern under
 study for up to 67 million.
 

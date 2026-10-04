@@ -242,6 +242,7 @@ const ORIENTATIONS: [Orientation; 8] = [
 #[derive(Debug, Default)]
 pub struct Watch {
     generation: AtomicU32,
+    back: AtomicBool,
     apart: AtomicBool,
     stopped: AtomicBool,
 }
@@ -250,6 +251,13 @@ impl Watch {
     /// For how many generations the pattern has been followed so far.
     pub fn generation(&self) -> u32 {
         self.generation.load(Ordering::Relaxed)
+    }
+
+    /// Whether the pattern is back in its shape, and is now being gone through again, for the
+    /// form it is filed under and the parts it has: as long once more as it took to be back,
+    /// and not to be stopped.
+    pub fn back(&self) -> bool {
+        self.back.load(Ordering::Relaxed)
     }
 
     /// Whether the pattern has been followed as far as it will be, and what it became is now
@@ -356,7 +364,11 @@ impl Analyser {
     pub fn motion_or_fate(&self, cells: &[Cell], phase: usize) -> Result<(Motion, (i32, i32)), Fate> {
         // What does not come back is found out first, since most of what is asked about
         // does not.
-        let returns = self.fate(cells, phase);
+        self.filed(cells, phase, self.fate(cells, phase))
+    }
+
+    /// The motion of a pattern whose fate is known, if that is to come back.
+    fn filed(&self, cells: &[Cell], phase: usize, returns: Fate) -> Result<(Motion, (i32, i32)), Fate> {
         let Fate::Returns { period, displacement: moved } = returns else {
             return Err(returns);
         };
@@ -411,7 +423,7 @@ impl Analyser {
         let mut before = start.clone();
         let mut throughout = start.clone();
         let mut changed = 0;
-        let mut populations = Vec::new();
+        let mut populations = Populations::default();
         let mut last = start.clone();
         let (mut recurs, mut cycles) = (None, 0);
         let fate = follower.run(
@@ -444,10 +456,15 @@ impl Analyser {
             },
         );
         // The pattern came back: it is gone through once more for the form to file it under,
-        // which is not for anyone to watch or to stop.
+        // which is not for anyone to stop. Whoever watches is told so.
         let unwatched = Analyser { watch: None, ..self.clone() };
-        let motion = match fate {
-            Fate::Returns { .. } => unwatched.analyse(cells, phase),
+        let motion = match (fate, &self.watch) {
+            (Fate::Returns { .. }, watch) => {
+                if let Some(watch) = watch {
+                    watch.back.store(true, Ordering::Relaxed);
+                }
+                unwatched.filed(cells, phase, fate).ok().map(|(motion, _)| motion)
+            }
             _ => None,
         };
         let period = match (fate, &apart) {
@@ -462,7 +479,7 @@ impl Analyser {
         };
         let growth = match period {
             Some(_) => None,
-            None => Some(growth_of(&populations)),
+            None => Some(populations.growth()),
         };
         let (pieces, more_pieces) = match period {
             // Parts that never meet come back each on its own, when the whole does at the latest.
@@ -710,10 +727,7 @@ impl Analyser {
         };
         // What comes back is filed as the catcher files a ship: under one form, whichever way
         // it lies.
-        let form = match fate {
-            Fate::Returns { .. } => self.analyse(cells, 0).map_or(Vec::new(), |motion| motion.canonical),
-            _ => Vec::new(),
-        };
+        let form = self.filed(cells, 0, fate).map_or(Vec::new(), |(motion, _)| motion.canonical);
         (Piece { cells: cells.len(), kind, form }, generations)
     }
 
@@ -721,7 +735,7 @@ impl Analyser {
     /// went with; and for how many generations it was followed.
     fn follow(&self, cells: &[Cell], phase: usize) -> (Fate, bool, f32, u32) {
         let mut still = true;
-        let mut populations = Vec::new();
+        let mut populations = Populations::default();
         let fate = self.run(
             cells,
             phase,
@@ -732,7 +746,7 @@ impl Analyser {
                 populations.push(pattern.len());
             },
         );
-        (fate, still, growth_of(&populations), populations.len() as u32)
+        (fate, still, populations.growth(), populations.count as u32)
     }
 
     /// A pattern filed at the start of the tables' cycle, as it is at every generation of the
@@ -937,21 +951,56 @@ fn reorient(cells: &[Cell], moved: (i32, i32), orientation: &Orientation) -> (Ve
     (turned, (tip.0 - origin.0, tip.1 - origin.1))
 }
 
-/// The power of time that a pattern's cells went with, from how many it had at each
-/// generation: from what it gained half way and in the end, so that a gun with a long stream
-/// behind it still counts as growing along lines. 0 for a pattern that did not grow by a
-/// quarter at least: what it gained is then no more than a flicker.
-fn growth_of(populations: &[usize]) -> f32 {
-    let count = populations.len();
-    if count < 2 {
-        return 0.0;
+/// So many of a pattern's populations are kept; of more, every other one is let go.
+const POPULATIONS_KEPT: usize = 1 << 17;
+
+/// How many cells a pattern had as it went: at every generation, for as long as that is not
+/// much to keep; then at every other one, every fourth, and so on. A handful of cells may be
+/// followed for tens of millions of generations, and what is read from this is three numbers.
+#[derive(Default)]
+struct Populations {
+    kept: Vec<usize>,
+    /// Of how many generations one is kept, less one: none are let go at first.
+    skipping: usize,
+    count: usize,
+    last: usize,
+}
+
+impl Populations {
+    fn push(&mut self, population: usize) {
+        if self.count.is_multiple_of(self.skipping + 1) {
+            if self.kept.len() == POPULATIONS_KEPT {
+                let mut index = 0;
+                self.kept.retain(|_| {
+                    index += 1;
+                    index % 2 == 1
+                });
+                self.skipping = 2 * self.skipping + 1;
+            }
+            if self.count.is_multiple_of(self.skipping + 1) {
+                self.kept.push(population);
+            }
+        }
+        self.count += 1;
+        self.last = population;
     }
-    let (first, half_way, end) = (populations[0], populations[count / 2 - 1], populations[count - 1]);
-    if (end as f32) < 1.25 * first as f32 {
-        return 0.0;
+
+    /// The power of time that the pattern's cells went with: from what it gained half way and
+    /// in the end, so that a gun with a long stream behind it still counts as growing along
+    /// lines. 0 for a pattern that did not grow by a quarter at least: what it gained is then
+    /// no more than a flicker.
+    fn growth(&self) -> f32 {
+        if self.count < 2 {
+            return 0.0;
+        }
+        let half_way = (self.count / 2 - 1) / (self.skipping + 1);
+        let (first, half_way, end) = (self.kept[0], self.kept[half_way.min(self.kept.len() - 1)], self.last);
+        if (end as f32) < 1.25 * first as f32 {
+            return 0.0;
+        }
+        let gained = |cells: usize| cells.saturating_sub(first).max(1) as f32;
+        (gained(end) / gained(half_way)).log2().clamp(0.0, 3.0)
     }
-    let gained = |cells: usize| cells.saturating_sub(first).max(1) as f32;
-    (gained(end) / gained(half_way)).log2().clamp(0.0, 3.0)
 }
 
 /// The turn or mirror that an orientation is.
@@ -1617,6 +1666,55 @@ mod tests {
             }
         }
         assert!(recognised > 50, "only {recognised} patterns repeated");
+    }
+
+    #[test]
+    fn a_long_run_keeps_few_populations_and_reads_the_same_growth() {
+        // Cells that go with time, and with its square, for far longer than is kept at every
+        // generation: the growth law read from what is kept is the one read from all.
+        let exact = |populations: &[usize]| {
+            let (first, half_way, end) =
+                (populations[0], populations[populations.len() / 2 - 1], *populations.last().unwrap());
+            let gained = |cells: usize| cells.saturating_sub(first).max(1) as f32;
+            (gained(end) / gained(half_way)).log2()
+        };
+        for power in [1u32, 2] {
+            let all: Vec<usize> = (0..5 * POPULATIONS_KEPT + 77).map(|t| 10 + (t / 16).pow(power)).collect();
+            let mut populations = Populations::default();
+            all.iter().for_each(|&population| populations.push(population));
+            assert!(populations.kept.len() <= POPULATIONS_KEPT);
+            assert_eq!((populations.count, populations.skipping), (all.len(), 7));
+            assert!((populations.growth() - exact(&all)).abs() < 0.001, "power {power}: {}", populations.growth());
+            assert!((populations.growth() - power as f32).abs() < 0.01);
+        }
+        // While all are kept, it is the very same.
+        let short: Vec<usize> = (0..1000).map(|t| 4 + t / 3).collect();
+        let mut populations = Populations::default();
+        short.iter().for_each(|&population| populations.push(population));
+        assert_eq!((populations.kept.len(), populations.growth()), (1000, exact(&short)));
+    }
+
+    #[test]
+    fn a_slow_spaceship_is_studied_like_any_other() {
+        // Seven cells that take 13 774 generations to be back, four cells on along the
+        // diagonal: more than is kept of most patterns, and nothing special otherwise.
+        let rule: BlockRule = "15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0".parse().unwrap();
+        let mut analyser = Analyser::new(&rule);
+        analyser.max_generations = 20_000;
+        let watch = Arc::new(Watch::default());
+        analyser.watch = Some(watch.clone());
+        let study = analyser.study(&from_rle("4bo$3bo2$5bobo2$bo2$5bobo").unwrap(), 0).unwrap();
+        assert_eq!(study.fate, Fate::Returns { period: 13_774, displacement: (4, 4) });
+        let motion = study.motion.expect("it is filed under a form");
+        assert_eq!((motion.period, motion.displacement, study.parts), (13_774, (4, 4), 1));
+        assert_eq!((study.period, study.generations, study.growth), (Some(13_774), 13_774, None));
+        assert!(watch.back() && !watch.taking_apart(), "whoever watched was told that it is back");
+        // Given less time than it takes, it is undecided, and nobody is told that it came back.
+        analyser.max_generations = 8192;
+        let watch = Arc::new(Watch::default());
+        analyser.watch = Some(watch.clone());
+        let study = analyser.study(&from_rle("4bo$3bo2$5bobo2$bo2$5bobo").unwrap(), 0).unwrap();
+        assert_eq!((study.fate, study.period, watch.back()), (Fate::Undecided, None, false));
     }
 
     #[test]

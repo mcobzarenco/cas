@@ -598,8 +598,16 @@ fn labelled(label: &'static str, name: &'static str, which: Field) -> impl Scene
 }
 
 /// A row of the list: a rule by its name, with a line more about it, and its pin if it is in
-/// the library. The row of the rule on the grid is outlined.
-fn rule_row(position: usize, title: String, about: String, pin: Option<(usize, bool)>, current: bool) -> impl Scene {
+/// the library. The row of the rule on the grid is outlined, and one that takes the place of
+/// the row under the pointer is `lit` from the start.
+fn rule_row(
+    position: usize,
+    title: String,
+    about: String,
+    pin: Option<(usize, bool)>,
+    current: bool,
+    lit: bool,
+) -> impl Scene {
     let name = Name::new(format!("LibraryRow{position}"));
     let pin_name = Name::new(format!("LibraryRowPin{position}"));
     let row = RuleRow(position);
@@ -620,6 +628,7 @@ fn rule_row(position: usize, title: String, about: String, pin: Option<(usize, b
             padding: UiRect::axes(px(8), px(5)),
         }
         BorderColor::all(outline)
+        Hovered(lit)
         template_value(name)
         template_value(row)
         on(pick_row)
@@ -875,6 +884,7 @@ fn list_rules(
     mut library: ResMut<RuleLibrary>,
     universe: Res<Universe>,
     list: Single<Entity, With<RuleList>>,
+    old: Query<(&RuleRow, &Hovered)>,
     mut shown: Local<Option<(u64, BlockRule)>>,
     mut commands: Commands,
 ) {
@@ -883,6 +893,9 @@ fn list_rules(
         return;
     }
     *shown = Some(now);
+    // The rows are made anew, and the pointer is only found on them a frame later: the row in
+    // the place of the one it is on is lit from the start, or a click would make it blink.
+    let lit = old.iter().find(|(_, hovered)| hovered.0).map(|(row, _)| row.0);
     let current = universe.rule();
     let wanted = library.properties();
     let found = library.library.matching(&library.filter, &wanted);
@@ -903,7 +916,7 @@ fn list_rules(
         // A rule without a name goes by its table, and by what it has.
         let twin = library.library.twin(rule).map(|twin| format!("“{}” in another form", entries[twin].name));
         let about = twin.unwrap_or_else(|| properties(rule).join(" · "));
-        let row = rule_row(rules.len(), library.label(rule), about, None, rule == current);
+        let row = rule_row(rules.len(), library.label(rule), about, None, rule == current, lit == Some(rules.len()));
         rows.push(commands.spawn_scene(row).id());
         rules.push(rule.clone());
     }
@@ -922,7 +935,9 @@ fn list_rules(
         for index in listed {
             let entry = &entries[index];
             let pin = Some((index, entry.pinned));
-            let row = rule_row(rules.len(), entry.name.clone(), about(entry), pin, entry.rule == *current);
+            let place = rules.len();
+            let row =
+                rule_row(place, entry.name.clone(), about(entry), pin, entry.rule == *current, lit == Some(place));
             rows.push(commands.spawn_scene(row).id());
             rules.push(entry.rule.clone());
         }

@@ -136,6 +136,12 @@ const NAMES: [(&str, Constraint, &str); 16] = [
     ("linear", Constraint::Linear, "The 322 560 rules under which patterns superpose"),
 ];
 
+/// The constraints that go by a name alone, each with its name: `sparse` is the one that
+/// allows four blocks to change.
+pub fn named() -> impl Iterator<Item = (&'static str, Constraint)> {
+    NAMES.iter().map(|&(name, constraint, _)| (name, constraint))
+}
+
 /// What may be written for a family, as the help of a program lists it: every constraint as
 /// it is typed, with what it says of its rules.
 pub fn catalogue() -> Vec<(&'static str, &'static str)> {

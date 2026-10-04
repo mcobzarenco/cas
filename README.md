@@ -409,10 +409,20 @@ border lets everything else pass. The grid is then outlined in the colour of the
   of them; anything bigger is debris. The ships of a dense stream lie within reach of each other
   without ever meeting: then the chain is followed a few generations to see which cells go with
   the one at the edge, and that ship is taken alone.
+* Where there is next to nothing else around, cells up to twelve apart are one pattern too. A
+  slow spaceship can be a loose cloud, a few cells here and a few there, each lot blinking where
+  it is until one of the others comes by; taken by its close cells alone it would leave in
+  pieces, none of them a spaceship.
 * To identify a pattern it is run alone on an unbounded plane until it is back in its starting
   shape, which gives its period and how far it has moved by then. What moved is a spaceship; what
   did not, or never came back, is counted under *others*. Ships that fly side by side without
-  ever meeting are counted one by one.
+  ever meeting are counted one by one, and what is no spaceship as a whole is looked at again by
+  its lots of close cells: a ship caught with a bystander counts as the ship.
+* Most patterns repeat within a few thousand generations, which is as long as a catch is
+  followed while the grid runs. One that has not is followed on, on another thread and for up to
+  eight million generations, and counted when that is done; the line under the list says so
+  meanwhile. There are spaceships that slow: under `15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0` seven
+  cells move four cells along the diagonal in 13 774 generations.
 * A ship is the same entry whichever way it flew and whenever it was caught: it is filed under
   one form chosen among all phases of its period and all the orientations the rule itself is
   symmetric under, by a fixed order (travelling right, then down; smallest bounding box; cells
@@ -641,10 +651,12 @@ generations and 11 after 128 000.
   backwards does not bring them back. A mode that only watches spaceships cross the edge is not
   there yet, and neither is reseeding the grid once a blob has evaporated.
 * The size menu offers square grids only; other sizes need `--width` and `--height`.
-* Patterns that leave together and then part ways (a spaceship next to debris, two ships on
-  different courses) are one pattern to the catcher. It never comes back to its shape, so it
-  counts as one of the *others* and its ships are missed, which happens a lot in a gas like the
-  billiard ball machine.
+* Patterns that leave within four cells of each other and then part ways (a spaceship next to
+  debris, two ships on different courses) are one pattern to the catcher. It never comes back to
+  its shape, so it counts as one of the *others* and its ships are missed, which happens a lot
+  in a gas like the billiard ball machine.
+* Where little else is around, the edge takes what lies within twelve cells of a small pattern
+  along with it, a lone oscillator that happens to sit there too.
 * Spaceships that follow each other closely are one pattern to the catcher as well, and a long
   train of them is debris. The gun of ESPCA-09457f fires such trains: an open border wears them
   down cell by cell, and what is left blows up. Watch it with the border closed.

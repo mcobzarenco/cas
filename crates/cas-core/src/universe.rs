@@ -70,6 +70,11 @@ pub struct Departure {
 
 /// Live cells this close to each other, along both axes, belong to the same pattern.
 pub const PATTERN_REACH: i32 = 4;
+/// And cells this close, where there is next to nothing else around. A slow spaceship can be
+/// a loose cloud: a few cells here and a few there, each lot blinking where it is until one
+/// of the others comes by. Taken by what lies close together alone, it would leave in pieces,
+/// none of them a spaceship.
+const LOOSE_REACH: i32 = 12;
 /// Something with this many cells or more is debris, not a pattern; unless it is a dense
 /// stream of ships, which lie within reach of each other without ever meeting. Then what is
 /// within so far of the cell at the edge, up to so many cells, is followed for so many
@@ -406,6 +411,39 @@ impl Universe {
                 return None;
             }
             pattern = own;
+        } else {
+            // A pattern, and nothing more close to it. What lies a little further off goes
+            // with it if that is all there is: a few cells, none of them far from the edge.
+            let close = pattern.len();
+            let mut visited = 0;
+            let mut alone = true;
+            'cloud: while visited < pattern.len() {
+                let (cx, cy) = pattern[visited];
+                visited += 1;
+                for dy in -LOOSE_REACH..=LOOSE_REACH {
+                    for dx in -LOOSE_REACH..=LOOSE_REACH {
+                        let cell = (cx + dx, cy + dy);
+                        if self.cells[index(cell)] == 0 {
+                            continue;
+                        }
+                        let near = (cell.0 - seed.0).abs().max((cell.1 - seed.1).abs()) <= CHAIN_RADIUS;
+                        if !near || pattern.len() + 1 >= PATTERN_CELLS {
+                            alone = false;
+                            break 'cloud;
+                        }
+                        self.cells[index(cell)] = 0;
+                        pattern.push(cell);
+                    }
+                }
+            }
+            if !alone {
+                // There is more around than a pattern has cells: debris, or other patterns,
+                // which stay as they were.
+                for &cell in &pattern[close..] {
+                    self.cells[index(cell)] = 1;
+                }
+                pattern.truncate(close);
+            }
         }
         Some(Departure { cells: relative(&pattern), phase: self.phase })
     }
@@ -791,14 +829,67 @@ mod tests {
 
     #[test]
     fn both_lines_of_the_edge_are_watched() {
-        let mut universe = Universe::new(16, 16, BlockRule::identity());
+        let mut universe = Universe::new(32, 32, BlockRule::identity());
         universe.open_border = true;
-        for (x, y) in [(5, 0), (0, 9), (5, 9)] {
+        for (x, y) in [(5, 0), (0, 9), (20, 22)] {
             universe.set(x, y, true);
         }
         universe.step(true);
         assert_eq!(universe.population(), 1, "only the cell away from the edge is left");
-        assert!(universe.get(5, 9));
+        assert!(universe.get(20, 22));
+    }
+
+    #[test]
+    fn a_loose_cloud_with_little_else_around_leaves_whole() {
+        // A spaceship of 13 774 generations: five to seven cells in a box ten wide, more
+        // than a pattern's reach apart for some of the time. Wherever it sets out from, it
+        // comes to the edge at another moment of its period, and leaves in one piece.
+        let slow: BlockRule = rule("15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0");
+        let ship = [(4, 0), (3, 1), (5, 3), (7, 3), (1, 5), (5, 7), (7, 7)];
+        let mut patient = crate::pattern::Analyser::new(&slow);
+        patient.max_generations = 20_000;
+        for (x0, y0) in [(40, 40), (44, 30), (30, 44), (20, 48)] {
+            let mut universe = Universe::new(64, 64, slow.clone());
+            for (x, y) in ship {
+                universe.set(x0 + x, y0 + y, true);
+            }
+            universe.catching = true;
+            let mut departures = Vec::new();
+            while departures.is_empty() {
+                universe.step(true);
+                departures = universe.take_departures();
+                assert!(universe.generation < 100_000, "from ({x0}, {y0}) it never reached the edge");
+            }
+            assert_eq!((departures.len(), universe.population()), (1, 0), "from ({x0}, {y0}): all of it at once");
+            let fate = patient.fate(&departures[0].cells, departures[0].phase);
+            assert_eq!(fate, crate::pattern::Fate::Returns { period: 13_774, displacement: (4, 4) });
+        }
+    }
+
+    #[test]
+    fn where_there_is_more_around_only_what_lies_close_together_leaves() {
+        // Two cells on the edge, and a square of cells seven columns off: beyond a pattern's
+        // reach, within that of a loose cloud.
+        let with_square = |side: usize| {
+            let mut universe = Universe::new(32, 32, BlockRule::identity());
+            universe.open_border = true;
+            universe.set(0, 10, true);
+            universe.set(1, 10, true);
+            for y in 8..8 + side {
+                for x in 8..8 + side {
+                    universe.set(x, y, true);
+                }
+            }
+            universe.step(true);
+            universe
+        };
+        // Nine cells more are a small cloud still, and go with the two.
+        assert_eq!(with_square(3).population(), 0);
+        // Twenty-five are debris, which stays as it was.
+        const { assert!(PATTERN_CELLS <= 25) };
+        let left = with_square(5);
+        assert_eq!(left.population(), 25);
+        assert!(left.get(8, 8) && left.get(12, 12) && !left.get(1, 10));
     }
 
     #[test]

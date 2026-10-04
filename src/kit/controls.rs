@@ -269,6 +269,74 @@ pub(crate) fn field_frame() -> impl Scene {
     }
 }
 
+/// What a chip is known by: an icon, an icon turned by so many degrees, or a few characters.
+#[derive(Clone, Copy)]
+pub(crate) enum Sign {
+    Icon(&'static str),
+    Turned(&'static str, f32),
+    Written(&'static str),
+}
+
+/// The box of a chip or of a step: a small button that lights up under the pointer.
+pub(crate) fn chip_box() -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(6),
+            padding: UiRect::axes(px(7), px(3)),
+            border: px(1),
+            border_radius: px(4),
+        }
+        BackgroundColor(palette::GRAY_2)
+        BorderColor::all(Color::NONE)
+        Hovered
+        EntityCursor::System(SystemCursorIcon::Pointer)
+    }
+}
+
+/// A chip: its box, its sign, and a word or two, or none where the sign says it all. The
+/// sign is marked with `mark`, for whoever lights the chip up when it is on.
+pub(crate) fn chip<M: Component + Clone + Default + Unpin>(sign: Sign, label: &'static str, mark: M) -> impl Scene {
+    // A sign alone needs no word next to it, and less room around it.
+    let (shown, sides) = if label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
+    let (glyph, font, size, degrees): (_, _, f32, f32) = match sign {
+        Sign::Icon(glyph) => (glyph, icons::FONT, 15.0, 0.0),
+        Sign::Turned(glyph, degrees) => (glyph, icons::FONT, 15.0, degrees),
+        Sign::Written(text) => (text, fonts::MONO, 13.0, 0.0),
+    };
+    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
+    bsn! {
+        chip_box()
+        Node { padding: UiRect::axes(px(sides), px(3)) }
+        Children [
+            (
+                Text(glyph)
+                TextFont {
+                    font: FontSourceTemplate::Handle(font),
+                    font_size: FontSize::Px(size),
+                    weight: FontWeight::NORMAL,
+                }
+                TextColor(palette::LIGHT_GRAY_2)
+                template_value(turned)
+                template_value(mark)
+                template_value(Pickable::IGNORE)
+            ),
+            (
+                Text(label)
+                TextFont {
+                    font: FontSourceTemplate::Handle(fonts::REGULAR),
+                    font_size: FontSize::Px(12.0),
+                    weight: FontWeight::NORMAL,
+                }
+                TextColor(palette::LIGHT_GRAY_1)
+                Node { display: shown }
+                template_value(Pickable::IGNORE)
+            ),
+        ]
+    }
+}
+
 /// The name of a group of items in a menu.
 pub(crate) fn menu_heading(text: &'static str) -> impl Scene {
     bsn! {

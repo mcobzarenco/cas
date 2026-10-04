@@ -35,7 +35,7 @@ use cas_core::{
 
 use crate::{
     editor::RuleEditor,
-    kit::{Aspect, caption, checkbox, group_digits, icons},
+    kit::{self, Aspect, Sign, caption, checkbox, chip_box, group_digits, icons},
     sim::SimSystems,
 };
 
@@ -55,14 +55,6 @@ pub(crate) struct Chip {
     pub(crate) constraint: Constraint,
     sign: Sign,
     label: &'static str,
-}
-
-/// What a chip is known by: an icon, an icon turned by so many degrees, or a few characters.
-#[derive(Clone, Copy)]
-enum Sign {
-    Icon(&'static str),
-    Turned(&'static str, f32),
-    Written(&'static str),
 }
 
 const fn chip(name: &'static str, constraint: Constraint, sign: Sign, label: &'static str) -> Chip {
@@ -376,24 +368,6 @@ fn words(text: &'static str) -> impl Scene {
     }
 }
 
-/// The box of a chip or of a step: a small button that lights up under the pointer.
-pub(crate) fn chip_box() -> impl Scene {
-    bsn! {
-        Node {
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(6),
-            padding: UiRect::axes(px(7), px(3)),
-            border: px(1),
-            border_radius: px(4),
-        }
-        BackgroundColor(palette::GRAY_2)
-        BorderColor::all(Color::NONE)
-        Hovered
-        EntityCursor::System(SystemCursorIcon::Pointer)
-    }
-}
-
 fn chip_scene(index: usize) -> impl Scene {
     let name = Name::new(format!("Want:{}", CHIPS[index].name));
     let want = Want(index);
@@ -417,47 +391,10 @@ fn chip_scene(index: usize) -> impl Scene {
     }
 }
 
-/// A chip as it looks: its box, its sign, and its word or two. The sign is marked with
-/// `sign`, for whoever lights the chip up when it is on.
+/// The chip of a property, by its place in [`CHIPS`]. Its sign is marked with `sign`, for
+/// whoever lights the chip up when it is on.
 pub(crate) fn chip_face<M: Component + Clone + Default + Unpin>(index: usize, sign: M) -> impl Scene {
-    let chip = &CHIPS[index];
-    // A sign alone needs no word next to it, and less room around it.
-    let (label, sides) = if chip.label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
-    let (glyph, font, size, degrees): (_, _, f32, f32) = match chip.sign {
-        Sign::Icon(glyph) => (glyph, icons::FONT, 15.0, 0.0),
-        Sign::Turned(glyph, degrees) => (glyph, icons::FONT, 15.0, degrees),
-        Sign::Written(text) => (text, fonts::MONO, 13.0, 0.0),
-    };
-    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
-    bsn! {
-        chip_box()
-        Node { padding: UiRect::axes(px(sides), px(3)) }
-        Children [
-            (
-                Text(glyph)
-                TextFont {
-                    font: FontSourceTemplate::Handle(font),
-                    font_size: FontSize::Px(size),
-                    weight: FontWeight::NORMAL,
-                }
-                TextColor(palette::LIGHT_GRAY_2)
-                template_value(turned)
-                template_value(sign)
-                template_value(Pickable::IGNORE)
-            ),
-            (
-                Text({chip.label})
-                TextFont {
-                    font: FontSourceTemplate::Handle(fonts::REGULAR),
-                    font_size: FontSize::Px(12.0),
-                    weight: FontWeight::NORMAL,
-                }
-                TextColor(palette::LIGHT_GRAY_1)
-                Node { display: {label} }
-                template_value(Pickable::IGNORE)
-            ),
-        ]
-    }
+    kit::chip(CHIPS[index].sign, CHIPS[index].label, sign)
 }
 
 /// A small button that makes the number of the sparse chip one less or one more.

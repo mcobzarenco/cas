@@ -270,18 +270,19 @@ fn main() {
             [] => "every rule there is".to_string(),
             constraints => constraints.iter().map(|constraint| constraint.to_string()).collect::<Vec<_>>().join("+"),
         };
-        let rules = match family.count(ENUMERABLE) {
-            Some(count) => {
-                eprintln!("{named}: {count} rules");
-                family.rules()
-            }
+        let (said, rules) = match family.count(ENUMERABLE) {
+            Some(count) => (format!("{count} rules"), family.rules()),
             None => {
                 let drawn = args.limit.unwrap_or(DRAWN);
-                eprintln!("{named}: too many rules to go through, {drawn} drawn with seed {}", args.seed);
-                family.sample(drawn, args.seed)
+                let said = format!("too many rules to go through, {drawn} drawn with seed {}", args.seed);
+                (said, family.sample(drawn, args.seed))
             }
         };
-        families::distinct(rules)
+        // Rules that make the same world would measure the same: the canonical one of each
+        // is measured, and the count says how many those are.
+        let rules = families::distinct(rules);
+        eprintln!("{named}: {said} · {} canonical", rules.len());
+        rules
     };
 
     let done: HashSet<&str> = lines.iter().map(|line| line[0].as_str()).collect();

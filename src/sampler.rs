@@ -49,10 +49,11 @@ const COUNTED: usize = 2_000_000;
 const TRIES: usize = 20;
 
 /// A property that may be asked for, as the flow shows it: the name the rig knows it by, its
-/// sign, and a word or two (none where the sign says it all).
-struct Chip {
-    name: &'static str,
-    constraint: Constraint,
+/// sign, and a word or two (none where the sign says it all). The rule library narrows its
+/// list by the same properties, with the same chips.
+pub(crate) struct Chip {
+    pub(crate) name: &'static str,
+    pub(crate) constraint: Constraint,
     sign: Sign,
     label: &'static str,
 }
@@ -71,7 +72,7 @@ const fn chip(name: &'static str, constraint: Constraint, sign: Sign, label: &'s
 
 /// The chips, group by group: the turns, the mirrors, what patterns keep, the table. The
 /// mirrors across the diagonals are the mirror's icon, turned to lie along them.
-const CHIPS: [Chip; 16] = [
+pub(crate) const CHIPS: [Chip; 16] = [
     chip("quarter-turn", Constraint::Symmetric(Turn::Quarter), Sign::Written("90°"), ""),
     chip("half-turn", Constraint::Symmetric(Turn::Half), Sign::Written("180°"), ""),
     chip("mirror", Constraint::Symmetric(Turn::Mirror), Sign::Icon(icons::MIRROR), ""),
@@ -377,7 +378,7 @@ fn words(text: &'static str) -> impl Scene {
 }
 
 /// The box of a chip or of a step: a small button that lights up under the pointer.
-fn chip_box() -> impl Scene {
+pub(crate) fn chip_box() -> impl Scene {
     bsn! {
         Node {
             flex_direction: FlexDirection::Row,
@@ -395,20 +396,10 @@ fn chip_box() -> impl Scene {
 }
 
 fn chip_scene(index: usize) -> impl Scene {
-    let chip = &CHIPS[index];
-    let name = Name::new(format!("Want:{}", chip.name));
-    let (want, sign) = (Want(index), WantSign(index));
-    // A sign alone needs no word next to it, and less room around it.
-    let (label, sides) = if chip.label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
-    let (glyph, font, size, degrees): (_, _, f32, f32) = match chip.sign {
-        Sign::Icon(glyph) => (glyph, icons::FONT, 15.0, 0.0),
-        Sign::Turned(glyph, degrees) => (glyph, icons::FONT, 15.0, degrees),
-        Sign::Written(text) => (text, fonts::MONO, 13.0, 0.0),
-    };
-    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
+    let name = Name::new(format!("Want:{}", CHIPS[index].name));
+    let want = Want(index);
     bsn! {
-        chip_box()
-        Node { padding: UiRect::axes(px(sides), px(3)) }
+        chip_face(index, WantSign(index))
         template_value(name)
         template_value(want)
         on(|click: On<Pointer<Click>>, chips: Query<&Want>, mut sampler: ResMut<Sampler>| {
@@ -424,6 +415,24 @@ fn chip_scene(index: usize) -> impl Scene {
                 sampler.ask();
             }
         })
+    }
+}
+
+/// A chip as it looks: its box, its sign, and its word or two. The sign is marked with
+/// `sign`, for whoever lights the chip up when it is on.
+pub(crate) fn chip_face<M: Component + Clone + Default + Unpin>(index: usize, sign: M) -> impl Scene {
+    let chip = &CHIPS[index];
+    // A sign alone needs no word next to it, and less room around it.
+    let (label, sides) = if chip.label.is_empty() { (Display::None, 5.0) } else { (Display::Flex, 7.0) };
+    let (glyph, font, size, degrees): (_, _, f32, f32) = match chip.sign {
+        Sign::Icon(glyph) => (glyph, icons::FONT, 15.0, 0.0),
+        Sign::Turned(glyph, degrees) => (glyph, icons::FONT, 15.0, degrees),
+        Sign::Written(text) => (text, fonts::MONO, 13.0, 0.0),
+    };
+    let turned = UiTransform::from_rotation(Rot2::degrees(degrees));
+    bsn! {
+        chip_box()
+        Node { padding: UiRect::axes(px(sides), px(3)) }
         Children [
             (
                 Text(glyph)

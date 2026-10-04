@@ -271,6 +271,8 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
 | show / hide the list of spaceships caught | **Spaceships** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
+| show / hide the oscillators kept under the rule, and the still lifes | **Oscillators**, **Still lifes** | |
+| keep a pattern among those of its rule, or let go of it | **Keep** in the analysis panel; the mark in a row of a list; **Keep all** | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
 | choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list; or its text, typed or pasted into the panel | left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
@@ -448,6 +450,10 @@ pattern as it is at that generation. Shift-click copies the pattern as run-lengt
 instead (`b2o2$b2o`: `b` dead, `o` alive, `$` next row, written from a corner of the blocks the
 next step rewrites). **Clear list** forgets what was caught under the current rule.
 
+The mark in a row [keeps the kind](#keeping-patterns), and is lit while it is kept; **Keep all**
+keeps every kind of the list. The spaceships kept under a rule are in its list from the start,
+with a count of none until one is caught, and they stay when the list is cleared.
+
 What left or was caught is gone: stepping backwards does not bring it back.
 
 ### Analysing a pattern
@@ -476,13 +482,15 @@ each finding, as the rule editor shows the properties of a rule.
   rule's, a point with its images and the axes of the mirrors; and its run-length encoded text.
   The sign of a spaceship points the way it flies.
 * What its **pieces** are, for a pattern that came apart or is several that never meet. They
-  come last, under the buttons: a line to each sort, with how many spaceships there are and of
+  come last, under the buttons: a tile to each sort, with how many spaceships there are and of
   which speeds, how many oscillators and of which periods, how many still lifes, and what else
   became of pieces. A click on their line lists them kind by kind instead, under a heading for
   the spaceships, one for the oscillators and one for the still lifes. A kind is shown as the
   spaceship list shows one, by the form it is filed under, whichever way its pieces lie; a
   small dial next to a spaceship has the ways its ships fly lit, as in the spaceship list.
-  Another click folds the list away again.
+  Another click folds the list away again. **Keep all**, on the line, keeps every kind of
+  piece that came back to its shape, the list open or not; in the list each kind has a mark
+  of its own.
 
 A pattern is followed for 131 072 generations, and a small one for longer: for as long as its
 cells times the generations stay under 268 million, and for 67 million generations at most.
@@ -500,8 +508,10 @@ The panel shows the pattern living in a small world of its own, a torus just big
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it
 set out. A pattern that never repeats would fill that world, so it has an open border instead, and
 what leaves through it is caught and counted, as on the grid: a gun's output, kind by kind.
-**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text. The
-magnifying glass in a row of the spaceship list sends that kind over. The study is a record: it stays when the rule
+**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text;
+**Keep**, which is there for a still life, an oscillator or a spaceship, [keeps the
+pattern](#keeping-patterns), and reads *Kept* while it is. The magnifying glass in a row of a
+list sends that kind over. The study is a record: it stays when the rule
 changes, under the rule named next to the title, and **Place** then puts the same cells down under
 the rule now set.
 
@@ -520,6 +530,26 @@ the drag does nothing. `a` puts the panel away, as
 <p align="center">
   <img src="docs/analysis.png" width="396" alt="The analysis panel: the shape of Conway's glider in a small world of its own, and under it what the study found, a tile to each finding: a spaceship flying down and to the right at c/15, of period 15, with 5 cells of which 7.2 change in a generation, 3×3 and up to 5×5, without symmetry.">
 </p>
+
+### Keeping patterns
+
+What comes back to its shape can be kept with the rule it is a pattern of: a spaceship, an
+oscillator, a still life. Nothing is kept by itself: **Keep** in the analysis panel keeps the
+pattern on display, **Keep all** the kinds of its pieces, and the mark in a row of the
+spaceship list, or of the pieces, its kind. A second click lets go again. A kind is kept once,
+by the form it is filed under, whichever way and whenever it was found.
+
+The spaceships kept under a rule are in its spaceship list. **Oscillators** and **Still lifes**
+open a panel each for the others: a row shows the pattern, its size, its period and its cells; a
+click picks it up to be put down on the grid, the magnifying glass sends it to the analysis, and
+its mark lets go of it. Each rule has its own, and a rule in another form (turned, mirrored, or
+begun a generation later) has its own too.
+
+They are in `patterns.tsv`, next to the library's `rules.tsv`: a pattern to a line, with tabs in
+between (the rule, the sort, the pattern as text, its period, how far it moves, a name, the day
+it was kept and a note), to be read, edited by hand, and added to by whatever else looks at
+rules. Like the library's file it is written at every change and read again whenever something
+else wrote it, and a scripted run has none.
 
 ## Searching for rules
 

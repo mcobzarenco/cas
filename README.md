@@ -271,6 +271,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | catch the spaceships that reach the edge | *Catch spaceships* | `k` |
 | show / hide the list of spaceships caught | **Caught** | `s` |
 | pick up a caught spaceship, put it down, let go of it | a row of the list; a click on the grid; `Escape` or a right click | |
+| turn the pattern that is picked up: the next way its rule has it | | `t` |
 | show / hide the spaceships kept under the rule, the oscillators, the still lifes | **Spaceships**, **Oscillators**, **Still lifes** | |
 | keep a pattern among those of its rule, or let go of it | **Keep** in the analysis panel; the mark in a row of a list; **Keep all** | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
@@ -426,8 +427,8 @@ border lets everything else pass. The grid is then outlined in the colour of the
   meanwhile. There are spaceships that slow: under `15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0` seven
   cells move four cells along the diagonal in 13 774 generations.
 * A ship is the same entry whichever way it flew and whenever it was caught: it is filed under
-  one form chosen among all phases of its period and all the orientations the rule itself is
-  symmetric under, by a fixed order (travelling right, then down; smallest bounding box; cells
+  one form chosen among all phases of its period and all the turns and mirrors its world looks
+  the same under, by a fixed order (travelling right, then down; smallest bounding box; cells
   in reading order).
 
 **Caught** (`s`) opens the list for the current rule; every rule has a list of its own. A row
@@ -436,16 +437,22 @@ flying, its period, its number of cells, how often it was caught, and as a bar i
 catches. The picture shows the blocks the pattern lies on: how a pattern sits on the blocks is
 part of what it is, and the same cells one block over are another pattern.
 
-The picture is of the form the kind is filed under, which flies right or down. The ways its
-ships were going when they were caught are on the small dial next to the speed: a way is lit
-once a ship of the kind went it, and the brighter the more of them did. A kind goes only the ways
-the rule's own symmetry turns it: all four of its sort under a rule that looks the same after a
-quarter turn, two under one with only a half turn, and a single one under a rule with no
-symmetry, where the same shape flying another way is another pattern, if it flies at all.
+The picture is of the form the kind is filed under, which flies right or down where its world
+has a turn or a mirror that points it there. The small dial next to the speed has the eight
+ways there are to go. A way is lit once a ship of the kind was caught going it, and the
+brighter the more of them were; a way the kind can go, though none was caught going it, is
+grey; the rest are dark. A kind can go the ways that the turns and mirrors of its world take
+it, those under which what differs from empty space fares the same: all four of its sort where
+every quarter turn is one, two where only the half turn is, and a single one in a world that
+looks the same no other way, where the same shape flying another way is another pattern, if it
+flies at all. The dial has the straight ways and the diagonals: a ship that flies between two
+of them is on the diagonal, and its row says *oblique*.
 
 A click on a row picks the pattern up. It follows the pointer over the grid as a ghost, on the
 blocks of the current partition, and a click puts it down there, as often as you like; `Escape`
-or a right click lets go of it. Under a rule whose empty space flickers, what is put down is the
+or a right click lets go of it. `t` turns it first, to the next way its rule has it: a ship to
+the next way it can go, round with the clock, and to its mirror image where that flies the same
+way. Under a rule whose empty space flickers, what is put down is the
 pattern as it is at that generation. Shift-click copies the pattern as run-length encoded text
 instead (`b2o2$b2o`: `b` dead, `o` alive, `$` next row, written from a corner of the blocks the
 next step rewrites). **Clear list** forgets what was caught under the current rule.
@@ -508,7 +515,8 @@ The panel shows the pattern living in a small world of its own, a torus just big
 running on a clock of its own: **Pause** holds it, **Restart** takes it back to the pattern as it
 set out. A pattern that never repeats would fill that world, so it has an open border instead, and
 what leaves through it is caught and counted, as on the grid: a gun's output, kind by kind.
-**Place** picks the pattern up to be put down on the grid again; **Copy** copies the text;
+**Place** picks the pattern up to be put down on the grid again, where `t` turns it as it does a
+ship of the list; **Copy** copies the text;
 **Keep**, which is there for a still life, an oscillator or a spaceship, [keeps the
 pattern](#keeping-patterns), and reads *Kept* while it is. The magnifying glass in a row of a
 list sends that kind over. The study is a record: it stays when the rule
@@ -540,10 +548,19 @@ what was caught, or of the pieces, its kind. A second click lets go again. A kin
 by the form it is filed under, whichever way and whenever it was found.
 
 **Spaceships**, **Oscillators** and **Still lifes** open a panel each with what is kept under
-the rule on the grid: a row shows the pattern, its speed and the way it flies or its size, its
-period and its cells; a click picks it up to be put down on the grid, the magnifying glass sends
-it to the analysis, and its mark lets go of it. Each rule has its own, and a rule in another
-form (turned, mirrored, or begun a generation later) has its own too.
+the rule on the grid: a row shows the pattern, its speed or its size, its period and its cells;
+a click picks it up to be put down on the grid, turned with `t` if need be, the magnifying glass
+sends it to the analysis, and its mark lets go of it. Each rule has its own, and a rule in
+another form (turned, mirrored, or begun a generation later) has its own too.
+
+A spaceship's row says whether it flies straight, along a diagonal or neither (*orthogonal*,
+*diagonal*, *oblique*), and its dial has the ways it can go: lit the way of the form it is filed
+under, grey the others that the turns and mirrors of the world take it. Over the list the same
+dial has the ways of all the kept ships together, the brighter a way the more kinds can go it,
+and next to it how many kinds fly straight, along a diagonal or neither: what was found in this
+world so far, at a glance. The fastest ships come first; of two as fast the one of the shorter
+period, then the one of fewer cells. Oscillators go by their period and then their cells, still
+lifes by their cells.
 
 They are in `patterns.tsv`, next to the library's `rules.tsv`: a pattern to a line, with tabs in
 between (the rule, the sort, the pattern as text, its period, how far it moves, a name and a

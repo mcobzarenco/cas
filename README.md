@@ -554,13 +554,13 @@ sends it to the analysis, and its mark lets go of it. Each rule has its own, and
 another form (turned, mirrored, or begun a generation later) has its own too.
 
 A spaceship's row says whether it flies straight, along a diagonal or neither (*orthogonal*,
-*diagonal*, *oblique*), and its dial has the ways it can go: lit the way of the form it is filed
-under, grey the others that the turns and mirrors of the world take it. Over the list the same
-dial has the ways of all the kept ships together, the brighter a way the more kinds can go it,
-and next to it how many kinds fly straight, along a diagonal or neither: what was found in this
-world so far, at a glance. The fastest ships come first; of two as fast the one of the shorter
-period, then the one of fewer cells. Oscillators go by their period and then their cells, still
-lifes by their cells.
+*diagonal*, *oblique*), and its dial has the ways it can go lit: the way of the form it is filed
+under, and the others that the turns and mirrors of its world take it. A way is lit or it is
+not: these lists are of what is known, and nothing in them was counted. Over the list the same
+dial has the ways of all the kept ships together, and next to it how many kinds fly straight,
+along a diagonal or neither: what was found in this world so far, at a glance. The fastest ships
+come first; of two as fast the one of the shorter period, then the one of fewer cells.
+Oscillators go by their period and then their cells, still lifes by their cells.
 
 They are in `patterns.tsv`, next to the library's `rules.tsv`: a pattern to a line, with tabs in
 between (the rule, the sort, the pattern as text, its period, how far it moves, a name and a

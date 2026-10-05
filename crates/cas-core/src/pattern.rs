@@ -351,8 +351,8 @@ impl Analyser {
     }
 
     /// As [`Analyser::analyse`], and besides how far the pattern moves in a period as it
-    /// lies: the form it is filed under travels right or down, whichever way the pattern
-    /// was going when it was found.
+    /// lies: the form it is filed under travels as far right, then down, as a turn or a
+    /// mirror of its world takes it, whichever way the pattern was going when it was found.
     pub fn analyse_as_found(&self, cells: &[Cell], phase: usize) -> Option<(Motion, (i32, i32))> {
         // Nothing at all is no pattern.
         if cells.is_empty() {
@@ -771,6 +771,39 @@ impl Analyser {
         forms
     }
 
+    /// Which of the [`WAYS`] a pattern can go that moves by `moved` in a period: the way it
+    /// goes as it lies, and every way that a turn or a mirror takes that to, of those the
+    /// world looks the same under. In a world that looks the same no other way a ship has
+    /// the one way to go.
+    pub fn ways(&self, moved: (i32, i32)) -> [bool; 8] {
+        let mut ways = [false; 8];
+        for &i in &self.orientations {
+            let (_, (dx, dy)) = reorient(&[], moved, &ORIENTATIONS[i]);
+            if let Some(way) = way(dx, dy) {
+                ways[way] = true;
+            }
+        }
+        ways
+    }
+
+    /// A pattern filed at the start of the tables' cycle, as it lies and turned or mirrored
+    /// every way the world looks the same under: copies that do what it does, each going its
+    /// own way, which is given with it. `moved` is how far the pattern moves in a period as it
+    /// lies. Each copy is there once, so a pattern that is its own mirror image has fewer; the
+    /// pattern as it lies comes first, and the others by the way they go, clockwise from its
+    /// own. Copies of what stays where it is are in the order of the turns and mirrors.
+    pub fn turned(&self, cells: &[Cell], moved: (i32, i32)) -> Vec<(Vec<Cell>, (i32, i32))> {
+        let mut copies: Vec<(Vec<Cell>, (i32, i32))> = Vec::new();
+        for &i in &self.orientations {
+            let copy = reorient(cells, moved, &ORIENTATIONS[i]);
+            if copies.iter().all(|(seen, _)| *seen != copy.0) {
+                copies.push(copy);
+            }
+        }
+        copies.sort_by(|a, b| clockwise(moved, a.1).total_cmp(&clockwise(moved, b.1)));
+        copies
+    }
+
     /// Runs the pattern until it is back in its starting shape, as it lies, or until it is
     /// given up. Along the way `seen` gets its form every time the tables start over, the
     /// first time included, and `each` gets the form it set out with, the form after every
@@ -957,6 +990,15 @@ fn reorient(cells: &[Cell], moved: (i32, i32), orientation: &Orientation) -> (Ve
     settle(&mut turned);
     let (origin, tip) = ((orientation.cell)((0, 0)), (orientation.cell)(moved));
     (turned, (tip.0 - origin.0, tip.1 - origin.1))
+}
+
+/// How far round `to` points from where `from` does, clockwise as the grid is drawn: from
+/// nothing to just short of a full turn. Nothing, too, if either goes nowhere.
+fn clockwise(from: (i32, i32), to: (i32, i32)) -> f64 {
+    let (from, to) = ((from.0 as i64, from.1 as i64), (to.0 as i64, to.1 as i64));
+    let (across, along) = (from.0 * to.1 - from.1 * to.0, from.0 * to.0 + from.1 * to.1);
+    let angle = (across as f64).atan2(along as f64);
+    if angle < 0.0 { angle + std::f64::consts::TAU } else { angle }
 }
 
 /// So many of a pattern's populations are kept; of more, every other one is let go.
@@ -1366,6 +1408,86 @@ mod tests {
         let (down, right) = (analyser.analyse(&ship, 0).unwrap(), analyser.analyse(&turned, 0).unwrap());
         assert_eq!((down.period, down.heading()), (68, Heading::Orthogonal));
         assert_eq!(down, right);
+    }
+
+    #[test]
+    fn a_ship_goes_the_ways_its_world_looks_the_same() {
+        let ways = |name: &str, moved| {
+            let ways = Analyser::new(&rule(name)).ways(moved);
+            (0..8).filter(|&way| ways[way]).collect::<Vec<_>>()
+        };
+        // After every quarter turn, with mirrors or without: four ways. A ship that flies
+        // neither straight nor along a diagonal is on the diagonals, all four of them.
+        for name in ["single-rotation", "critters"] {
+            assert_eq!(ways(name, (2, 0)), [0, 2, 4, 6], "{name}");
+            assert_eq!(ways(name, (2, 2)), [1, 3, 5, 7], "{name}");
+            assert_eq!(ways(name, (4, 2)), [1, 3, 5, 7], "{name}");
+        }
+        // Ship factory looks the same turned about and mirrored across either diagonal: what
+        // flies right flies down as well, and what flies down a diagonal flies it both ways
+        // and not the other diagonal.
+        assert_eq!(ways("ship-factory", (2, 0)), [0, 2, 4, 6]);
+        assert_eq!(ways("ship-factory", (2, 2)), [3, 7]);
+        // Turned about and nothing else: there and back. No other way at all: there.
+        assert_eq!(ways("steady-blob", (2, 0)), [2, 6]);
+        assert_eq!(ways("crossing-fleets", (2, 0)), [2]);
+        assert_eq!(ways("crossing-fleets", (0, 0)), [] as [usize; 0]);
+    }
+
+    /// A few cells that fly under a rule, and how far in a period: the first to do so of what
+    /// a seed gives, if any of it does.
+    fn some_ship(analyser: &Analyser, seed: u64) -> Option<(Vec<Cell>, (i32, i32))> {
+        let mut rng = Rng::new(seed);
+        (0..500).find_map(|_| {
+            let cells = (0..2 + rng.next_u64() % 5).map(|_| ((rng.next_u64() % 4) as i32, (rng.next_u64() % 4) as i32));
+            let mut cells: Vec<Cell> = cells.collect();
+            cells.sort_unstable();
+            cells.dedup();
+            let (_, moved) = analyser.analyse_as_found(&cells, 0)?;
+            (moved != (0, 0)).then_some((cells, moved))
+        })
+    }
+
+    #[test]
+    fn a_pattern_turned_does_what_it_did_another_way() {
+        // Worlds that look the same every way, after quarter turns only, turned about and
+        // across the diagonals, and no other way at all.
+        let (mut ships, mut most, mut mirrored) = (0, 0, 0);
+        for name in ["bbm", "hpp-gas", "single-rotation", "espca-01c5ef", "ship-factory", "crossing-fleets"] {
+            let analyser = Analyser::new(&rule(name));
+            for (ship, moved) in (1..=6).filter_map(|seed| some_ship(&analyser, seed)) {
+                let motion = analyser.analyse(&ship, 0).unwrap();
+                let copies = analyser.turned(&ship, moved);
+                // As it lies first, and every copy once.
+                assert_eq!(copies[0], (settled(&ship), moved), "{name} {ship:?}");
+                for (index, (copy, flies)) in copies.iter().enumerate() {
+                    assert!(copies[..index].iter().all(|(other, _)| other != copy), "{name} {ship:?}");
+                    // The same kind of ship, flying the way that is said of the copy.
+                    assert_eq!(analyser.analyse_as_found(copy, 0), Some((motion.clone(), *flies)), "{name} {ship:?}");
+                }
+                // Round with the clock from the way the ship flies.
+                let angles: Vec<f64> = copies.iter().map(|(_, flies)| clockwise(moved, *flies)).collect();
+                assert!(angles.is_sorted() && angles[0] == 0.0, "{name} {ship:?}: {angles:?}");
+                // The ways the copies go are the ways there are for the ship.
+                let mut ways = [false; 8];
+                for (_, flies) in &copies {
+                    ways[way(flies.0, flies.1).unwrap()] = true;
+                }
+                assert_eq!(ways, analyser.ways(moved), "{name} {ship:?}");
+                assert_eq!(analyser.orientations.len() % copies.len(), 0, "{name} {ship:?}");
+                ships += 1;
+                most = most.max(copies.len());
+                // Two copies that go the same way are mirror images of each other.
+                mirrored += usize::from(copies.windows(2).any(|pair| pair[0].1 == pair[1].1));
+            }
+        }
+        assert!(ships > 24 && most == 8 && mirrored > 0, "{ships} ships, {most} copies at most, {mirrored} mirrored");
+        // What stays where it is has its copies too, in the order of the turns: a cell goes
+        // round its block. A whole block is the same every way.
+        let analyser = Analyser::new(&rule("single-rotation"));
+        let corners: Vec<Vec<Cell>> = analyser.turned(&[(0, 0)], (0, 0)).into_iter().map(|(copy, _)| copy).collect();
+        assert_eq!(corners, [[(0, 0)], [(1, 0)], [(1, 1)], [(0, 1)]]);
+        assert_eq!(analyser.turned(&[(0, 0), (1, 0), (0, 1), (1, 1)], (0, 0)).len(), 1);
     }
 
     #[test]

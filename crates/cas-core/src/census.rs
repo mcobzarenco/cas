@@ -35,9 +35,9 @@ pub struct Census {
 }
 
 /// One kind of spaceship, how often it was caught, and how often flying each of the eight
-/// [`WAYS`](crate::pattern::WAYS). A kind flies the ways the rule's own turns and mirrors take
-/// it: all four of its sort under a rule that looks the same after a quarter turn, and one
-/// alone under a rule with no symmetry.
+/// [`WAYS`](crate::pattern::WAYS). A kind flies the ways the turns and mirrors of its world
+/// take it ([`Analyser::ways`]): all four of its sort where every quarter turn is one, and
+/// one alone in a world that looks the same no other way.
 pub struct Kind {
     pub motion: Motion,
     pub count: u64,

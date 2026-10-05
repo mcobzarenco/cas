@@ -891,11 +891,12 @@ fn pieces_heading(title: &'static str, period: bool) -> impl Scene {
 }
 
 /// One kind of piece, as the spaceship list shows a kind of spaceship: its picture, how it
-/// moves or how large it is, the dial of the ways its ships fly, its period, its cells, how
-/// many of it there are, the mark that keeps the kind, lit if it is kept, and as a bar the
-/// share of its pieces in the `of` pieces of its section. The picture of a kind is the form
-/// it is filed under, whichever way its pieces lie.
-fn piece_row(index: usize, kind: &Listed, of: usize, kept: bool) -> impl Scene {
+/// moves or how large it is, the dial of the ways its ships fly among those that are
+/// `possible` for it, its period, its cells, how many of it there are, the mark that keeps
+/// the kind, lit if it is kept, and as a bar the share of its pieces in the `of` pieces of
+/// its section. The picture of a kind is the form it is filed under, whichever way its pieces
+/// lie.
+fn piece_row(index: usize, kind: &Listed, possible: &[bool; 8], of: usize, kept: bool) -> impl Scene {
     let name = Name::new(format!("Piece{index}"));
     let (keep, keep_name) = (KeepPiece(index), Name::new(format!("PieceKeep{index}")));
     let ink = if kept { Aspect::Pattern.color() } else { palette::LIGHT_GRAY_2 };
@@ -934,7 +935,7 @@ fn piece_row(index: usize, kind: &Listed, of: usize, kept: bool) -> impl Scene {
                         }
                         Children [ { about } ]
                     ),
-                    dial(&kind.ways, None),
+                    dial(&kind.ways, possible, None),
                     number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(kind.cells.to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     number(group_digits(kind.count as i64), COUNT_COLUMN, palette::WHITE),
@@ -1932,6 +1933,9 @@ fn list_pieces(
     }
     let rule = subject.map(|subject| &subject.rule);
     let is_kept = |kind: &Listed| rule.is_some_and(|rule| collected.is_kept(rule, &kind.form));
+    // The ways a kind can go are those its rule's world looks the same.
+    let analyser = rule.map(Analyser::new);
+    let possible = |kind: &Listed| analyser.as_ref().map_or([false; 8], |analyser| analyser.ways(kind.moves));
     let mut index = 0;
     for (title, kinds) in ["SPACESHIPS", "OSCILLATORS", "STILL LIFES"].into_iter().zip(&kinds) {
         if kinds.is_empty() {
@@ -1941,7 +1945,7 @@ fn list_pieces(
         let period = kinds.iter().any(|kind| kind.period.is_some());
         rows.push(commands.spawn_scene(pieces_heading(title, period)).id());
         for kind in kinds.iter().take(KINDS_LISTED) {
-            rows.push(commands.spawn_scene(piece_row(index, kind, of, is_kept(kind))).id());
+            rows.push(commands.spawn_scene(piece_row(index, kind, &possible(kind), of, is_kept(kind))).id());
             index += 1;
         }
         if kinds.len() > KINDS_LISTED {

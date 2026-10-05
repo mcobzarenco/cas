@@ -404,7 +404,7 @@ const PATTERNS: [Pattern; 12] = [
     (&[(0, 1), (1, 0), (1, 1), (2, 1)], "c/6", "orthogonal", [9, 0, 7, 0, 8, 0, 6, 0], 12, 0.42),
     (&[(0, 0), (1, 1), (2, 1), (3, 0)], "c/4", "diagonal", [0, 5, 0, 3, 0, 4, 0, 6], 8, 0.21),
     (&[(0, 0), (0, 1), (1, 2), (2, 0), (2, 1), (3, 3)], "2c/184", "orthogonal", [1, 0, 0, 0, 2, 0, 0, 0], 368, 0.12),
-    (&[(1, 0), (0, 1), (2, 2), (3, 1)], "c/15", "oblique", [0, 0, 1, 0, 0, 0, 0, 0], 30, 0.08),
+    (&[(1, 0), (0, 1), (2, 2), (3, 1)], "c/15", "oblique", [0, 0, 0, 1, 0, 0, 0, 0], 30, 0.08),
     (&[(0, 0), (1, 0), (0, 1), (1, 1)], "2×2", "still", [0; 8], 1, 0.06),
     (&[(0, 0), (3, 0), (1, 1), (2, 1), (0, 3), (3, 3)], "c/2", "orthogonal", [2, 0, 2, 0, 2, 0, 2, 0], 4, 0.04),
     (&[(1, 0), (0, 1), (1, 2), (2, 1), (5, 1)], "3c/7", "diagonal", [0, 1, 0, 1, 0, 0, 0, 0], 14, 0.03),
@@ -427,6 +427,9 @@ const PATTERNS: [Pattern; 12] = [
 fn row(index: usize) -> impl Scene {
     let (cells, speed, way, ways, period, share) = PATTERNS[index];
     let row = Row(index);
+    // As in a world that looks the same after a quarter turn: a pattern can go every way
+    // that quarter turns take it from one it went.
+    let possible = std::array::from_fn(|way| (0..4).any(|quarters| ways[(way + 2 * quarters) % 8] > 0));
     bsn! {
         list_row()
         Node {
@@ -463,7 +466,7 @@ fn row(index: usize) -> impl Scene {
                             (caption(way) template_value(Pickable::IGNORE)),
                         ]
                     ),
-                    dial(&ways, None),
+                    dial(&ways, &possible, None),
                     number(period.to_string(), PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(cells.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     // A click on the button is the button's: the row is not chosen by it.

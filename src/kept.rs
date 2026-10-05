@@ -284,7 +284,7 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
                     (caption(word) template_value(Pickable::IGNORE)),
                 ]
             ),
-            dial(&ways, None),
+            dial(&ways, &ways.map(|ships| ships > 0), None),
             number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
             number(kept.cells.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
             (

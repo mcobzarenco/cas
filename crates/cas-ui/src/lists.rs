@@ -93,36 +93,43 @@ pub const COLUMN_GAP: f32 = 6.0;
 const DIAL: f32 = 30.0;
 /// How bright a way of the dial is that the fewest ships took, against the one most took.
 const FAINTEST: f32 = 0.45;
+/// A way of the dial that a ship of the kind could go and none did, and one that is not for
+/// the kind at all: lighter and darker than a row, lit by the pointer or not.
+const POSSIBLE: Color = Color::oklcha(0.54, 0.006, 282.0, 1.0);
+const IMPOSSIBLE: Color = palette::GRAY_1;
 
 /// The eight ways there are to go on a grid, clockwise from straight up: a step across and a
 /// step down each.
 const WAYS: [(i32, i32); 8] = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)];
 
-/// An arrow of a dial: the way it points, of the eight there are, clockwise from straight up,
-/// and which kind of the list it belongs to, if it is the list's: those are kept in step with
-/// what is caught ([`glow`]).
+/// An arrow of a dial: the way it points, of the eight there are, clockwise from straight up;
+/// whether the kind can go that way; and which kind of the list it belongs to, if it is the
+/// list's: those are kept in step with what is caught ([`glow`]).
 #[derive(Component, Default, Clone, Copy)]
 pub struct Flown {
     pub kind: Option<usize>,
     pub way: usize,
+    pub possible: bool,
 }
 
-/// The ways the spaceships of a kind go, as a dial: the eight ways there are, lit where some
-/// went, and the brighter the more of them did. A kind goes the ways the rule's own turns and
-/// mirrors take it. `ways` counts the ships by the way they went, clockwise from straight up;
-/// `kind` is the kind's place in the spaceship list, whose dials follow what is caught. With
-/// no ship at all there is no dial.
+/// The ways the spaceships of a kind go, as a dial of the eight ways there are. A way that
+/// some went is lit, and the brighter the more of them did; a way that none went and one
+/// could is grey; a way that is not for the kind at all is dark. `ways` counts the ships by
+/// the way they went, clockwise from straight up, and `possible` says of each way whether the
+/// kind can go it, which is for whoever knows the rule to say. `kind` is the kind's place in
+/// the spaceship list, whose dials follow what is caught. With no way to show there is no
+/// dial.
 ///
 /// Every way has an arrow of its own, where one arrow could be turned eight ways: what is
 /// turned is not clipped by what it scrolls in, and a dial is in every row of lists that do.
-pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
+pub fn dial(ways: &[u64; 8], possible: &[bool; 8], kind: Option<usize>) -> impl Scene + use<> {
     let step = DIAL / 3.0;
     let arrows: Vec<_> = WAYS
         .iter()
         .enumerate()
         .map(|(way, &(dx, dy))| {
-            let color = glow(ways, way);
-            let flown = Flown { kind, way };
+            let color = glow(ways, way, possible[way]);
+            let flown = Flown { kind, way, possible: possible[way] };
             bsn! {
                 Node {
                     position_type: PositionType::Absolute,
@@ -142,7 +149,8 @@ pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
             }
         })
         .collect();
-    let (side, shown) = if ways.iter().all(|&ships| ships == 0) { (0.0, Display::None) } else { (DIAL, Display::Flex) };
+    let none = ways.iter().all(|&ships| ships == 0) && possible.iter().all(|&possible| !possible);
+    let (side, shown) = if none { (0.0, Display::None) } else { (DIAL, Display::Flex) };
     bsn! {
         Node {
             display: shown,
@@ -155,12 +163,12 @@ pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
     }
 }
 
-/// The colour of a way on a dial: dark where no ship went, and from there the brighter the
-/// more ships went that way, up to the way most of them took.
-pub fn glow(ways: &[u64; 8], way: usize) -> Color {
+/// The colour of a way on a dial. Where no ship went: dark, or grey if one could have. Where
+/// some did: the brighter the more of them, up to the way most of them took.
+pub fn glow(ways: &[u64; 8], way: usize, possible: bool) -> Color {
     let most = ways.iter().copied().max().unwrap_or(0);
     if ways[way] == 0 {
-        return palette::GRAY_3;
+        return if possible { POSSIBLE } else { IMPOSSIBLE };
     }
     let share = ways[way] as f32 / most as f32;
     let (dark, lit) = (palette::GRAY_3.to_srgba(), Aspect::Pattern.color().to_srgba());
@@ -238,5 +246,24 @@ pub fn picture(cells: &[(i32, i32)]) -> impl Scene {
             }
             Children [ { squares }, { lines } ]
         )]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_way_of_the_dial_is_dark_grey_or_lit() {
+        // No ship went up: dark if none can, grey if one could.
+        let ways = [0, 0, 6, 0, 3, 0, 0, 0];
+        assert_eq!(glow(&ways, 0, false), IMPOSSIBLE);
+        assert_eq!(glow(&ways, 0, true), POSSIBLE);
+        // Where ships went, the way most of them took is the colour of patterns, and the
+        // other is between that and the dark: whether it is possible is not asked again.
+        assert_eq!(glow(&ways, 2, true), Color::from(Aspect::Pattern.color().to_srgba()));
+        let (fewer, most) = (glow(&ways, 4, true).to_srgba(), glow(&ways, 2, true).to_srgba());
+        assert!(fewer.red < most.red && fewer.red > palette::GRAY_3.to_srgba().red);
+        assert_eq!(glow(&ways, 4, false), glow(&ways, 4, true));
     }
 }

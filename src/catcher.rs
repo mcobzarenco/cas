@@ -365,17 +365,18 @@ fn figure(label: &'static str, figure: Figure) -> impl Scene {
     }
 }
 
-/// One kind of spaceship: its picture, how it moves, and how often it was caught, out of
-/// `ships` in all.
-fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
+/// One kind of spaceship: its picture, how it moves, the ways its ships went among those
+/// that are `possible` for it, and how often it was caught, out of `ships` in all.
+fn kind_row(index: usize, kind: &Kind, possible: &[bool; 8], ships: u64) -> impl Scene {
     let motion = &kind.motion;
     let name = Name::new(format!("Kind{index}"));
     let row = KindRow(index);
     let (caught, share) = (Figure::Caught(index), Share(index));
     let (analyse, analyse_name) = (AnalyseKind(index), Name::new(format!("AnalyseKind{index}")));
     let (keep, keep_name) = (KeepKind(index), Name::new(format!("KeepKind{index}")));
-    // The picture is of the form the kind is filed under, which flies right or down; the ways
-    // its ships were going when they were caught are on the dial.
+    // The picture is of the form the kind is filed under, which flies right or down where
+    // its world has a turn or a mirror that points it there; the ways its ships were going
+    // when they were caught are on the dial.
     let speed = match motion.speed() {
         (1, 1) => "c".to_string(),
         (1, period) => format!("c/{period}"),
@@ -424,7 +425,7 @@ fn kind_row(index: usize, kind: &Kind, ships: u64) -> impl Scene {
                             caption(heading),
                         ]
                     ),
-                    dial(&kind.ways, Some(index)),
+                    dial(&kind.ways, possible, Some(index)),
                     number(motion.period.to_string(), PERIOD_COLUMN, palette::LIGHT_GRAY_1),
                     number(motion.canonical.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
                     (
@@ -717,7 +718,7 @@ fn sync_list(
     // The dials of the list: a way lights up when the first ship of its kind goes it.
     for (flown, mut color) in &mut arrows {
         if let Some(kind) = flown.kind.and_then(|kind| kinds.get(kind)) {
-            color.set_if_neq(TextColor(glow(&kind.ways, flown.way)));
+            color.set_if_neq(TextColor(glow(&kind.ways, flown.way, flown.possible)));
         }
     }
     note.set_if_neq(Text(catcher.note.clone().unwrap_or(hint.to_string())));
@@ -736,7 +737,11 @@ fn sync_list(
         .take(LISTED)
         .map(|kind| {
             let row = rows.remove(&kind);
-            row.unwrap_or_else(|| commands.spawn_scene(kind_row(kind, &kinds[kind], ships)).id())
+            row.unwrap_or_else(|| {
+                // A kind can go the ways the rule's world looks the same.
+                let possible = Analyser::new(universe.rule()).ways(kinds[kind].motion.displacement);
+                commands.spawn_scene(kind_row(kind, &kinds[kind], &possible, ships)).id()
+            })
         })
         .collect();
     for unlisted in rows.into_values() {

@@ -20,6 +20,7 @@ mod view;
 use std::path::PathBuf;
 
 use bevy::{
+    log::{DEFAULT_FILTER, LogPlugin},
     prelude::*,
     window::{CursorOptions, PresentMode, WindowResolution},
 };
@@ -164,18 +165,25 @@ fn main() -> AppExit {
     }
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "cas — reversible cellular automata".into(),
-            resolution: WindowResolution::new(window_width, window_height),
-            present_mode: args.vsync.present_mode(),
-            ..default()
-        }),
-        // A scripted run is not for clicking on: let the real pointer through to whatever
-        // is behind the window.
-        primary_cursor_options: Some(CursorOptions { hit_test: script.is_none(), ..default() }),
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "cas — reversible cellular automata".into(),
+                    resolution: WindowResolution::new(window_width, window_height),
+                    present_mode: args.vsync.present_mode(),
+                    ..default()
+                }),
+                // A scripted run is not for clicking on: let the real pointer through to
+                // whatever is behind the window.
+                primary_cursor_options: Some(CursorOptions { hit_test: script.is_none(), ..default() }),
+                ..default()
+            })
+            // Bevy's use of Tab, going from one control to the next, comes with the widgets
+            // and finds nowhere to go in this interface: it would warn of that at every press
+            // of the key.
+            .set(LogPlugin { filter: format!("{DEFAULT_FILTER}bevy_input_focus::tab_navigation=error"), ..default() }),
+    )
     .insert_resource(ClearColor(view::BACKGROUND))
     .insert_resource(kept::Collected::at(library.as_ref().map(|rules| rules.with_file_name("patterns.tsv"))))
     .insert_resource(library::RuleLibrary::at(library))

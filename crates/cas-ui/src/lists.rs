@@ -112,6 +112,9 @@ pub struct Flown {
 /// mirrors take it. `ways` counts the ships by the way they went, clockwise from straight up;
 /// `kind` is the kind's place in the spaceship list, whose dials follow what is caught. With
 /// no ship at all there is no dial.
+///
+/// Every way has an arrow of its own, where one arrow could be turned eight ways: what is
+/// turned is not clipped by what it scrolls in, and a dial is in every row of lists that do.
 pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
     let step = DIAL / 3.0;
     let arrows: Vec<_> = WAYS
@@ -119,7 +122,6 @@ pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
         .enumerate()
         .map(|(way, &(dx, dy))| {
             let color = glow(ways, way);
-            let turned = UiTransform::from_rotation(Rot2::degrees(45.0 * way as f32));
             let flown = Flown { kind, way };
             bsn! {
                 Node {
@@ -133,8 +135,7 @@ pub fn dial(ways: &[u64; 8], kind: Option<usize>) -> impl Scene + use<> {
                 }
                 template_value(Pickable::IGNORE)
                 Children [(
-                    icons::icon(icons::WAY, step, color)
-                    template_value(turned)
+                    icons::icon(icons::WAYS[way], step, color)
                     template_value(flown)
                     template_value(Pickable::IGNORE)
                 )]

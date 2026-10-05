@@ -52,15 +52,16 @@ pub const UNDECIDED: &str = "\u{e2b2}";
 /// How long a pattern takes to be back, and how much of it changes on the way.
 pub const PERIOD: &str = "\u{e492}";
 pub const CHANGES: &str = "\u{e2de}";
-/// A way to go: up, to be turned.
-pub const WAY: &str = "\u{e08e}";
+/// The eight ways to go, clockwise from straight up.
+pub const WAYS: [&str; 8] =
+    ["\u{e08e}", "\u{e092}", "\u{e06c}", "\u{e042}", "\u{e03e}", "\u{e040}", "\u{e058}", "\u{e090}"];
 /// What holds a rule in the rule menu.
 pub const PIN: &str = "\u{e3e2}";
 /// The mark of a pattern that is kept.
 pub const KEEP: &str = "\u{e0ea}";
 
 /// Every icon with its name, as the gallery shows them.
-pub const ALL: [(&str, &str); 28] = [
+pub const ALL: [(&str, &str); 35] = [
     ("TURN", TURN),
     ("MIRROR", MIRROR),
     ("FLIP", FLIP),
@@ -86,7 +87,14 @@ pub const ALL: [(&str, &str); 28] = [
     ("UNDECIDED", UNDECIDED),
     ("PERIOD", PERIOD),
     ("CHANGES", CHANGES),
-    ("WAY", WAY),
+    ("WAYS[0]", WAYS[0]),
+    ("WAYS[1]", WAYS[1]),
+    ("WAYS[2]", WAYS[2]),
+    ("WAYS[3]", WAYS[3]),
+    ("WAYS[4]", WAYS[4]),
+    ("WAYS[5]", WAYS[5]),
+    ("WAYS[6]", WAYS[6]),
+    ("WAYS[7]", WAYS[7]),
     ("PIN", PIN),
     ("KEEP", KEEP),
 ];

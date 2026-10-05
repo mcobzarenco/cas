@@ -12,13 +12,14 @@ use bevy::{feathers::palette, prelude::*, ui_widgets::Activate};
 
 use cas_core::{
     collection::{Collection, Kept, Sort},
-    pattern::{Analyser, Cell, Motion, way},
+    pattern::{Analyser, Cell, Heading, Motion, way},
     rules::BlockRule,
     universe::Universe,
 };
 use cas_ui::{
-    Aspect, CELLS_COLUMN, COLUMN_GAP, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button, icons,
-    list_row, mono, number, panel_header, panel_title, picture, scrolling, side_panel,
+    Aspect, CELLS_COLUMN, COLUMN_GAP, GLYPH, PERIOD_COLUMN, PICTURE, Scrolls, caption, dial, heading, icon_button,
+    icons, list_row, mono, number, panel_header, panel_title, picture, scrolling, side_panel, tile, tile_label,
+    tile_picture, tile_value,
 };
 
 use crate::{
@@ -138,6 +139,17 @@ struct KeptList(usize);
 #[derive(Component, Default, Clone, Copy)]
 struct KeptNote(usize);
 
+/// What the kept spaceships come to, over their list: the tile of it, the box its dial is
+/// in, and the line that says how they fly.
+#[derive(Component, Default, Clone, Copy)]
+struct KeptWays;
+
+#[derive(Component, Default, Clone, Copy)]
+struct KeptWaysDial;
+
+#[derive(Component, Default, Clone, Copy)]
+struct KeptWaysSaid;
+
 /// A row of a list, and its two buttons: the shelf, and which of its patterns.
 #[derive(Component, Default, Clone, Copy)]
 struct KeptRow(usize, usize);
@@ -191,6 +203,8 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
         Sort::Oscillator => ("SIZE", "PERIOD"),
         Sort::StillLife => ("SIZE", ""),
     };
+    // Only what flies goes any way.
+    let ways: Vec<_> = (SHELVES[shelf] == Sort::Spaceship).then(ways_tile).into_iter().collect();
     bsn! {
         side_panel(KEPT_WIDTH, bsn_list![
             panel_header(panel_title(Aspect::Pattern, title), bsn! {
@@ -203,6 +217,7 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
                 })
             }),
             caption(about),
+            { ways },
             (
                 // Titles over the columns of the rows below: same widths, same padding.
                 Node {
@@ -225,6 +240,44 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
         template_value(panel)
         template_value(this)
     }
+}
+
+/// The ways the kept spaceships of the rule go, all of them together: a dial of the ways
+/// that are there for one kind of them at least, the brighter the more kinds can go a way,
+/// and in words how many kinds fly straight, along a diagonal, or neither. It says what was
+/// found in the rule's world, not what there is. Not there while no spaceship is kept.
+fn ways_tile() -> impl Scene {
+    bsn! {
+        tile()
+        Node { display: Display::None }
+        #KeptSpaceshipsWays
+        KeptWays
+        Children [
+            (tile_picture(GLYPH) KeptWaysDial),
+            (
+                Node {
+                    flex_grow: 1.0,
+                    flex_basis: px(0),
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                }
+                Children [
+                    tile_label("WAYS"),
+                    (tile_value("") KeptWaysSaid),
+                ]
+            ),
+        ]
+    }
+}
+
+/// How many kinds of ship fly straight, along a diagonal, or neither, in words.
+fn headings(ships: &[Kept]) -> String {
+    let flies = |kept: &Kept| Motion { period: kept.period, displacement: kept.moves, canonical: Vec::new() }.heading();
+    let count = |heading: Heading| ships.iter().filter(|kept| flies(kept) == heading).count();
+    let said = [(Heading::Orthogonal, "orthogonal"), (Heading::Diagonal, "diagonal"), (Heading::Oblique, "oblique")];
+    let said = said.into_iter().map(|(heading, name)| (count(heading), name)).filter(|&(count, _)| count > 0);
+    said.map(|(count, name)| format!("{count} {name}")).collect::<Vec<_>>().join(" · ")
 }
 
 /// A kept pattern: its picture; how fast it flies, or how large it is; a word on it; the
@@ -411,6 +464,9 @@ fn list_kept(
     universe: Res<Universe>,
     lists: Query<(Entity, &KeptList)>,
     mut notes: Query<(&KeptNote, &mut Text)>,
+    mut ways_tiles: Query<&mut Node, With<KeptWays>>,
+    ways_dials: Query<Entity, With<KeptWaysDial>>,
+    mut ways_said: Query<&mut Text, (With<KeptWaysSaid>, Without<KeptNote>)>,
     mut shown: Local<Option<(u64, BlockRule)>>,
     mut commands: Commands,
 ) {
@@ -435,6 +491,29 @@ fn list_kept(
             .collect();
         commands.entity(list).despawn_related::<Children>();
         commands.entity(list).add_children(&rows);
+    }
+    // Over the spaceships, the ways they go between them: every way one kind can go counts
+    // for that kind.
+    let ships = shelf(Sort::Spaceship).map_or(&[][..], |shelf| &listed[shelf][..]);
+    let mut ways = [0; 8];
+    for kept in ships {
+        for (way, possible) in analyser.ways(kept.moves).into_iter().enumerate() {
+            ways[way] += u64::from(possible);
+        }
+    }
+    let display = if ships.is_empty() { Display::None } else { Display::Flex };
+    for mut tile in &mut ways_tiles {
+        if tile.display != display {
+            tile.display = display;
+        }
+    }
+    for picture in &ways_dials {
+        let dial = commands.spawn_scene(dial(&ways, &ways.map(|kinds| kinds > 0), None)).id();
+        commands.entity(picture).despawn_related::<Children>();
+        commands.entity(picture).add_child(dial);
+    }
+    for mut said in &mut ways_said {
+        said.set_if_neq(Text(headings(ships)));
     }
     for (&KeptNote(shelf), mut text) in &mut notes {
         let said = match (collected.trouble(), listed[shelf].is_empty()) {

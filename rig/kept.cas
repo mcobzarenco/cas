@@ -4,7 +4,7 @@
 wait 25; clear
 
 # The panels open from the pattern card, and say that nothing is kept yet.
-click Spaceships; wait 6; expect_shown KeptSpaceships on
+click Spaceships; wait 6; expect_shown KeptSpaceships on; expect_shown KeptSpaceshipsWays off
 expect_text KeptSpaceshipsNote None kept under this rule yet. Keep puts a pattern here.
 click Oscillators; wait 6; expect_shown KeptOscillators on
 shot kept-1-empty
@@ -72,6 +72,8 @@ expect_shown KeptSpaceship0 on; expect_shown KeptSpaceship2 on
 expect_text KeptSpaceship0 12 4 c/6 orthogonal
 expect_text KeptSpaceship1 15 5 c/15 diagonal
 expect_text KeptSpaceship2 368 4 c/184 diagonal
+# Over the list, the ways they go between them: in this world every one of them four ways.
+expect_shown KeptSpaceshipsWays on; expect_text KeptSpaceshipsWays WAYS 1 orthogonal · 2 diagonal
 shot kept-5-spaceships
 click Spaceships; wait 4
 

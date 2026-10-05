@@ -152,6 +152,10 @@ The limitations users meet are in the README. Besides those:
   unless all of it is within its clip (`turned.rs`), so that the tick of a checkbox or the
   turned sign of a chip is gone a little before it has scrolled out of sight; and the arrows of
   a dial are eight glyphs, not one turned eight ways, since dials are in every scrolling list.
+* Bevy's tab navigation comes with Feathers and finds nothing to go to in this interface, of
+  which it warns at every press of Tab. The key has a use of its own here, so those warnings
+  are filtered out of the log (`main.rs`). Going from control to control with the keyboard is
+  not there: a button lets go of the focus as soon as a click is over.
 * Painting and wheel zoom assume a `UiScale` of 1.
 * A scripted window still takes the keyboard focus when it opens. Its input is discarded, but
   keystrokes meant for the window behind it are lost while it is in front.

@@ -275,6 +275,7 @@ so they follow the keyboard layout; with Ctrl, Alt or Super held they do nothing
 | show / hide the spaceships kept under the rule, the oscillators, the still lifes | **Spaceships**, **Oscillators**, **Still lifes** | |
 | keep a pattern among those of its rule, or let go of it | **Keep** in the analysis panel; the mark in a row of a list; **Keep all** | |
 | show / hide the analysis panel; it opens choosing a pattern | | `a` |
+| with the analysis panel open: start or stop choosing a pattern | **Analyse** | `tab` |
 | choose a pattern to analyse: a drag around it | **Analyse** (again: stop choosing); or the magnifying glass in a row of the spaceship list; or its text, typed or pasted into the panel | left-drag |
 | paint | | left-drag: paints the opposite of the first cell touched; with `shift` it erases |
 
@@ -532,7 +533,8 @@ leaves the field.
 Choosing stays on after a study, so the next drag studies the next pattern, and **Analyse** is
 outlined for as long as it is on; `Escape`, **Analyse** again, or picking a pattern up ends it,
 and left-drag paints again. Called off in the middle of a drag, the band is gone and the rest of
-the drag does nothing. `a` puts the panel away, as
+the drag does nothing. While the panel is open `tab` does what **Analyse** does, and is the key
+the button then shows: it turns the choosing off and on again. `a` puts the panel away, as
 `e` and `s` do theirs, and brings it back choosing.
 
 <p align="center">

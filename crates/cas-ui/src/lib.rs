@@ -44,6 +44,7 @@ mod controls;
 pub mod icons;
 mod lists;
 mod text;
+mod turned;
 
 use bevy::{
     feathers::{FeathersPlugins, theme::UiTheme},
@@ -76,7 +77,7 @@ pub struct KitSystems;
 
 impl Plugin for KitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((FeathersPlugins, icons::plugin, controls::plugin, lists::plugin))
+        app.add_plugins((FeathersPlugins, icons::plugin, controls::plugin, lists::plugin, turned::plugin))
             .insert_resource(UiTheme(aspect::theme()));
     }
 }

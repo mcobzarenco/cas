@@ -40,7 +40,7 @@ use cas_ui::{
 };
 
 use crate::{
-    actions::KeyboardOwner,
+    actions::{Action, KeyboardOwner},
     kept::Collected,
     sim::{Settings, SimSystems},
     view::{Framing, GridMaterial, GridParams, Stamp, blank_image, cell_image, edge_of, upload},
@@ -414,6 +414,11 @@ pub struct SelectHint;
 #[derive(Component, Default, Clone)]
 pub struct ChoosingMark;
 
+/// The key shown on that button: the one that does what the button does, which is another
+/// once the panel is open.
+#[derive(Component, Default, Clone)]
+pub struct ChoosingKey;
+
 /// The texture and the material the small world is drawn with, and an empty world to draw
 /// while there is no pattern.
 #[derive(Resource)]
@@ -456,6 +461,7 @@ impl Plugin for AnalysisPlugin {
                     list_pieces,
                     show_status,
                     label_pause,
+                    label_key,
                 )
                     .chain()
                     .in_set(SimSystems::Present),
@@ -1364,6 +1370,16 @@ fn show_status(analysis: Res<Analysis>, mut status: Single<&mut Text, With<Small
 fn label_pause(analysis: Res<Analysis>, mut label: Single<&mut Text, With<PauseLabel>>) {
     let paused = analysis.subject.as_ref().is_some_and(|subject| subject.paused);
     label.set_if_neq(Text(if paused { "Play" } else { "Pause" }.to_string()));
+}
+
+/// The Analyse button of the pattern card shows the key that does what it does: the one that
+/// opens the panel, choosing, or, with the panel open, the one that turns the choosing off
+/// and on.
+fn label_key(analysis: Res<Analysis>, mut key: Single<&mut Text, With<ChoosingKey>>) {
+    let same = if analysis.open { Action::Choose } else { Action::Analysis };
+    if key.0 != same.key() {
+        key.0 = same.key().to_string();
+    }
 }
 
 /// Keeps the findings in step with the pattern on display: what each says, and the picture of

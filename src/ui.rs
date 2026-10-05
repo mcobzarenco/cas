@@ -29,13 +29,13 @@ use cas_core::{
     universe::Universe,
 };
 use cas_ui::{
-    Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, keyed_button, menu_heading,
-    readout, scrolling,
+    Aspect, GUTTER, Scrolls, button, caption, check, checkbox, group_digits, key_hint, keyed_button,
+    keyed_button_marked, menu_heading, readout, scrolling,
 };
 
 use crate::{
     actions::{Action, Does, Toggle},
-    analysis::{ANALYSIS_WIDTH, Analysis, ChoosingMark, SelectHint, analysis_panel},
+    analysis::{ANALYSIS_WIDTH, Analysis, ChoosingKey, ChoosingMark, SelectHint, analysis_panel},
     catcher::{CATCHER_WIDTH, Catcher, catcher_panel},
     editor::{EDITOR_WIDTH, RuleEditor, describe, editor_panel},
     kept::{Collected, KEPT_WIDTH, oscillators_panel, spaceships_panel, still_lifes_panel},
@@ -373,16 +373,10 @@ fn card(aspect: Aspect, figure: Option<Readout>, body: impl SceneList) -> impl S
 
 /// A button that triggers `action`, labelled with its shortcut.
 fn action_button(label: &'static str, name: &'static str, action: Action) -> impl Scene {
-    action_button_hinted(label, name, action, action)
-}
-
-/// A button that triggers `action`, labelled with the shortcut of `hinted`: for a button
-/// whose key does the same thing as far as a glance tells, and more besides.
-fn action_button_hinted(label: &'static str, name: &'static str, action: Action, hinted: Action) -> impl Scene {
     let name = Name::new(name);
     let does = Does(action);
     bsn! {
-        keyed_button(label, hinted.key())
+        keyed_button(label, action.key())
         Node { flex_grow: 1.0 }
         template_value(name)
         template_value(does)
@@ -764,10 +758,14 @@ fn pattern_card() -> impl Scene {
                 }
                 Children [
                     (
-                        // Outlined in the pattern's colour while a pattern is being chosen.
-                        action_button_hinted("Analyse", "Analyse", Action::Analyse, Action::Analysis)
-                        Node { flex_grow: 0.0, border: px(1) }
+                        // Outlined in the pattern's colour while a pattern is being chosen. It
+                        // has no key of its own, and shows the one that does what it does:
+                        // which that is, the analysis says.
+                        keyed_button_marked("Analyse", Action::Analysis.key(), ChoosingKey)
+                        Node { border: px(1) }
                         BorderColor::all(Color::NONE)
+                        #Analyse
+                        template_value(Does(Action::Analyse))
                         ChoosingMark
                     ),
                     (

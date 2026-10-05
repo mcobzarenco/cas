@@ -214,6 +214,17 @@ expect_text AnalysisNote Place picks the pattern up, to be put down on the grid 
 expect_text SelectHint on the grid, or from the list
 click Analyse; wait 3
 expect_text SelectHint drag over it · Escape cancels
+# With the panel open Tab does what the button does, and is the key the button shows: it
+# turns the choosing off and on. In a text field it is the field's. With the panel put away
+# the button shows the key that opens it, and Tab does nothing.
+expect_text Analyse Analyse tab
+key Tab; wait 3; expect_text SelectHint on the grid, or from the list
+key Tab; wait 3; expect_text SelectHint drag over it · Escape cancels
+click StudyText; wait 3; key Tab; wait 3; key Escape; wait 3
+expect_text SelectHint drag over it · Escape cancels
+key a; wait 5; expect_text Analyse Analyse a
+key Tab; wait 3; expect_shown Analysis off
+key a; wait 5; expect_text SelectHint drag over it · Escape cancels
 
 # A wide pattern is followed as far as a small one: two lone cells seven hundred cells apart
 # are two oscillators, however far that is. (Two side panels leave the grid a third of a

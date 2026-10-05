@@ -69,6 +69,8 @@ pub enum Action {
     Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
     Analyse,
+    /// The same, with the analysis panel open; with the panel put away, nothing.
+    Choose,
     /// Turn the pattern that is held the next way its rule has it.
     Turn,
 }
@@ -113,7 +115,7 @@ impl Toggle {
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 29] = [
+const KEYS: [(&str, Action); 30] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -142,6 +144,7 @@ const KEYS: [(&str, Action); 29] = [
     ("↑", Action::PreviousRule),
     ("↓", Action::NextRule),
     ("a", Action::Analysis),
+    ("tab", Action::Choose),
     ("t", Action::Turn),
 ];
 
@@ -157,6 +160,7 @@ impl Action {
             Key::ArrowUp => "↑".to_string(),
             Key::ArrowDown => "↓".to_string(),
             Key::Home => "home".to_string(),
+            Key::Tab => "tab".to_string(),
             _ => return None,
         };
         KEYS.iter().find(|(key, _)| *key == name).map(|(_, action)| *action)
@@ -295,6 +299,8 @@ fn perform(
             }
         }
         Action::Analyse => analysis.choose(),
+        Action::Choose if !analysis.is_open() => {}
+        Action::Choose => analysis.choose(),
         Action::Turn => stamp.turn(),
     }
     // A band is drawn with the left button, which a stamp would answer to.
@@ -411,6 +417,7 @@ mod tests {
                 "↑" => Key::ArrowUp,
                 "↓" => Key::ArrowDown,
                 "home" => Key::Home,
+                "tab" => Key::Tab,
                 "−" => Key::Character("-".into()),
                 character => Key::Character(character.into()),
             };
@@ -427,5 +434,8 @@ mod tests {
         assert_eq!(Action::Fit.key(), "f");
         assert_eq!(Action::ZoomIn.key(), "+");
         assert_eq!(Action::Flip(Toggle::ShowBlocks).key(), "p");
+        // The button that chooses a pattern has no key of its own: it shows the one that
+        // does what it does, which depends on whether the analysis panel is open.
+        assert_eq!((Action::Analyse.key(), Action::Analysis.key(), Action::Choose.key()), ("", "a", "tab"));
     }
 }

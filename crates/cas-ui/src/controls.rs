@@ -38,11 +38,16 @@ pub fn check(commands: &mut Commands, entity: Entity, is: bool, should: bool) {
     };
 }
 
-/// The caption of a button that has a key: its label and the key that does the same.
-fn label_with_key(label: &'static str, key: &'static str) -> Box<dyn SceneList> {
+/// The caption of a button that has a key: its label and the key that does the same, which
+/// has the mark.
+fn label_with_key<M: Component + Clone + Default + Unpin>(
+    label: &'static str,
+    key: &'static str,
+    mark: M,
+) -> Box<dyn SceneList> {
     bsn_list![
         (Text(label) ThemedText),
-        key_hint(key),
+        (key_hint(key) template_value(mark)),
     ]
     .into()
 }
@@ -63,9 +68,19 @@ pub fn button_marked<M: Component + Clone + Default + Unpin>(label: &'static str
 
 /// A button with the key that does the same after its label.
 pub fn keyed_button(label: &'static str, key: &'static str) -> impl Scene {
+    keyed_button_marked(label, key, Unmarked)
+}
+
+/// Such a button with a mark on its key, for whoever changes it later: what a button does may
+/// be one key's doing at one time and another's at another.
+pub fn keyed_button_marked<M: Component + Clone + Default + Unpin>(
+    label: &'static str,
+    key: &'static str,
+    mark: M,
+) -> impl Scene {
     bsn! {
         @FeathersButton {
-            @caption: {label_with_key(label, key)},
+            @caption: {label_with_key(label, key, mark)},
         }
     }
 }

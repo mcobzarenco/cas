@@ -58,6 +58,13 @@ run, and so does pointing at one that is not on display.
 
 Example: `shot a; step 500; step -500; expect_gen 0; shot b` produces two byte-identical PNGs.
 
+Most screenshots of the scripts are the same pixels in every run of one build, so comparing
+them before and after is a check on a change that is to alter nothing on screen. Not all of
+them: a few show something live, and differ between two runs of the same build in just that.
+These are the small world of the analysis panel with its generation, how far a study had got
+when it was stopped, the caret of a text field, and the grid after playing in real time
+(`catcher-3-haul`, `controls-6-flat-out`).
+
 ## The pictures of the README
 
 The figures in `docs/` are drawn by `cargo run --release -p cas-core --example figures`, with
@@ -83,7 +90,7 @@ panels are made of, and knows nothing of the automata or of the app.
 | `…/families.rs` | the families of rules a search goes through: the rules with some properties in common (symmetries, what patterns keep, the form of the table), enumerated by filling in the table under those constraints, or sampled when there are too many |
 | `crates/cas-core/examples/figures.rs` | draws the figures of the README |
 | `crates/cas-search` | the command-line search: the table, taking up an interrupted search, a closer look at the best of a table, keeping the best in the rule library |
-| `crates/cas-ui` | the kit: what the panels are made of, with only Bevy in it. The aspects with their colours and the `bevy_feathers` dark theme (`aspect.rs`), text in the faces and sizes it comes in (`text.rs`), cards, side panels with their heads, sections and tiles (`cards.rs`), buttons, checkboxes and sliders on the headless widgets, text fields, chips, and what scrolls with its scrollbar (`controls.rs`), the rows of lists and the columns, pictures and dials of the lists of patterns (`lists.rs`). `KitPlugin` sets it up, and its own systems run last in a frame (`KitSystems`) |
+| `crates/cas-ui` | the kit: what the panels are made of, with only Bevy in it. The aspects with their colours and the `bevy_feathers` dark theme (`aspect.rs`), text in the faces and sizes it comes in (`text.rs`), cards, side panels with their heads, sections and tiles (`cards.rs`), buttons, checkboxes and sliders on the headless widgets, text fields, chips, and what scrolls with its scrollbar (`controls.rs`), the rows of lists and the columns, pictures and dials of the lists of patterns (`lists.rs`), and the hiding of what is turned where Bevy would not clip it (`turned.rs`). `KitPlugin` sets it up, and its own systems run last in a frame (`KitSystems`) |
 | `…/src/icons.rs`, `…/assets/fonts/` | the icons: the Phosphor icon font (bold) with its licence, built into the program, and the glyphs the interface uses by name. Another icon is another constant, and a line in `ALL` for the gallery: its code point is in the `style.css` of `@phosphor-icons/web` |
 | `…/examples/gallery.rs` | every element of the kit on one page, in a window of its own and with nothing of cas in it; given a path, it saves a picture of itself there |
 | `src/sim.rs` | the universe in the app: transport and pacing, the settings, the system sets that order a frame; the pacing is tested in a headless app |
@@ -140,6 +147,11 @@ The limitations users meet are in the README. Besides those:
   which is least plain in a thin soup: with a cell in ten alive, a generation costs thirty
   plain steps.
 * The paused app still redraws every frame; Bevy's reactive update mode would let it idle.
+* Bevy's UI neither clips nor culls a node that is turned (a `UiTransform` with a rotation): it
+  draws slivers of one that lies outside what clips it. The kit therefore hides a turned node
+  unless all of it is within its clip (`turned.rs`), so that the tick of a checkbox or the
+  turned sign of a chip is gone a little before it has scrolled out of sight; and the arrows of
+  a dial are eight glyphs, not one turned eight ways, since dials are in every scrolling list.
 * Painting and wheel zoom assume a `UiScale` of 1.
 * A scripted window still takes the keyboard focus when it opens. Its input is discarded, but
   keystrokes meant for the window behind it are lost while it is in front.

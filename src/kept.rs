@@ -227,10 +227,11 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
     }
 }
 
-/// A kept pattern: its picture; how fast it flies and which way, or how large it is; a word
-/// on it; its period if it has one to speak of; its cells; and two small buttons: a closer
-/// look, and the mark that it is kept, which lets go of it.
-fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
+/// A kept pattern: its picture; how fast it flies, or how large it is; a word on it; the
+/// ways it can go, which are those `possible` for it; its period if it has one to speak of;
+/// its cells; and two small buttons: a closer look, and the mark that it is kept, which lets
+/// go of it.
+fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8]) -> impl Scene {
     let stem = ["KeptSpaceship", "KeptOscillator", "KeptStillLife"][shelf];
     let name = Name::new(format!("{stem}{index}"));
     let (look_name, forget_name) = (Name::new(format!("{stem}Look{index}")), Name::new(format!("{stem}Forget{index}")));
@@ -242,8 +243,8 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
     let size = format!("{}×{}", span(|cell| cell.0), span(|cell| cell.1));
     // What was written about it, if anything was.
     let written = if kept.name.is_empty() { kept.note.clone() } else { kept.name.clone() };
-    // A spaceship by its speed, with the way the form it is filed under flies on the dial;
-    // what stays where it is by its size.
+    // A spaceship by its speed, and on the dial the ways it can go, lit the one the form it
+    // is filed under flies; what stays where it is by its size.
     let motion = Motion { period: kept.period, displacement: kept.moves, canonical: Vec::new() };
     let mut ways = [0; 8];
     let (title, word, period) = match kept.sort {
@@ -251,7 +252,10 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
             if let Some(way) = way(kept.moves.0, kept.moves.1) {
                 ways[way] = 1;
             }
-            let word = if written.is_empty() { analysis::heading(&motion).to_string() } else { written };
+            // Straight, along a diagonal or neither is said of every ship: the dial has only
+            // eight ways, and a ship that flies between two of them is on the diagonal.
+            let heading = analysis::heading(&motion);
+            let word = if written.is_empty() { heading.to_string() } else { format!("{heading} · {written}") };
             (analysis::speed(&motion), word, kept.period.to_string())
         }
         Sort::Oscillator => (size, written, kept.period.to_string()),
@@ -284,7 +288,7 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept) -> impl Scene {
                     (caption(word) template_value(Pickable::IGNORE)),
                 ]
             ),
-            dial(&ways, &ways.map(|ships| ships > 0), None),
+            dial(&ways, possible, None),
             number(period, PERIOD_COLUMN, palette::LIGHT_GRAY_1),
             number(kept.cells.len().to_string(), CELLS_COLUMN, palette::LIGHT_GRAY_1),
             (
@@ -398,11 +402,13 @@ fn list_kept(
     *shown = Some(now);
     let rule = universe.rule();
     let listed: [Vec<Kept>; 3] = SHELVES.map(|sort| collected.of(rule, sort).into_iter().rev().cloned().collect());
+    // A ship can go every way that the rule's world looks the same.
+    let analyser = Analyser::new(rule);
     for (list, &KeptList(shelf)) in &lists {
         let rows: Vec<Entity> = listed[shelf]
             .iter()
             .enumerate()
-            .map(|(index, kept)| commands.spawn_scene(kept_row(shelf, index, kept)).id())
+            .map(|(index, kept)| commands.spawn_scene(kept_row(shelf, index, kept, &analyser.ways(kept.moves))).id())
             .collect();
         commands.entity(list).despawn_related::<Children>();
         commands.entity(list).add_children(&rows);

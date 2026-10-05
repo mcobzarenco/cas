@@ -12,7 +12,7 @@ use bevy::{feathers::palette, prelude::*, ui_widgets::Activate};
 
 use cas_core::{
     collection::{Collection, Kept, Sort},
-    pattern::{Analyser, Cell, Heading, Motion, way},
+    pattern::{Analyser, Cell, Heading, Motion},
     rules::BlockRule,
     universe::Universe,
 };
@@ -245,10 +245,10 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
     }
 }
 
-/// The ways the kept spaceships of the rule go, all of them together: a dial of the ways
-/// that are there for one kind of them at least, the brighter the more kinds can go a way,
-/// and in words how many kinds fly straight, along a diagonal, or neither. It says what was
-/// found in the rule's world, not what there is. Not there while no spaceship is kept.
+/// The ways the kept spaceships of the rule go, all of them together: a dial with the ways
+/// lit that one kind of them at least can go, and in words how many kinds fly straight, along
+/// a diagonal, or neither. It says what was found in the rule's world, not what there is. Not
+/// there while no spaceship is kept.
 fn ways_tile() -> impl Scene {
     bsn! {
         tile()
@@ -284,9 +284,9 @@ fn headings(ships: &[Kept]) -> String {
 }
 
 /// A kept pattern: its picture; how fast it flies, or how large it is; a word on it; the
-/// ways it can go, which are those `possible` for it; its period if it has one to speak of;
-/// its cells; and two small buttons: a closer look, and the mark that it is kept, which lets
-/// go of it.
+/// ways it can go, which are those `possible` for it, lit on its dial; its period if it has
+/// one to speak of; its cells; and two small buttons: a closer look, and the mark that it is
+/// kept, which lets go of it.
 fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8]) -> impl Scene {
     let stem = ["KeptSpaceship", "KeptOscillator", "KeptStillLife"][shelf];
     let name = Name::new(format!("{stem}{index}"));
@@ -299,16 +299,14 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8]) -> im
     let size = format!("{}×{}", span(|cell| cell.0), span(|cell| cell.1));
     // What was written about it, if anything was.
     let written = if kept.name.is_empty() { kept.note.clone() } else { kept.name.clone() };
-    // A spaceship by its speed, and on the dial the ways it can go, lit the one the form it
-    // is filed under flies; what stays where it is by its size.
+    // A spaceship by its speed; what stays where it is by its size.
     let motion = Motion { period: kept.period, displacement: kept.moves, canonical: Vec::new() };
-    let mut ways = [0; 8];
+    // On the dial a way is lit or it is not: lit, every way the pattern can go, each as much
+    // as the other. The list is of what is known, and nothing in it was counted.
+    let ways = possible.map(u64::from);
     let period = period_of(kept).map_or(String::new(), |period| period.to_string());
     let (title, word) = match kept.sort {
         Sort::Spaceship => {
-            if let Some(way) = way(kept.moves.0, kept.moves.1) {
-                ways[way] = 1;
-            }
             // Straight, along a diagonal or neither is said of every ship: the dial has only
             // eight ways, and a ship that flies between two of them is on the diagonal.
             let heading = analysis::heading(&motion);
@@ -494,13 +492,13 @@ fn list_kept(
         commands.entity(list).despawn_related::<Children>();
         commands.entity(list).add_children(&rows);
     }
-    // Over the spaceships, the ways they go between them: every way one kind can go counts
-    // for that kind.
+    // Over the spaceships, the ways they go between them: a way is lit if one kind of them
+    // can go it, and as much as any other, however many kinds can.
     let ships = shelf(Sort::Spaceship).map_or(&[][..], |shelf| &listed[shelf][..]);
-    let mut ways = [0; 8];
+    let mut ways = [false; 8];
     for kept in ships {
         for (way, possible) in analyser.ways(kept.moves).into_iter().enumerate() {
-            ways[way] += u64::from(possible);
+            ways[way] |= possible;
         }
     }
     let display = if ships.is_empty() { Display::None } else { Display::Flex };
@@ -510,7 +508,7 @@ fn list_kept(
         }
     }
     for picture in &ways_dials {
-        let dial = commands.spawn_scene(dial(&ways, &ways.map(|kinds| kinds > 0), None)).id();
+        let dial = commands.spawn_scene(dial(&ways.map(u64::from), &ways, None)).id();
         commands.entity(picture).despawn_related::<Children>();
         commands.entity(picture).add_child(dial);
     }

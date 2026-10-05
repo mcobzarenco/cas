@@ -6,7 +6,7 @@
 //! it ([`Synced`]). Nothing gets there by itself: a pattern is kept with a button, in the
 //! analysis panel or in the list of what was caught.
 
-use std::path::PathBuf;
+use std::{cmp::Ordering, path::PathBuf};
 
 use bevy::{feathers::palette, prelude::*, ui_widgets::Activate};
 
@@ -247,7 +247,8 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8]) -> im
     // is filed under flies; what stays where it is by its size.
     let motion = Motion { period: kept.period, displacement: kept.moves, canonical: Vec::new() };
     let mut ways = [0; 8];
-    let (title, word, period) = match kept.sort {
+    let period = period_of(kept).map_or(String::new(), |period| period.to_string());
+    let (title, word) = match kept.sort {
         Sort::Spaceship => {
             if let Some(way) = way(kept.moves.0, kept.moves.1) {
                 ways[way] = 1;
@@ -256,10 +257,9 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8]) -> im
             // eight ways, and a ship that flies between two of them is on the diagonal.
             let heading = analysis::heading(&motion);
             let word = if written.is_empty() { heading.to_string() } else { format!("{heading} · {written}") };
-            (analysis::speed(&motion), word, kept.period.to_string())
+            (analysis::speed(&motion), word)
         }
-        Sort::Oscillator => (size, written, kept.period.to_string()),
-        Sort::StillLife => (size, written, String::new()),
+        Sort::Oscillator | Sort::StillLife => (size, written),
     };
     bsn! {
         list_row()
@@ -386,7 +386,26 @@ fn show_panels(collected: Res<Collected>, mut panels: Query<(&KeptPanel, &mut No
     }
 }
 
-/// Lists what is kept under the rule on the grid, sort by sort, the latest first.
+/// The period of a kept pattern, if it has one to speak of. What stands still has none: the
+/// one it was kept with is the length of its vacuum's cycle, or simply 1.
+fn period_of(kept: &Kept) -> Option<u32> {
+    (kept.sort != Sort::StillLife).then_some(kept.period)
+}
+
+/// The order of a list: the faster ship first; of two as fast, the one of the shorter period;
+/// of two of one period, the one of fewer cells. What stays where it is has no speed, and
+/// goes by its period and its cells; what stands still has no period either
+/// ([`period_of`]), and goes by its cells.
+fn in_order(a: &Kept, b: &Kept) -> Ordering {
+    // Cells per generation along the faster axis, as a speed is given: compared without
+    // dividing.
+    let far = |kept: &Kept| u64::from(kept.moves.0.unsigned_abs().max(kept.moves.1.unsigned_abs()));
+    let faster = (far(b) * u64::from(a.period)).cmp(&(far(a) * u64::from(b.period)));
+    faster.then(period_of(a).cmp(&period_of(b))).then(a.cells.len().cmp(&b.cells.len()))
+}
+
+/// Lists what is kept under the rule on the grid, sort by sort and in order ([`in_order`]):
+/// of two that are alike in all it goes by, the one kept last comes first.
 fn list_kept(
     mut collected: ResMut<Collected>,
     universe: Res<Universe>,
@@ -401,7 +420,11 @@ fn list_kept(
     }
     *shown = Some(now);
     let rule = universe.rule();
-    let listed: [Vec<Kept>; 3] = SHELVES.map(|sort| collected.of(rule, sort).into_iter().rev().cloned().collect());
+    let listed: [Vec<Kept>; 3] = SHELVES.map(|sort| {
+        let mut kept: Vec<Kept> = collected.of(rule, sort).into_iter().rev().cloned().collect();
+        kept.sort_by(in_order);
+        kept
+    });
     // A ship can go every way that the rule's world looks the same.
     let analyser = Analyser::new(rule);
     for (list, &KeptList(shelf)) in &lists {
@@ -464,5 +487,29 @@ mod tests {
                 && !collected.is_open(Sort::Spaceship)
         );
         let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn the_lists_are_in_order() {
+        let rule: BlockRule = "single-rotation".parse().unwrap();
+        let cells = |count: i32| (0..count).map(|x| (x, 0)).collect::<Vec<Cell>>();
+        let ship = |count, period, moves| Kept::new(&rule, Sort::Spaceship, &cells(count), period, moves);
+        // By speed, which is along the faster axis: 2c/5, c/3, c/6 three times and 2c/15.
+        let (fast, slow) = (ship(9, 3, (-1, 0)), ship(2, 30, (4, 2)));
+        let (short, long, light) = (ship(7, 12, (0, 2)), ship(3, 24, (4, 4)), ship(5, 12, (-2, 0)));
+        let fastest = ship(8, 5, (1, -2));
+        let mut ships = vec![slow.clone(), long.clone(), short.clone(), fast.clone(), light.clone(), fastest.clone()];
+        ships.sort_by(in_order);
+        assert_eq!(ships, [fastest, fast, light, short, long, slow]);
+        // What stays where it is: by period, then by cells.
+        let stays = |count, period| Kept::new(&rule, Sort::Oscillator, &cells(count), period, (0, 0));
+        let mut oscillators = vec![stays(4, 8), stays(6, 2), stays(1, 4), stays(3, 2), stays(2, 4)];
+        oscillators.sort_by(in_order);
+        assert_eq!(oscillators, [stays(3, 2), stays(6, 2), stays(1, 4), stays(2, 4), stays(4, 8)]);
+        // What stands still: by cells alone, whatever period it was kept with.
+        let stands = |count, period| Kept::new(&rule, Sort::StillLife, &cells(count), period, (0, 0));
+        let mut still = vec![stands(4, 1), stands(3, 2), stands(6, 1)];
+        still.sort_by(in_order);
+        assert_eq!(still, [stands(3, 2), stands(4, 1), stands(6, 1)]);
     }
 }

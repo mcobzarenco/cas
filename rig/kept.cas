@@ -65,11 +65,13 @@ click PiecesToggle; wait 4
 key Escape; wait 3; key a; wait 6
 expect_shown Analysis off
 
-# The three kinds of spaceship are in the panel of the spaceships, the latest first, each with
-# its speed and the way the form it is filed under flies.
+# The three kinds of spaceship are in the panel of the spaceships, the fastest first, each with
+# its speed and the ways it can go.
 clear; click Spaceships; wait 10
 expect_shown KeptSpaceship0 on; expect_shown KeptSpaceship2 on
-expect_text KeptSpaceship2 12 4 c/6 orthogonal
+expect_text KeptSpaceship0 12 4 c/6 orthogonal
+expect_text KeptSpaceship1 15 5 c/15 diagonal
+expect_text KeptSpaceship2 368 4 c/184 diagonal
 shot kept-5-spaceships
 click Spaceships; wait 4
 

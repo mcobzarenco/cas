@@ -60,7 +60,14 @@ until expect_caught 1 1
 shot catcher-5-slow
 rule single-rotation; wait 3
 
+# In a window too low for it the list scrolls, and what is scrolled out of it is gone: the
+# dials of the rows above are not drawn over the head of the panel.
+window 1440 640; wait 12
+scroll KindList -3; wait 6
+shot catcher-6-scrolled
+window 1440 900; wait 12
+
 # Forgetting empties the list of this rule; the key closes the panel.
 click CatcherForget; wait 20; expect_caught 0 0
-key s; wait 4; shot catcher-6-closed
+key s; wait 4; shot catcher-7-closed
 quit

@@ -86,7 +86,7 @@ shot analysis-4-still-life
 click AnalysisCopy; wait 3; expect_clipboard $2o$2o
 expect_text AnalysisNote Copied $2o$2o
 click AnalysisPlace; wait 3
-expect_text AnalysisNote Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.
+expect_text AnalysisNote Click the grid to put the pattern down, as often as you like. T turns it, Escape or a right click lets go of it.
 expect_text SelectHint on the grid, or from the list
 click Grid 0 0; wait 3; expect_population 8
 key Escape; wait 3

@@ -69,6 +69,8 @@ pub enum Action {
     Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
     Analyse,
+    /// Turn the pattern that is held the next way its rule has it.
+    Turn,
 }
 
 /// Put on a button or a checkbox: using it triggers the action.
@@ -111,7 +113,7 @@ impl Toggle {
 
 /// Keys and what they do. A key is named by the character it types, so shortcuts follow the
 /// keyboard layout. The first key listed for an action is the one shown next to its control.
-const KEYS: [(&str, Action); 28] = [
+const KEYS: [(&str, Action); 29] = [
     ("space", Action::PlayPause),
     ("←", Action::StepBack),
     ("→", Action::StepForward),
@@ -140,6 +142,7 @@ const KEYS: [(&str, Action); 28] = [
     ("↑", Action::PreviousRule),
     ("↓", Action::NextRule),
     ("a", Action::Analysis),
+    ("t", Action::Turn),
 ];
 
 impl Action {
@@ -292,6 +295,7 @@ fn perform(
             }
         }
         Action::Analyse => analysis.choose(),
+        Action::Turn => stamp.turn(),
     }
     // A band is drawn with the left button, which a stamp would answer to.
     if analysis.selecting {

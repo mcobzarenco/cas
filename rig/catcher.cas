@@ -40,15 +40,19 @@ shot catcher-3-haul
 # partition, so that it flies: the lightest ship, two cells to the right every 12 generations.
 clear; wait 2; expect_population 0
 click Kind0; wait 3
-expect_text CatcherNote Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it.
+expect_text CatcherNote Click the grid to put the pattern down, as often as you like. T turns it, Escape or a right click lets go of it.
 move Grid 0 0; wait 3; shot catcher-4-ghost
 click Grid 0 0; wait 3; expect_population 4
 expect_cell 127 126 on; expect_cell 128 128 on
 step 120; wait 2; expect_population 4; expect_cell 147 126 on; expect_cell 148 128 on
+# T turns it the next way it can go, round with the clock: put down again, it flies down.
+key t; wait 3; click Grid 0 0; wait 3; expect_population 8
+expect_cell 127 127 on; expect_cell 129 128 on
+step 120; wait 2; expect_population 8; expect_cell 127 147 on; expect_cell 129 148 on
 # It stays picked up until Escape; a click on its row would let go of it as well.
-click Grid -100 60; wait 3; expect_population 8
+click Grid -100 60; wait 3; expect_population 12
 key Escape; wait 3; expect_text CatcherNote Click a pattern to pick it up, or shift-click it to copy it as text.
-click Grid 100 -60; wait 3; expect_population 9
+click Grid 100 -60; wait 3; expect_population 13
 
 # A slow spaceship: a loose cloud of five to seven cells that is back in its shape after
 # 13 774 generations, four cells on along the diagonal. It leaves whole, and is known for

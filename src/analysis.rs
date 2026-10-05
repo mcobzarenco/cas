@@ -126,8 +126,6 @@ struct Subject {
     number: u64,
     study: Study,
     rule: BlockRule,
-    /// The pattern through the vacuum's cycle, to put it back on the grid.
-    forms: Vec<Vec<Cell>>,
     /// The small world it lives in, how many generations that world is owed, and how many it
     /// gets a second.
     world: Universe,
@@ -173,18 +171,7 @@ impl Subject {
             world.catching = true;
             Census::with(Analyser::new(&rule))
         });
-        Some(Self {
-            number,
-            forms: analyser.forms(&study.start),
-            world,
-            rle: to_rle(&study.start),
-            rule,
-            clock: 0.0,
-            pace,
-            paused: false,
-            census,
-            study,
-        })
+        Some(Self { number, world, rle: to_rle(&study.start), rule, clock: 0.0, pace, paused: false, census, study })
     }
 
     /// The small world as it was when the study began: the pattern as it set out, at
@@ -1059,15 +1046,15 @@ fn sync_keep(
 }
 
 /// The pattern goes back on the grid: picked up, to be put down wherever. Under another rule
-/// than it was studied in, the same cells go down, filed for that rule's vacuum.
+/// than it was studied in, the same cells go down, filed for that rule's vacuum; which way
+/// they go there, if any, was not looked at.
 fn place_subject(_: On<Activate>, universe: Res<Universe>, mut analysis: ResMut<Analysis>, mut stamp: ResMut<Stamp>) {
     if let Some(subject) = analysis.shown() {
-        let forms = if universe.rule() == &subject.rule {
-            subject.forms.clone()
-        } else {
-            Analyser::new(universe.rule()).forms(&subject.study.start)
+        let moved = match subject.study.fate {
+            Fate::Returns { displacement, .. } if universe.rule() == &subject.rule => displacement,
+            _ => (0, 0),
         };
-        stamp.pick_up(forms, universe.rule(), None);
+        stamp.pick_up(&subject.study.start, moved, universe.rule(), None);
         analysis.note = None;
         // A click on the grid puts the pattern down now, rather than starting a band.
         analysis.stop_choosing();
@@ -1252,8 +1239,9 @@ struct Shown {
     /// The study on its way that shows instead, by its number.
     busy: Option<u64>,
     selecting: bool,
-    /// The subject is picked up, to be put down on the grid.
-    holding: bool,
+    /// What there is to do with the pattern that is held, while one is: another may be
+    /// picked up before this one is let go of, and turn where this one did not.
+    holding: Option<&'static str>,
     note: Option<String>,
 }
 
@@ -1286,7 +1274,7 @@ fn sync_panel(
         busy: busy.map(|_| analysis.studied),
         selecting: analysis.selecting,
         // A stamp from the list is the list's business.
-        holding: stamp.is_held() && stamp.kind.is_none(),
+        holding: (stamp.is_held() && stamp.kind.is_none()).then(|| stamp.hint()),
         // What is wrong with the text being typed comes before what a button did.
         note: analysis.mistyped.clone().or(analysis.note.clone()),
     };
@@ -1320,9 +1308,7 @@ fn sync_panel(
         _ if busy.is_some() => {
             "Stop takes what is known by then for the study. A drag over another pattern studies that one instead."
         }
-        (_, _, true) => {
-            "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
-        }
+        (_, _, Some(hint)) => hint,
         (true, false, _) => "Drag over the pattern on the grid. Escape calls it off.",
         (true, true, _) => {
             "Drag over another pattern, or Place picks this one up to be put down on the grid where you click."

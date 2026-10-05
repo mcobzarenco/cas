@@ -164,7 +164,10 @@ pub struct KeptPlugin;
 
 impl Plugin for KeptPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (watch_file, show_panels, list_kept).chain().in_set(SimSystems::Present));
+        app.add_systems(
+            Update,
+            (watch_file, show_panels, list_kept, say_what_next).chain().in_set(SimSystems::Present),
+        );
     }
 }
 
@@ -376,7 +379,7 @@ fn pick_kept(
         return;
     }
     if let Some(kept) = collected.listed[shelf].get(index) {
-        stamp.pick_up(Analyser::new(universe.rule()).forms(&kept.cells), universe.rule(), None);
+        stamp.pick_up(&kept.cells, kept.moves, universe.rule(), None);
         // A click on the grid puts the pattern down now, rather than starting a band.
         analysis.stop_choosing();
     }
@@ -463,10 +466,9 @@ fn list_kept(
     mut collected: ResMut<Collected>,
     universe: Res<Universe>,
     lists: Query<(Entity, &KeptList)>,
-    mut notes: Query<(&KeptNote, &mut Text)>,
     mut ways_tiles: Query<&mut Node, With<KeptWays>>,
     ways_dials: Query<Entity, With<KeptWaysDial>>,
-    mut ways_said: Query<&mut Text, (With<KeptWaysSaid>, Without<KeptNote>)>,
+    mut ways_said: Query<&mut Text, With<KeptWaysSaid>>,
     mut shown: Local<Option<(u64, BlockRule)>>,
     mut commands: Commands,
 ) {
@@ -515,15 +517,26 @@ fn list_kept(
     for mut said in &mut ways_said {
         said.set_if_neq(Text(headings(ships)));
     }
-    for (&KeptNote(shelf), mut text) in &mut notes {
-        let said = match (collected.trouble(), listed[shelf].is_empty()) {
-            (Some(trouble), _) => trouble.to_string(),
-            (None, true) => "None kept under this rule yet. Keep puts a pattern here.".to_string(),
-            (None, false) => "Click a pattern to pick it up. Its mark lets go of it.".to_string(),
-        };
-        text.set_if_neq(Text(said));
-    }
     collected.bypass_change_detection().listed = listed;
+}
+
+/// The line under each list: what is wrong with the file, what the list is for, or what
+/// there is to do with a pattern that is held.
+fn say_what_next(collected: Res<Collected>, stamp: Res<Stamp>, mut notes: Query<(&KeptNote, &mut Text)>) {
+    // A stamp from the list of what was caught is that list's to speak of. Of any other,
+    // every panel that hands patterns out says the same, wherever it was picked up.
+    let holding = stamp.is_held() && stamp.kind.is_none();
+    for (&KeptNote(shelf), mut text) in &mut notes {
+        let said = match (collected.trouble(), collected.listed[shelf].is_empty()) {
+            (Some(trouble), _) => trouble,
+            (None, true) => "None kept under this rule yet. Keep puts a pattern here.",
+            (None, false) if holding => stamp.hint(),
+            (None, false) => "Click a pattern to pick it up. Its mark lets go of it.",
+        };
+        if text.0 != said {
+            text.0 = said.to_string();
+        }
+    }
 }
 
 #[cfg(test)]

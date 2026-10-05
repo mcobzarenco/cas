@@ -6,9 +6,10 @@
 //! 2×2 block partition. Zooming, panning and the overlays therefore cost nothing on the CPU.
 //!
 //! Interaction goes through picking events on the grid node: the wheel zooms about the pointer,
-//! right- or middle-drag pans, left-drag paints. A pattern picked up from the spaceship list
-//! ([`Stamp`]) follows the pointer as a ghost, snapped to the blocks, and a click puts it down.
-//! While a pattern is being chosen for analysis, left-drag draws a band around it instead.
+//! right- or middle-drag pans, left-drag paints. A pattern picked up from a list or from the
+//! analysis panel ([`Stamp`]) follows the pointer as a ghost, snapped to the blocks, and a
+//! click puts it down, turned first if that was asked for. While a pattern is being chosen
+//! for analysis, left-drag draws a band around it instead.
 //!
 //! The analysis panel draws its small world with the same material ([`GridParams::new`]).
 
@@ -24,7 +25,11 @@ use bevy::{
     window::SystemCursorIcon,
 };
 
-use cas_core::{pattern::Cell, rules::BlockRule, universe::Universe};
+use cas_core::{
+    pattern::{Analyser, Cell},
+    rules::BlockRule,
+    universe::Universe,
+};
 use cas_ui::{ALIVE, Aspect, BLOCKS, DEAD};
 
 use crate::{
@@ -135,13 +140,17 @@ struct Stroke {
 /// A pattern picked up to be put on the grid, as often as one likes, until it is let go of.
 #[derive(Resource, Default)]
 pub struct Stamp {
-    /// The pattern through the vacuum's cycle, one form per generation of it, each relative
-    /// to a corner of the blocks the next step rewrites
-    /// ([`Analyser::forms`](cas_core::pattern::Analyser::forms)). Empty while nothing is
-    /// picked up.
+    /// The pattern as it is held, through the vacuum's cycle: one form per generation of it,
+    /// each relative to a corner of the blocks the next step rewrites
+    /// ([`Analyser::forms`]). Empty while nothing is picked up.
     forms: Vec<Vec<Cell>>,
     /// The least and the greatest coordinates of each form: the corners of its bounding box.
     bounds: Vec<(IVec2, IVec2)>,
+    /// The pattern as it was picked up and every other way its rule has it, turned or
+    /// mirrored ([`Analyser::turned`]), each at the start of the vacuum's cycle; and which
+    /// of them is held.
+    copies: Vec<Vec<Cell>>,
+    held: usize,
     /// The rule the pattern is a pattern of.
     rule: Option<BlockRule>,
     /// Which spaceship of the list it is, if it is one: the number of the haul and the kind's
@@ -149,32 +158,66 @@ pub struct Stamp {
     pub kind: Option<(u64, usize)>,
     /// The cell under the pointer, while the pointer is over the grid.
     hover: Option<IVec2>,
-    /// How many patterns were picked up so far, which tells one from the one before.
+    /// How many times a pattern was picked up or turned so far, which tells what is held
+    /// from what was held before.
     picked: u64,
 }
 
 impl Stamp {
-    pub fn pick_up(&mut self, forms: Vec<Vec<Cell>>, rule: &BlockRule, kind: Option<(u64, usize)>) {
+    /// Picks up a pattern of a rule, filed at the start of the vacuum's cycle. `moved` is how
+    /// far it moves in a period, where that is known: turning it then goes round with the
+    /// clock.
+    pub fn pick_up(&mut self, cells: &[Cell], moved: (i32, i32), rule: &BlockRule, kind: Option<(u64, usize)>) {
+        let analyser = Analyser::new(rule);
+        self.copies = analyser.turned(cells, moved).into_iter().map(|(copy, _)| copy).collect();
+        self.rule = Some(rule.clone());
+        self.kind = kind;
+        self.hold(0, &analyser);
+    }
+
+    /// Holds the pattern the next way its rule has it ([`Analyser::turned`]): a ship as its
+    /// mirror image, where that flies the same way, or else flying the next way it can go.
+    /// Where there is no other way, it stays as it is.
+    pub fn turn(&mut self) {
+        if self.copies.len() > 1
+            && let Some(rule) = &self.rule
+        {
+            let analyser = Analyser::new(rule);
+            self.hold((self.held + 1) % self.copies.len(), &analyser);
+        }
+    }
+
+    fn hold(&mut self, copy: usize, analyser: &Analyser) {
         let corners = |form: &Vec<Cell>| {
             let cells = form.iter().map(|&(x, y)| IVec2::new(x, y));
             cells.fold((IVec2::MAX, IVec2::MIN), |(least, greatest), cell| (least.min(cell), greatest.max(cell)))
         };
-        self.bounds = forms.iter().map(corners).collect();
-        self.forms = forms;
-        self.rule = Some(rule.clone());
-        self.kind = kind;
+        self.forms = analyser.forms(&self.copies[copy]);
+        self.bounds = self.forms.iter().map(corners).collect();
+        self.held = copy;
         self.picked += 1;
     }
 
     pub fn let_go(&mut self) {
         self.forms.clear();
         self.bounds.clear();
+        self.copies.clear();
         self.rule = None;
         self.kind = None;
     }
 
     pub fn is_held(&self) -> bool {
         !self.forms.is_empty()
+    }
+
+    /// What there is to do with the pattern that is held, for whoever says so under a list.
+    pub fn hint(&self) -> &'static str {
+        if self.copies.len() > 1 {
+            "Click the grid to put the pattern down, as often as you like. T turns it, Escape or a right click lets go \
+             of it."
+        } else {
+            "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
+        }
     }
 
     /// The form for the universe as it is now, and the corners of its bounding box.
@@ -756,6 +799,41 @@ mod tests {
         view.zoom = 40.0;
         view.zoom_about(Vec2::new(300.0, 200.0), WHEEL_ZOOM);
         assert_eq!((view.center, view.zoom), (Vec2::new(100.0, 80.0), 40.0));
+    }
+
+    #[test]
+    fn a_held_pattern_turns_through_the_ways_its_rule_has() {
+        // The lightest ship of Single rotation, as it is filed: it flies right, and after
+        // every quarter turn the rule is the same.
+        let rule: BlockRule = "single-rotation".parse().unwrap();
+        let ship = [(1, 0), (2, 0), (1, 2), (2, 2)];
+        let mut stamp = Stamp::default();
+        stamp.turn();
+        assert!(!stamp.is_held());
+        stamp.pick_up(&ship, (2, 0), &rule, None);
+        assert!(stamp.is_held() && stamp.hint().contains("T turns it"));
+        assert_eq!(stamp.forms, [ship]);
+        // Round with the clock: down, left, up, and right again.
+        let mut turned = Vec::new();
+        for _ in 0..4 {
+            let before = stamp.picked;
+            stamp.turn();
+            assert_eq!(stamp.picked, before + 1, "the ghost is drawn anew");
+            turned.push(stamp.forms[0].clone());
+        }
+        assert_eq!(turned[0], [(1, 1), (3, 1), (1, 2), (3, 2)]);
+        assert_eq!(turned[1], [(1, 1), (2, 1), (1, 3), (2, 3)]);
+        assert_eq!(turned[3], ship);
+        assert_eq!(stamp.bounds, [(IVec2::new(1, 0), IVec2::new(2, 2))]);
+        // A world that looks the same no other way has the one way to hold a pattern.
+        let rule: BlockRule = "crossing-fleets".parse().unwrap();
+        stamp.pick_up(&ship, (2, 0), &rule, None);
+        let (before, forms) = (stamp.picked, stamp.forms.clone());
+        stamp.turn();
+        assert_eq!((stamp.picked, &stamp.forms), (before, &forms));
+        assert!(!stamp.hint().contains("turns"));
+        stamp.let_go();
+        assert!(!stamp.is_held() && stamp.copies.is_empty());
     }
 
     #[test]

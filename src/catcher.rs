@@ -507,8 +507,7 @@ fn pick_kind(
     } else if stamp.kind == Some((haul, index)) {
         stamp.let_go();
     } else {
-        let forms = Analyser::new(universe.rule()).forms(&kind.motion.canonical);
-        stamp.pick_up(forms, universe.rule(), Some((haul, index)));
+        stamp.pick_up(&kind.motion.canonical, kind.motion.displacement, universe.rule(), Some((haul, index)));
         catcher.note = None;
         // A click on the grid puts the pattern down now, rather than starting a band.
         analysis.stop_choosing();
@@ -685,9 +684,7 @@ fn sync_list(
         return;
     }
     let hint = match (now.held.is_some(), now.kinds, now.catching) {
-        (true, ..) => {
-            "Click the grid to put the pattern down, as often as you like. Escape or a right click lets go of it."
-        }
+        (true, ..) => stamp.hint(),
         // A slow spaceship takes its time to show that it is one.
         _ if now.unsettled == 1 => "A catch has not repeated yet: it is followed further.",
         _ if now.unsettled > 1 => "Some catches have not repeated yet: they are followed further.",

@@ -348,9 +348,9 @@ impl Family {
     }
 
     /// How many rules the family has, and how many canonical rules, as far as `threads`
-    /// threads find out with at most `most` rules gone through; `progress` is told how far
-    /// they have got, and can stop them. None if there are more and nothing else says how
-    /// many, or when told to stop.
+    /// threads find out with at most `most` rules gone through in all; `progress` is told how
+    /// many of the family's own rules they have got through, and can stop them. None if there
+    /// are more and nothing else says how many, or when told to stop.
     ///
     /// Every rule there is, and the rules that move at most so many blocks, are known without
     /// going through them. The canonical rules of a family whose rules leave the empty world
@@ -365,19 +365,22 @@ impl Family {
             return Some(EVERY_RULE);
         }
         let known = family.known_rules();
+        let mut budget = most;
         if family.constraints.contains(&Constraint::StableVacuum) && family.kept_by_turns() {
             let rules = match known {
                 Some(rules) => rules,
-                None => family.go(threads, most, progress, &|_| {})?,
+                None => family.go(threads, &mut budget, progress, true, &|_| {})?,
             };
-            // Each quarter turn and its opposite leave the same rules alone.
+            // Each quarter turn and its opposite leave the same rules alone. The families
+            // with a symmetry more are gone through unreported: they are not the rules asked
+            // about.
             let mut alone = rules;
             for (turn, times) in [(Turn::Quarter, 2), (Turn::Half, 1), (Turn::Mirror, 1), (Turn::Flip, 1)]
                 .into_iter()
                 .chain([(Turn::Diagonal, 1), (Turn::AntiDiagonal, 1)])
             {
                 let symmetric = Family::new(family.constraints.iter().copied().chain([Constraint::Symmetric(turn)]));
-                alone += times * symmetric.go(threads, most, progress, &|_| {})?;
+                alone += times * symmetric.go(threads, &mut budget, progress, false, &|_| {})?;
             }
             debug_assert_eq!(alone % 8, 0, "{self:?}");
             return Some(Size { rules, canonical: Some(alone / 8) });
@@ -391,7 +394,7 @@ impl Family {
                 canonical.fetch_add(1, Ordering::Relaxed);
             }
         };
-        let rules = family.go(threads, most, progress, &first)?;
+        let rules = family.go(threads, &mut budget, progress, true, &first)?;
         Some(Size { rules, canonical: Some(canonical.into_inner()) })
     }
 
@@ -409,7 +412,7 @@ impl Family {
                 worlds.lock().expect("no thread panicked while holding it").push(rule.canonical());
             }
         };
-        let rules = family.go(threads, most, progress, &first)?;
+        let rules = family.go(threads, &mut { most }, progress, true, &first)?;
         let mut worlds = worlds.into_inner().expect("no thread panicked while holding it");
         worlds.sort_unstable_by(|a, b| a.table().cmp(b.table()));
         Some((rules, worlds))
@@ -457,42 +460,57 @@ impl Family {
     }
 
     /// Goes through the family's rules on `threads` threads, handing each to `found` on the
-    /// thread that finds it. Returns how many there are, or None once there are more than
-    /// `most` or when `progress` is told to stop.
-    fn go(&self, threads: usize, most: u64, progress: &Progress, found: &(dyn Fn(&BlockRule) + Sync)) -> Option<u64> {
+    /// thread that finds it, and takes the rules gone through off `budget`. Returns how many
+    /// there are, or None once there are more than the budget allows or when `progress` is
+    /// told to stop; `report` says whether `progress` is told how far this has got.
+    fn go(
+        &self,
+        threads: usize,
+        budget: &mut u64,
+        progress: &Progress,
+        report: bool,
+        found: &(dyn Fn(&BlockRule) + Sync),
+    ) -> Option<u64> {
         // Any weighting will do: the families of every weighting but the plain one, each
         // rule counted with the lightest weighting it keeps.
         let Some(place) = self.constraints.iter().position(|c| *c == Constraint::Weighted(None)) else {
-            return self.go_through(threads, most, progress, &|_| true, found);
+            return self.go_through(threads, budget, progress, report, &|_| true, found);
         };
         let mut total = 0;
         for weights in weightings().into_iter().filter(|weights| *weights != [1; 4]) {
             let mut constraints = self.constraints.clone();
             constraints[place] = Constraint::Weighted(Some(weights));
             let lightest = |rule: &BlockRule| rule.conserved_weights() == Some(weights);
-            total += Family::new(constraints).go_through(threads, most - total, progress, &lightest, found)?;
+            total += Family::new(constraints).go_through(threads, budget, progress, report, &lightest, found)?;
         }
         Some(total)
     }
 
-    /// As [`Family::go`], handing over only the rules that `wanted` says.
+    /// As [`Family::go`], handing over and counting only the rules that `wanted` says, though
+    /// every rule gone through is taken off the budget.
     fn go_through(
         &self,
         threads: usize,
-        most: u64,
+        budget: &mut u64,
         progress: &Progress,
+        report: bool,
         wanted: &(dyn Fn(&BlockRule) -> bool + Sync),
         found: &(dyn Fn(&BlockRule) + Sync),
     ) -> Option<u64> {
+        let most = *budget;
         // The tables begun in as many ways as the threads can share out among themselves.
         let starts = Filler::starts(&self.constraints, 32 * threads.max(1));
-        let (next, total, over) = (AtomicUsize::new(0), AtomicU64::new(0), AtomicBool::new(false));
+        let next = AtomicUsize::new(0);
+        let (total, gone, over) = (AtomicU64::new(0), AtomicU64::new(0), AtomicBool::new(false));
         // Counts are added up now and then, not at every rule: so many threads would queue
         // for the same counter.
-        let add = |count: &mut u64| {
-            let all = total.fetch_add(*count, Ordering::Relaxed) + *count;
-            progress.rules.fetch_add(*count, Ordering::Relaxed);
-            *count = 0;
+        let add = |counted: &mut u64, through: &mut u64| {
+            total.fetch_add(*counted, Ordering::Relaxed);
+            let all = gone.fetch_add(*through, Ordering::Relaxed) + *through;
+            if report {
+                progress.rules.fetch_add(*through, Ordering::Relaxed);
+            }
+            (*counted, *through) = (0, 0);
             if all > most {
                 over.store(true, Ordering::Relaxed);
             }
@@ -501,7 +519,7 @@ impl Family {
         std::thread::scope(|scope| {
             for _ in 0..threads.max(1) {
                 scope.spawn(|| {
-                    let mut count = 0;
+                    let (mut counted, mut through) = (0, 0);
                     while !done() {
                         let Some(start) = starts.get(next.fetch_add(1, Ordering::Relaxed)) else {
                             break;
@@ -514,20 +532,25 @@ impl Family {
                         filler.fill(&mut |rule| {
                             if wanted(&rule) {
                                 found(&rule);
-                                count += 1;
-                                if count == 4096 {
-                                    add(&mut count);
-                                    return !done();
-                                }
+                                counted += 1;
+                            }
+                            through += 1;
+                            if through == 4096 {
+                                add(&mut counted, &mut through);
+                                return !done();
                             }
                             true
                         });
                     }
-                    add(&mut count);
+                    add(&mut counted, &mut through);
                 });
             }
         });
-        (!done()).then(|| total.into_inner())
+        if done() {
+            return None;
+        }
+        *budget -= gone.into_inner();
+        Some(total.into_inner())
     }
 
     /// Every rule of the family, for a family whose [`Family::count`] fits.
@@ -1042,10 +1065,11 @@ mod tests {
         ] {
             assert_eq!(size(name), exactly(rules, canonical), "{name}");
         }
-        let (rules, worlds) = family("quarter-turn").canonical_rules(4, u64::MAX, &Progress::default()).unwrap();
+        let progress = Progress::default();
+        let (rules, worlds) = family("quarter-turn").canonical_rules(4, u64::MAX, &progress).unwrap();
         let mut listed = distinct(family("quarter-turn").rules());
         listed.sort_unstable_by(|a, b| a.table().cmp(b.table()));
-        assert_eq!((rules, worlds), (1536, listed));
+        assert_eq!((rules, worlds, progress.rules()), (1536, listed, 1536));
         // Where the empty world stays empty, by Burnside, as counting them one by one has it.
         for name in [
             "stable-vacuum+half-turn",
@@ -1059,6 +1083,14 @@ mod tests {
             assert_eq!(size(name), exactly(rules, worlds.len() as u64), "{name}");
         }
         assert_eq!(size("stable-vacuum+half-turn"), exactly(276_480, 69_760));
+        // What is said to have been gone through is the family's own rules, not the smaller
+        // families gone through for its symmetry; those count towards how many may be gone
+        // through in all.
+        let progress = Progress::default();
+        assert_eq!(family("stable-vacuum+conserving").size(4, u64::MAX, &progress), exactly(414_720, 52_320));
+        assert_eq!(progress.rules(), 414_720);
+        assert_eq!(family("stable-vacuum+conserving").size(4, 414_720, &Progress::default()), None);
+        assert!(family("stable-vacuum+conserving").size(4, 418_560, &Progress::default()).is_some());
         // Too many to go through, and known all the same.
         assert_eq!(size("random"), Some(EVERY_RULE));
         assert_eq!(size("sparse=16"), Some(EVERY_RULE));

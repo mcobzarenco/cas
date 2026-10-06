@@ -1,0 +1,293 @@
+# The patterns kept for cas under the rule 0,2,8,12,1,10,6,13,4,9,5,7,3,14,11,15:
+# a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a
+# still life), the pattern (run-length encoded, from a corner of the blocks the next step
+# rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
+# a name, and a note. The file is named by the rule's table in hex.
+sort	pattern	period	moves	name	note
+spaceship	o$o$o2$o$o	152	4,0		search
+spaceship	o4$2o$o$2o	6470	6,0		search
+spaceship	2o$o$o$bo5$o	2154	2,0		search
+spaceship	2o$bo$2o2$o	556	2,2		search
+spaceship	2o$bo3$2o	234	2,0		search
+spaceship	2o$bo$bo2$o	524	4,0		search
+spaceship	2o2$bo$bo$2o	11880	4,0		search
+spaceship	3o$o2$o$2bo	542	6,0		search
+spaceship	3o$obo$bo	198	4,0		search
+spaceship	3o$o2bo	132	4,0		search
+spaceship	3o2$b2o	516	2,2		search
+spaceship	2obo$2bobo$2bo	108	2,2		search
+spaceship	obo$2o$o$2bo	3952	4,4		search
+spaceship	obo2$obo$b2o	3318	2,0		search
+spaceship	obo$b2o	180	2,2		search
+spaceship	o3b4o	1424	8,0		search
+spaceship	$o$o$bo3$2o$bo	3712	2,2		search
+spaceship	bo2$o$bo$bo2$2o	1462	2,0		search
+spaceship	bo$bo$2bo$bo$2bo	172	4,0		search
+spaceship	b2o$o$2o$o	3255	1,1		search
+spaceship	b2o$bo$b2o$bo	132	2,0		search
+spaceship	b2o$bo$2bo$2bo	560	4,0		search
+spaceship	b2o$bobo$bobo	8672	4,0		search
+spaceship	b2o2$bo$2bo2$2bo	1656	2,2		search
+spaceship	b2o$2bo$2o	236	4,0		search
+spaceship	b2o$2b2o$bo2bo	5116	12,0		search
+spaceship	b3o$3bo$bobo	4916	4,0		search
+spaceship	b4o$3b2o	546	2,0		search
+spaceship	b3o$4bo$2bobo	10492	4,0		search
+spaceship	b2ob2o$bo2bo	2752	4,0		search
+spaceship	b2o3b2o$bobo	21674	2,2		search
+spaceship	bobobo$2bo$bo3bo	441	3,3		search
+spaceship	bo4bob4o	2926	2,0		search
+spaceship	$b2o$2b2o$obo	2590	4,4		search
+spaceship	2bo$b3o$bobo	436	2,2		search
+spaceship	2bo$2bo$bo$2bo$2bo$bo	5798	6,0		search
+spaceship	3bobobo$bobo2bo	7350	14,0		search
+oscillator	o	4			search
+oscillator	o$o$o3$o3$o	196			search
+oscillator	o$o$2o	36			search
+oscillator	o$o$2o3$bo$bo	784			search
+oscillator	o$o2$o$o	184			search
+oscillator	o$o3$2o2$o	320			search
+oscillator	o$2o$o$o2$bo	592			search
+oscillator	o$2o$2o	128			search
+oscillator	o$2o$3o	528			search
+oscillator	o$2o3$o$o$o	658			search
+oscillator	o$2o3$2o	56			search
+oscillator	o$2o$2bo	20			search
+oscillator	o$o$bo$bo$o	280			search
+oscillator	o$o$bo3$bo$bo	2724			search
+oscillator	o$o$b2o	28			search
+oscillator	2o	16			search
+oscillator	2o$o	8			search
+oscillator	2o$o$o$o$o	5048			search
+oscillator	2o$o$o$o$bo	56			search
+oscillator	2o$o$2o	412			search
+oscillator	2o$o$2o2$bo	12236			search
+oscillator	2o$o$o$bo$2bo	8500			search
+oscillator	2o$o$obo2$bo	8728			search
+oscillator	2o$o2$o$o	340			search
+oscillator	2o$o2$o$2o	2276			search
+oscillator	2o$o3$o	36			search
+oscillator	2o$2o2bo	52			search
+oscillator	2o$o$bo2$o	636			search
+oscillator	2o$o$b2o	44			search
+oscillator	2o$o$b2o$o	7948			search
+oscillator	2o$obo	36			search
+oscillator	2o$obo$o	836			search
+oscillator	2o$obo3$o	188			search
+oscillator	2o$obo$bo	28			search
+oscillator	2o$o$2bo	108			search
+oscillator	2o$o$2bo2$obo	3284			search
+oscillator	2o$o3bo$2bo	28			search
+oscillator	2o2$o$2o$bo	832			search
+oscillator	2o2$o$o$bo	1108			search
+oscillator	2o2$2o	92			search
+oscillator	2o3$2o$2bo$bo	204			search
+oscillator	2o$bo$3o	68			search
+oscillator	2o$bo$o2bo	88			search
+oscillator	2o$bo$b2o	28			search
+oscillator	2o$bo$bo$2bo$bo	8750			search
+oscillator	2o$b2o2$bo$bo	144			search
+oscillator	2o$b2o$2bo	44			search
+oscillator	2o2$b2o	20			search
+oscillator	2o2$b2o$obo	1592			search
+oscillator	3o	20			search
+oscillator	3o$o	28			search
+oscillator	3o$o$o2$2bo	8236			search
+oscillator	3o$2o	84			search
+oscillator	3o$3o	5144			search
+oscillator	3o$2o$2bo	3172			search
+oscillator	3o$2o2bo	252			search
+oscillator	3o$o$b2o	12832			search
+oscillator	3o$o$bo$2bo	7238			search
+oscillator	3o$o$bobo	19996			search
+oscillator	3o$obo	476			search
+oscillator	3o$obo$o	7160			search
+oscillator	3o$obo2$bo	7672			search
+oscillator	3o2$o$2o	394			search
+oscillator	3o2$o$bo	220			search
+oscillator	3o2$obo$2bo	252			search
+oscillator	3o$bo$o$2bo	332			search
+oscillator	3o$bo$bobo	1816			search
+oscillator	3o$b2o	1028			search
+oscillator	3o$bobo	1300			search
+oscillator	3o$bobo$o	14884			search
+oscillator	3o$bo2bo	340			search
+oscillator	3o$2bo	72			search
+oscillator	3o$2bo$bo$3bo	4016			search
+oscillator	3o$2bo$2bo$o	1324			search
+oscillator	3o$2bo$3bo	56			search
+oscillator	3o$2bo$3bo$3bo	2416			search
+oscillator	3o$2bo3bo	144			search
+oscillator	4o$obo	1188			search
+oscillator	4o$o2bo	10408			search
+oscillator	4o$2bo	268			search
+oscillator	4o$3bo$2bo	320			search
+oscillator	4o$4bo	280			search
+oscillator	4o$4b2o	3592			search
+oscillator	3o$3bo	48			search
+oscillator	3obo$3bo	828			search
+oscillator	3obo$3bo$4bo	1736			search
+oscillator	3ob2o	2644			search
+oscillator	3o2bo$3b2o	15216			search
+oscillator	3o2b2o$3bo	1196			search
+oscillator	2o$2bo	12			search
+oscillator	2o$2bo$o	12			search
+oscillator	2o$2bo2$o$o	116			search
+oscillator	2o$2bo$2bo	12			search
+oscillator	2o$2bobo$4b2o	964			search
+oscillator	2o2$2bo$o$o	212			search
+oscillator	2o2$2bo$obo	256			search
+oscillator	2o2$2bo$2bo	52			search
+oscillator	2obo$o3bo	288			search
+oscillator	2obo$o3bo$2bo	1476			search
+oscillator	2obo2$3o	11884			search
+oscillator	2obo2$2obo	464			search
+oscillator	2obo$2bo$2bo	216			search
+oscillator	2obo$3bo$bo	172			search
+oscillator	2ob2o	184			search
+oscillator	2ob2o$bo$2bo	3156			search
+oscillator	2ob2o$2bo	5612			search
+oscillator	2ob2o$3bo	3052			search
+oscillator	2ob2o$3b2o	3824			search
+oscillator	2ob2o$4bo	168			search
+oscillator	2o2bo$2o2bo	25416			search
+oscillator	2o2bo$obo	512			search
+oscillator	2o2bo$b2obo	536			search
+oscillator	2o2bo$bo3bo$3bo	27632			search
+oscillator	2o2bo2$2b3o	1420			search
+oscillator	2o2bo$4bo	68			search
+oscillator	2o2bo$4bobo	1948			search
+oscillator	2o2b2o$4bobo	10292			search
+oscillator	2o2bobo$4bo	4500			search
+oscillator	2o$4b2o	12			search
+oscillator	2o3bo$b2o3bo	1564			search
+oscillator	2o3bo$bo2bobo	5636			search
+oscillator	o$bo	8			search
+oscillator	o$bo$o2$2o	900			search
+oscillator	o$bo$o$bo$2o	18024			search
+oscillator	o$bo2$o$2o	1440			search
+oscillator	o$bo2$2o$bo	604			search
+oscillator	o$bo$bo2$2o	1440			search
+oscillator	o$bo$bo2$2o2$bo	804			search
+oscillator	o$b2o$obo2$o	8844			search
+oscillator	o$b2o$o3bo	168			search
+oscillator	o$b2o2$2bo$2o	11112			search
+oscillator	o$b3o$o2bo	1924			search
+oscillator	o$b2obo	12			search
+oscillator	o$bo$2bo	20			search
+oscillator	o$bobo$bo	64			search
+oscillator	o$bo2bo	12			search
+oscillator	o$bo2bo$bo	20			search
+oscillator	o$bo2bo2$3bo	16			search
+oscillator	o2$bo$bo$2o	4396			search
+oscillator	obo$o$o$b2o	2246			search
+oscillator	obo$o$o2bo	2544			search
+oscillator	obo$2o$2bo	6244			search
+oscillator	obo$2obo$3bo	4072			search
+oscillator	obo$o$2b2o	100			search
+oscillator	obo$o2bo$b2o	17568			search
+oscillator	obo$bo	36			search
+oscillator	obo$bo$o	88			search
+oscillator	obo$bo2$o$2bo	996			search
+oscillator	obo$bo2$bo$obo	348			search
+oscillator	obo$b2o2$o	348			search
+oscillator	obo$b2obo	732			search
+oscillator	obo$bo$2bo	20			search
+oscillator	obo$bo$3bo2$o	60			search
+oscillator	obo$bo2bo	128			search
+oscillator	obo2$b2o$o2bo	6068			search
+oscillator	obo$2bo$2o	588			search
+oscillator	obo$2bo$2o3$2bo	1096			search
+oscillator	obo$2bo$bo	92			search
+oscillator	ob2o	24			search
+oscillator	ob2o$o$bobo	404			search
+oscillator	ob2o$bo$3bo	2908			search
+oscillator	ob2o$bo4bo	248			search
+oscillator	ob3o	28			search
+oscillator	ob3o$3bo	28			search
+oscillator	ob2o$4bo$bobo	16908			search
+oscillator	ob2ob2o$5bo	1780			search
+oscillator	ob2o2bo$bo3bo	46216			search
+oscillator	ob2o2bo$4bo	1180			search
+oscillator	obo$3bo2$o$2bo	60			search
+oscillator	obobo$bo2bo	356			search
+oscillator	obobo$4bo$bobo	816			search
+oscillator	obobo2b3o	6532			search
+oscillator	obo2b3o	8588			search
+oscillator	o$2b3o$o4bo	5536			search
+oscillator	o2$2bo$2bo2$o$2bo	112			search
+oscillator	o2bo$b2o	136			search
+oscillator	o2bo$bo2bo	48			search
+oscillator	o2bo$bo2bo2$3bo	288			search
+oscillator	o2b2o	60			search
+oscillator	o2b2o$b2o	564			search
+oscillator	o2b2o2$bo2bo	32			search
+oscillator	o2b2o$3bo	16			search
+oscillator	o2b4o	324			search
+oscillator	o2b5o	15592			search
+oscillator	o2bobo$bo2bo	88			search
+oscillator	o2bobo$3bo$bo	148			search
+oscillator	o$3bo$2obo	448			search
+oscillator	o3bo$b2o	840			search
+oscillator	o3bo$bo2bo	176			search
+oscillator	o3bo$bo3bo$bo	36			search
+oscillator	bo$obo$bo	20			search
+oscillator	bo3$2o2bo$bo	4			search
+oscillator	bo2$b2o2$bo$bo	164			search
+oscillator	b2o$obo$2b2o	34172			search
+oscillator	b2o$o$2b2o	220			search
+oscillator	b2o$b2o	18			search
+oscillator	b2o$b2o$4bo$3bo	136			search
+oscillator	b2o$bo$3b3o	13720			search
+oscillator	b2o$bo2bobo	88			search
+oscillator	b2o2$bo$bo2$2bo	1932			search
+oscillator	b2o2$b2o$bo	3340			search
+oscillator	b2o2$b2o$2bo2$bo	1856			search
+oscillator	b2o2$bo$2bo	120			search
+oscillator	b2o2$bobo$bo	4404			search
+oscillator	b2o3$b2o	36			search
+oscillator	b2o$2bo$bo$bo	2060			search
+oscillator	b2o$2bo$bo$2bo	1660			search
+oscillator	b2o$2bo2$b2o	192			search
+oscillator	b2o$2bo2$bo2bo	80			search
+oscillator	b2o$2bo$2bo$bo	1428			search
+oscillator	b2o$2bo2$2bo	44			search
+oscillator	b2o$2bo2$2bo$2bo$bo	8904			search
+oscillator	b2o$2bo3$2bo3$2bo	900			search
+oscillator	b2o$2b2o$2o	2016			search
+oscillator	b2o3$2bo$bo$2bo	440			search
+oscillator	b3o$bo2bo	3916			search
+oscillator	b3o$2bobo	420			search
+oscillator	b3o$3b2o	160			search
+oscillator	b3o$3b2o$5bo	7944			search
+oscillator	b4o$2b2o	10504			search
+oscillator	b4o$2bo3bo	2386			search
+oscillator	b3o$4bo	176			search
+oscillator	b3o2$4bo$bo	348			search
+oscillator	b3obo$3bo2bo	4812			search
+oscillator	b3o2bo$2bobo	1356			search
+oscillator	b3o$6bo	24			search
+oscillator	b2o$3b2o	48			search
+oscillator	b2obo$b2o	1564			search
+oscillator	b2obo$b3o	3080			search
+oscillator	b2obo$bob2o	400			search
+oscillator	b2obo$bobo2bo	2692			search
+oscillator	b2obo$bo2bo	44			search
+oscillator	b2obo$3bo	128			search
+oscillator	b2obo$3bobo$5bo	108			search
+oscillator	b2obo2$3b2o$3bo	1684			search
+oscillator	b2ob2o$2bo3bo	2612			search
+oscillator	b2o2bo$bo2bobo	7342			search
+oscillator	b2o2bo$3bo2bo	60			search
+oscillator	b2o2b2o$bo	416			search
+oscillator	b2o2b2o$2bo2bo	21752			search
+oscillator	b2o2b2o$3b2o	2620			search
+oscillator	b2o3bo$2bobo	2308			search
+oscillator	b2o3bo$4bo	192			search
+oscillator	bob2o$2b2o	764			search
+oscillator	bo$3b2o$2bo$2bo	4			search
+oscillator	bo2bo$2bo$b2o	88			search
+oscillator	bo5b2o$4b2o	188			search
+oscillator	2bo$b2o2$bo	32			search
+oscillator	2b3o$bobo	828			search
+oscillator	2bobo$b2o	32			search

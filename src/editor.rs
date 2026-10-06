@@ -16,7 +16,7 @@ use bevy::{
     input_focus::InputFocus,
     picking::hover::Hovered,
     prelude::*,
-    text::{EditableText, FontSource, TextEdit, TextEditChange},
+    text::{EditableText, FontSource, LineBreak, TextEdit, TextEditChange},
     ui_widgets::Activate,
     window::SystemCursorIcon,
 };
@@ -384,24 +384,37 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                 ),
                 (
                     Node {
-                        flex_direction: FlexDirection::Row,
-                        align_items: AlignItems::Baseline,
-                        column_gap: px(8),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(2),
                         padding: UiRect { left: px(6) },
                     }
                     Children [
                         (
-                            #RuleHex
-                            mono("", 12.0, palette::LIGHT_GRAY_1)
-                            template_value(Finding::Hex)
-                        ),
-                        (
-                            // Not there without a number: an empty text would still have
-                            // the row's gap on either side of it.
-                            #RuleEspca
-                            mono("", 12.0, palette::LIGHT_GRAY_1)
-                            template_value(Finding::Espca)
-                            template_value(Part::Espca)
+                            // The table in hex and Morita's number on one line, whatever
+                            // the room; the word on them goes below.
+                            Node {
+                                flex_direction: FlexDirection::Row,
+                                column_gap: px(8),
+                            }
+                            Children [
+                                (
+                                    #RuleHex
+                                    mono("", 12.0, palette::LIGHT_GRAY_1)
+                                    Node { flex_shrink: 0.0 }
+                                    TextLayout { linebreak: LineBreak::NoWrap }
+                                    template_value(Finding::Hex)
+                                ),
+                                (
+                                    // Not there without a number: an empty text would still
+                                    // have the row's gap on either side of it.
+                                    #RuleEspca
+                                    mono("", 12.0, palette::LIGHT_GRAY_1)
+                                    Node { flex_shrink: 0.0 }
+                                    TextLayout { linebreak: LineBreak::NoWrap }
+                                    template_value(Finding::Espca)
+                                    template_value(Part::Espca)
+                                ),
+                            ]
                         ),
                         (caption("") template_value(Finding::EspcaNote)),
                     ]

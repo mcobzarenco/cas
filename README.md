@@ -681,10 +681,10 @@ make the same world are measured once, those that differ only by a turn or a mir
 generation of the vacuum's cycle they begin at (Critters, and Critters with dead and alive
 exchanged), or by the vacuum alone: one that flickers where another stands still, or has
 another texture, while patterns do the same over both. The worlds are counted by going through
-the tables, on as many threads as the search has, but for the three families too large for
-that: the worlds of a stable vacuum are counted from their symmetry, those of every rule there
-is were counted once, and parity is only sampled. A world takes 7 to 15 ms on four threads, the
-tame ones longest: the half-turn family 17 minutes, the turning rules one.
+the tables, on as many threads as the search has, but for the families too large for that: the
+worlds of a stable vacuum are counted from their symmetry, those of every rule there is were
+counted once, and `parity`, like `sparse=9` and up, is only sampled. A world takes 7 to 15 ms
+on four threads, the tame ones longest: the half-turn family 17 minutes, the turning rules one.
 
 Together the properties cut each other down to size, which is how to get at the ones too large
 to go through: `diagonal+conserving` is 241 worlds, `half-turn+involution` 2 695,
@@ -695,8 +695,9 @@ would have more than N of them left to measure, and with `--sample` measures N o
 at random instead, the first of a shuffled order that is the same every time. A family of more
 than 250 million tables (`parity`, `stable-vacuum`, `random`) can only be sampled: tables are
 drawn with `--seed`, by filling them in at random under the properties, until N different
-worlds are found. That is no even sample: of the rules that are their own inverse, more than a
-fifth leave the empty world empty, and one draw in sixteen does. With `--from`, `--limit`
+worlds are found. That is no even sample: every outcome a block can have is as likely as any
+other, however many rules lie behind it (of the rules that are their own inverse, more than a
+fifth leave the empty world empty, and one draw in sixteen does). With `--from`, `--limit`
 takes the best of a table.
 
 How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`

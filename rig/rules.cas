@@ -88,7 +88,7 @@ shot rules-9-properties
 click RuleRandom; wait 3; expect_text EditorNote A random permutation.
 click RandomWith; wait 3
 expect_text RandomFamily any rule there is
-expect_text RandomCount 16! rules
+expect_text RandomCount 20 922 789 888 000 rules · 552 613 396 971 canonical
 click Want:quarter-turn; click Want:mirror; click Want:conserving; click Want:stable-vacuum; wait 3
 expect_text RandomFamily quarter-turn + mirror + conserving + stable-vacuum
 until expect_text RandomCount 16 rules · 16 canonical
@@ -122,10 +122,13 @@ click SparseLess; wait 3
 expect_text RandomFamily sparse=3
 until expect_text RandomCount 1 241 rules · 190 canonical
 click RuleRandom; wait 3; expect_text EditorNote A random rule that is sparse=3.
-# A family too big to count is said to be so, and drawn from all the same.
+# A family of millions is counted on other threads while the world runs, and drawn from
+# meanwhile. Where the empty world stays empty the canonical rules are counted by symmetry.
 click Want:sparse; click Want:involution; wait 3
-until expect_text RandomCount more than 2 000 000 rules
 click RuleRandom; wait 3; expect_text FindingReversed the same rule
-click Want:involution; click RandomWith; wait 3
+until expect_text RandomCount 46 206 736 rules · 4 538 049 canonical
+click Want:involution; click Want:stable-vacuum; wait 3
+until expect_text RandomCount 1 307 674 368 000 rules · 163 459 883 712 canonical
+click Want:stable-vacuum; click RandomWith; wait 3
 key e; wait 4; shot rules-11-editor-closed
 quit

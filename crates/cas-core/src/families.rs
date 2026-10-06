@@ -266,7 +266,7 @@ pub const COUNTABLE: u64 = 250_000_000;
 /// whose world has L tables has 8·L rules in its world, but for some with symmetries of their
 /// own, which were gone through one by one; the test `every_rule_there_is_makes_so_many_worlds`
 /// does it again, in about half an hour.
-const EVERY_RULE: Size = Size { rules: 20_922_789_888_000, canonical: Some(552_613_396_971) };
+pub const EVERY_RULE: Size = Size { rules: 20_922_789_888_000, canonical: Some(552_613_396_971) };
 
 /// How far going through a family has got, as whoever waits for it on another thread sees
 /// it, and a way to say that this is far enough.

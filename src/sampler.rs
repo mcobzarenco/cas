@@ -2,11 +2,12 @@
 //! should have, says how many rules have them all, and draws one.
 //!
 //! The properties are those a search goes through ([`cas_core::families`]), each a chip to
-//! switch on. How many rules have them is counted in the background, since some families take
-//! a second to go through; a family small enough is kept, and its rules are then drawn evenly.
+//! switch on. How many rules have them, and how many canonical rules, is counted on other
+//! threads, which takes up to half a minute for the largest families; a family small enough is
+//! kept, and its rules are then drawn evenly.
 
 use std::sync::{
-    Mutex,
+    Arc, Mutex,
     mpsc::{Receiver, Sender, channel},
 };
 
@@ -20,7 +21,7 @@ use bevy::{
 };
 
 use cas_core::{
-    families::{self, Constraint, Family, Turn},
+    families::{COUNTABLE, Constraint, EVERY_RULE, Family, Progress, Size, Turn},
     rules::BlockRule,
     universe::{Rng, Universe},
 };
@@ -30,10 +31,9 @@ use cas_ui::{
 
 use crate::{editor::RuleEditor, sim::SimSystems};
 
-/// Rules are counted up to so many, and a family that can be counted is kept, to draw from
-/// evenly and to tell how many worlds it makes; of a family with more, that is all that is
-/// said.
-const COUNTED: usize = 2_000_000;
+/// A family of at most so many rules is kept, to draw from evenly: among its rules, or among
+/// its canonical rules.
+const KEPT: u64 = 2_000_000;
 /// So often a draw is tried that finds no rule: where any weighting will do, the one drawn
 /// may have none.
 const TRIES: usize = 20;
@@ -100,14 +100,13 @@ pub struct Sampler {
 
 /// What is known of the family asked for.
 enum Count {
-    Counting,
-    /// It has more rules than are counted.
+    /// It is being counted on other threads, which say how far they have got.
+    Counting(Arc<Progress>),
+    /// It has more rules than are gone through, and nothing else says how many.
     Many,
-    /// Its rules, and the worlds they make: the canonical forms among them, each once.
-    Known {
-        rules: Vec<BlockRule>,
-        worlds: Vec<BlockRule>,
-    },
+    /// How many rules it has, and how many canonical rules; and while they are few, the rules
+    /// themselves and the worlds they make: the canonical forms among them, each once.
+    Known { size: Size, kept: Option<(Vec<BlockRule>, Vec<BlockRule>)> },
 }
 
 impl Default for Sampler {
@@ -118,7 +117,7 @@ impl Default for Sampler {
             wanted: [false; CHIPS.len()],
             sparse: 4,
             canonical: false,
-            count: Count::Many,
+            count: Count::Known { size: EVERY_RULE, kept: None },
             asked: 0,
             answers: Mutex::new(answers),
             reply,
@@ -136,24 +135,32 @@ impl Sampler {
         }))
     }
 
-    /// Has the family counted, out of the way of the frames.
+    /// Has the family counted, out of the way of the frames; a count asked for before is of
+    /// no use any more, and stops.
     fn ask(&mut self) {
         self.asked += 1;
+        if let Count::Counting(progress) = &self.count {
+            progress.stop();
+        }
         let family = self.family();
         if family.constraints().is_empty() {
-            self.count = Count::Many;
+            self.count = Count::Known { size: EVERY_RULE, kept: None };
             return;
         }
-        self.count = Count::Counting;
+        let progress = Arc::new(Progress::default());
+        self.count = Count::Counting(progress.clone());
         let (asked, reply) = (self.asked, self.reply.clone());
         std::thread::spawn(move || {
-            let count = match family.count(COUNTED) {
+            // Half the cores: the world on the grid goes on running meanwhile.
+            let threads = std::thread::available_parallelism().map_or(1, |n| n.get() / 2).max(1);
+            let count = match family.size(threads, COUNTABLE, &progress) {
+                _ if progress.stopped() => return,
                 None => Count::Many,
-                Some(_) => {
-                    let rules = family.rules();
-                    let worlds = families::distinct(rules.iter().cloned());
-                    Count::Known { rules, worlds }
+                Some(size) if size.rules <= KEPT => {
+                    let worlds = family.canonical_rules(threads, KEPT, &Progress::default());
+                    Count::Known { size, kept: worlds.map(|(_, worlds)| (family.rules(), worlds)) }
                 }
+                Some(size) => Count::Known { size, kept: None },
             };
             // Nobody listens if the app has gone.
             let _ = reply.send((asked, count));
@@ -194,7 +201,9 @@ impl Plugin for SamplerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Sampler>().add_systems(
             Update,
-            (hear_counts, show.run_if(resource_changed::<Sampler>)).chain().in_set(SimSystems::Present),
+            (hear_counts, show.run_if(resource_changed::<Sampler>.or_else(counting)))
+                .chain()
+                .in_set(SimSystems::Present),
         );
     }
 }
@@ -295,12 +304,20 @@ pub fn sampler_section() -> impl Scene {
                         Children [
                             (
                                 checkbox("In canonical form", "RandomCanonical", Aspect::Rule, "")
+                                Node { flex_shrink: 0.0 }
                                 CanonicalBox
                                 on(|change: On<ValueChange<bool>>, mut sampler: ResMut<Sampler>| {
                                     sampler.canonical = change.value;
                                 })
                             ),
-                            (#RandomCount caption("") Counted),
+                            (
+                                // A count of trillions takes two lines, on its own side.
+                                #RandomCount
+                                caption("")
+                                Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
+                                TextLayout { justify: Justify::Right }
+                                Counted
+                            ),
                         ]
                     ),
                     caption("A rule turned, mirrored or begun later in its vacuum's cycle is another table; the canonical form is the first of them."),
@@ -393,7 +410,7 @@ fn draw(
     let family = sampler.family();
     let rule = match &sampler.count {
         // In canonical form every world is as likely as any other; otherwise every table is.
-        Count::Known { rules, worlds } => {
+        Count::Known { kept: Some((rules, worlds)), .. } => {
             let from = if sampler.canonical { worlds } else { rules };
             (!from.is_empty()).then(|| from[(rng.next_u64() % from.len().max(1) as u64) as usize].clone())
         }
@@ -404,7 +421,7 @@ fn draw(
     };
     let Some(rule) = rule else {
         let why = match sampler.count {
-            Count::Counting => "No rule drawn: the rules with all of this are still being counted.",
+            Count::Counting(_) => "No rule drawn: the rules with all of this are still being counted.",
             _ => "No rule has all of this.",
         };
         editor.say(why, universe.rule());
@@ -424,6 +441,11 @@ fn draw(
 fn named(family: &Family) -> String {
     let names: Vec<String> = family.constraints().iter().map(|constraint| constraint.to_string()).collect();
     names.join(" + ")
+}
+
+/// Whether a count is on its way, which the flow says how far it has got with.
+fn counting(sampler: Res<Sampler>) -> bool {
+    matches!(sampler.count, Count::Counting(_))
 }
 
 /// Takes the counts as they come in; only the answer to the last question counts.
@@ -473,18 +495,27 @@ fn show(
         _ => named(&family),
     };
     family_name.set_if_neq(Text(asked_for));
-    let so_many =
-        |count: usize, one: &str| format!("{} {one}{}", group_digits(count as i64), if count == 1 { "" } else { "s" });
+    // A count of trillions is more than the line holds: it breaks between its numbers, not
+    // within one.
+    let whole = |count: u64| group_digits(count).replace(' ', "\u{a0}");
+    let so_many = |count: u64, one: &str| format!("{} {one}{}", whole(count), if count == 1 { "" } else { "s" });
     let count = match &sampler.count {
-        _ if family.constraints().is_empty() => "16! rules".to_string(),
-        Count::Counting => "counting…".to_string(),
-        Count::Known { rules, .. } if rules.is_empty() => "no rule has all of this".to_string(),
+        Count::Counting(progress) => match progress.rules() {
+            0 => "counting…".to_string(),
+            gone => format!("counting… {} rules so far", whole(gone)),
+        },
+        Count::Many => format!("more than {} rules", whole(COUNTABLE)),
+        Count::Known { size, .. } if size.rules == 0 => "no rule has all of this".to_string(),
         // In canonical form it is the canonical rules that are drawn from.
-        Count::Known { worlds, .. } if sampler.canonical => so_many(worlds.len(), "canonical rule"),
-        Count::Known { rules, worlds } => {
-            format!("{} · {} canonical", so_many(rules.len(), "rule"), group_digits(worlds.len() as i64))
+        Count::Known { size: Size { canonical: Some(canonical), .. }, .. } if sampler.canonical => {
+            so_many(*canonical, "canonical rule")
         }
-        Count::Many => format!("more than {} rules", group_digits(COUNTED as i64)),
+        Count::Known { size: Size { rules, canonical: Some(canonical) }, .. } => {
+            format!("{} · {} canonical", so_many(*rules, "rule"), whole(*canonical))
+        }
+        Count::Known { size: Size { rules, canonical: None }, .. } => {
+            format!("{} · too many to count the canonical ones", so_many(*rules, "rule"))
+        }
     };
     counted.set_if_neq(Text(count));
     let (checkbox, checked) = *canonical;

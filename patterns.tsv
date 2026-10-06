@@ -1,0 +1,711 @@
+# The patterns kept for cas, a pattern to a line, with tabs in between: the rule it is a
+# pattern of (its table, or the id of a built-in rule), what it is (a spaceship, an
+# oscillator or a still life), the pattern (run-length encoded, from a corner of the blocks
+# the next step rewrites, at the start of the vacuum's cycle), its period, how far it moves
+# in a period, a name, and a note.
+rule	sort	pattern	period	moves	name	note
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	o	4			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo	10			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	2o	8			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bo$bo	20			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo4$2bo	36			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	o2$o$o	8			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$b2o	32			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$5bo$2bo2$4bo$2o3$5bo	292			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$b3o$4bo$3bo	80			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	4bo2$bo3$3bo$2bobo	248			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	2bobo$bobo2$3bo$6bo	80			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bo$ob2o	72			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$o$o3$bo3$o	104			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bo2$4bo$4bo2$2bo$bo	140			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$3bo2$bo3bo2$5bo$4bobo	148			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$b3o$o	144			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	4bobo$bo$5bo	120			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo2$2bo2$2bo	36			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bo2$bobo$3bo	44			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo$2bo	92			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bob2o	44			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$3bo$2bo$bobo	32			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$o$o2$o	88			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$bo$bo$bo	4			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo3$bo3$2bo	68			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$2o	6			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	2o2$o	24			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	b2o$bo	48			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	b2o2$4bo	64			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	bo2$bo4$2bo	60			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	ob2o	4			
+single-rotation	spaceship	b2o2$2o	48	2,2		
+single-rotation	spaceship	3o2$2bo	28	2,2		
+single-rotation	spaceship	2bobo$b2o	44	2,2		
+single-rotation	spaceship	b2o2$b2o	12	2,0		
+single-rotation	spaceship	3o$o$bo	15	1,1		
+single-rotation	oscillator	o	4			
+single-rotation	oscillator	2o	16			
+single-rotation	oscillator	o$bo	8			
+single-rotation	oscillator	b2o$bo	28			
+single-rotation	oscillator	3o	24			
+single-rotation	oscillator	o2b2o	52			
+single-rotation	oscillator	b2o$2bo	4			
+single-rotation	oscillator	2o$o	16			
+single-rotation	spaceship	b3o$bo	61	1,1		
+single-rotation	spaceship	b2o$2b2o$2bo	149	3,3		
+single-rotation	spaceship	2ob2o	368	2,2		
+single-rotation	still life	b2o$b2o	2			
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	b3obo	1068762			
+diagonal-traffic	spaceship	o$o$bo$o	33	-1,-1		
+diagonal-traffic	spaceship	b2o$o2$2bo	58	2,2		
+diagonal-traffic	spaceship	2bo$b2o2$2bo	27	-1,-1		
+diagonal-traffic	spaceship	o2bo$obo	33	-1,-1		
+diagonal-traffic	spaceship	3bo$b3o2$2bo	3	-1,-1		
+diagonal-traffic	spaceship	o$bo$obo	17	1,1		
+diagonal-traffic	spaceship	b2obo$3bo	27	-1,-1		
+diagonal-traffic	spaceship	2o$o$bo$o	90	-2,-2		
+diagonal-traffic	spaceship	$bobo$2bo$3bo	49	-1,-1		
+diagonal-traffic	spaceship	b2o$3b2o	35	1,1		
+diagonal-traffic	spaceship	bobo$3b2o	87	-1,-1		
+diagonal-traffic	spaceship	b3o$bobo	870	-6,-6		
+diagonal-traffic	spaceship	o$o$3o	146	-2,-2		
+diagonal-traffic	spaceship	b3o$bo	534	-2,-2		
+diagonal-traffic	spaceship	$bobo$bo$2b2o	31	1,1		
+diagonal-traffic	spaceship	o$obo$2o	382	-2,-2		
+diagonal-traffic	spaceship	bo$bo2$bo$bo	530	2,2		
+diagonal-traffic	spaceship	$3b3o$bo2bo$3b2o	256	2,2		
+diagonal-traffic	spaceship	$o$4o	763	7,7		
+diagonal-traffic	spaceship	$bo$2bo$b2o2$bo	53	-1,-1		
+diagonal-traffic	spaceship	bo$bo$bo$bo	1434	2,2		
+diagonal-traffic	spaceship	o$2o$3o	1432	-6,-6		
+diagonal-traffic	spaceship	3bo$b2obo$bo	63	1,1		
+diagonal-traffic	spaceship	bo$b2o2$2bo2$bo	1386	-6,-6		
+diagonal-traffic	spaceship	2bo2$bo$b2o$o	11	-1,-1		
+diagonal-traffic	spaceship	o3bo$bo$obo	58	2,2		
+diagonal-traffic	spaceship	bo2b3o$2bo	376	4,4		
+diagonal-traffic	spaceship	2bo$bo$bo$bo$o	18	-2,-2		
+diagonal-traffic	spaceship	4b2o$b3o	57	-1,-1		
+diagonal-traffic	spaceship	b2o3bo$b2o	3948	8,8		
+diagonal-traffic	spaceship	$2o$2o$bo	1489	3,3		
+diagonal-traffic	spaceship	bo2bo$4bo$3bo$bo	58	2,2		
+diagonal-traffic	spaceship	$4o$o	1684	-4,-4		
+diagonal-traffic	spaceship	3o$2bo$2bo	138	2,2		
+diagonal-traffic	spaceship	$3bo$b2o$b2o	47	1,1		
+diagonal-traffic	spaceship	$2o$2o2$o	482	2,2		
+diagonal-traffic	spaceship	3b2o$2bo2$bo2bo	58	2,2		
+diagonal-traffic	spaceship	$b2o$2b2o$b2o	38	-2,-2		
+diagonal-traffic	spaceship	2b2o$bo2b2o	153	-1,-1		
+diagonal-traffic	spaceship	bo$2bo3$b2o$2bo	349	-1,-1		
+diagonal-traffic	spaceship	o2b2ob2o	130	-2,-2		
+diagonal-traffic	spaceship	3obo$4bo	1215	1,1		
+diagonal-traffic	spaceship	3o$3b2o	114	2,2		
+diagonal-traffic	spaceship	2o$b2o$obo	61	1,1		
+diagonal-traffic	spaceship	bobo$b2o5bo	848	4,4		
+diagonal-traffic	spaceship	o$2o2$o$o	226	2,2		
+diagonal-traffic	spaceship	bo2bo$b2o$o	11	-1,-1		
+diagonal-traffic	spaceship	b3o$b2o	734	-2,-2		
+diagonal-traffic	spaceship	bo2$b2o$2bo$2bo	41	1,1		
+diagonal-traffic	spaceship	o$bo$bo$o$bo	327	1,1		
+diagonal-traffic	spaceship	3o$2bobo	41	1,1		
+diagonal-traffic	spaceship	2bo2$2bo$2bo$bo$2bo	187	-1,-1		
+diagonal-traffic	spaceship	bo4bo$2bob2o	282	-2,-2		
+diagonal-traffic	spaceship	$2o$2o$o	2005	7,7		
+diagonal-traffic	spaceship	$3bo$3bo$bo$2bo$2bo	66	2,2		
+diagonal-traffic	spaceship	o$ob2o$2bo	434	-2,-2		
+diagonal-traffic	spaceship	ob2o$obo	90	-2,-2		
+diagonal-traffic	spaceship	$3bo$bo3$2bo$3bo$b2o2$2bo	39	-1,-1		
+diagonal-traffic	spaceship	$3bobo$2bobo$bo	342	2,2		
+diagonal-traffic	spaceship	bobo$2obo	589	-3,-3		
+diagonal-traffic	spaceship	o$2bo$o$o$o	162	2,2		
+diagonal-traffic	spaceship	o4bo$bo2bo$o5bo	866	10,10		
+diagonal-traffic	spaceship	bobo$2b2o$2bo	127	-1,-1		
+diagonal-traffic	spaceship	b2obo$2bo3bo	1404	-4,-4		
+diagonal-traffic	spaceship	$2bo$b3o$b2o	282	-2,-2		
+diagonal-traffic	spaceship	o2b2o$3b2o	115	-1,-1		
+diagonal-traffic	spaceship	2o2$bo2$b2o$3bo	62	2,2		
+diagonal-traffic	spaceship	bob2obo$2bo	187	-1,-1		
+diagonal-traffic	spaceship	b2o2bo$2bo3bo	349	-1,-1		
+diagonal-traffic	spaceship	$2o$o$2o	1082	-2,-2		
+diagonal-traffic	spaceship	bo4bo$b2o2bo	962	-2,-2		
+diagonal-traffic	spaceship	3o2$o$o	254	2,2		
+diagonal-traffic	spaceship	$2bo$bobo$b2o$o	56	-2,-2		
+diagonal-traffic	spaceship	obo$o$obo	318	2,2		
+diagonal-traffic	spaceship	b4o$2b2o	1656	-12,-12		
+diagonal-traffic	spaceship	bo$bo$3bo$bo$b2o	1306	4,4		
+diagonal-traffic	spaceship	bobo$bo$b2o	339	3,3		
+diagonal-traffic	spaceship	b3o$2bobo$3bo	120	-2,-2		
+diagonal-traffic	spaceship	3b2o$bobobo	53	-1,-1		
+diagonal-traffic	spaceship	$2o$bo$bo$o	109	-1,-1		
+single-rotation	spaceship	3o$o$b2o	11	1,1		
+single-rotation	spaceship	o$b2o$obo$o	307	5,5		
+single-rotation	spaceship	o$2o3$2o	632	4,0		
+single-rotation	spaceship	o$bo$o$2o	158	2,0		
+single-rotation	spaceship	obo$2o$b2o	39	1,1		
+single-rotation	spaceship	o3b2o$bobo2bo	1362	2,2		
+single-rotation	spaceship	o$bo$bobo$obo	214	2,0		
+single-rotation	spaceship	4bo$2o2bo$2bobo	124	4,0		
+single-rotation	spaceship	2bo$o$3o$2bo	296	6,0		
+single-rotation	spaceship	3o$o3bo	178	2,0		
+single-rotation	spaceship	bobo3$2b2o$bo2bo	44	2,0		
+single-rotation	spaceship	2o$o3$2o4$o	642	6,0		
+single-rotation	spaceship	b2o$bobo$bobo	124	2,2		
+15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0	oscillator	$5o	32782820			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	2bo3$b2o$bo$bo2$bo	9696	-4,-4		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	bob3o	28026	-8,-8		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	3ob2o	13774	4,4		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	bo$b2o2$2bo	4490	2,2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	b3o$bobo	8894	2,2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	o$2o$2o	7692	2,2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	bo$bo$2bo$b2o	21332	-2,-2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	o	4			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo	8			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo3$2bo2$3bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo$2bo4$3bo	12			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo$bo	4			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo2bo$bo$b2o	152			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	2o$bo3$7bo	68			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$2o$4bo	24			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	2bobo$bo$2b2o	100			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	still life	$o	1			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bobo$2bo$3bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	3o$2b2o	11062	-4,-4		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	bo3b2o$bobo	5070	2,2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	b3obo	417138	10,10		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	obo$b3obo	1082	-2,-2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	b2o2$2bo$b2o6$bo	67738	-2,-2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	spaceship	o$o3$o$o$o	33142	-2,-2		
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$3bo$6bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo4$5bo2$5bo	40			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$3o	162			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	2o	10			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	b2o$3b2o	44			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	b2o$bobo	80			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	2o$bo	24			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	o2$o$o	20			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	o$bo$4bo	12			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$bo	6			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$o3$bo	24			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	b2o	12			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo3$2bo$2bo	28			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	o2$bo	12			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo$bo4$obo$bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	b2obo$bo	24			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	o2$o2$bo	8			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$2bo	84			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	3b2o$bo2$5bo3$7bo$7bo	72			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$2b2o2$bo$3bo	280			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$2o3$3bo	100			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$bo$o2$bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$o$o	56			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo2bo$3bo	16			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo4$5bo$5bo	28			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	$o$o$o	152			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$bo$4bo	20			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	3bo$bo2bo	88			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	obo$bo	12			
+15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0	oscillator	bo$4bo	16			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	2o$2o	42120	0,-2		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	$b2o$2bo2$bo	1256	2,0		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	$b2o$b2o	674	-2,2		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	obo2bob2o	222308	-6,-6		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	2o2b3o	1040106	-8,-8		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	o	4			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	bo	10			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	bo$bo$bo	4412			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	b2o	36			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	o$o	10			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	bo$bo	8			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	$o$2bo2$2bo2$o$3bo	144			
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	o2bo2b3o	943230	-10,-10		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	o3b2ob2o	1011122	2,2		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	spaceship	o$o$o$o$o	1744636	-2,-2		
+15,7,6,3,11,10,2,8,14,13,12,9,5,4,1,0	oscillator	4o	49162			
+15,7,6,3,13,10,2,8,14,11,5,4,12,9,1,0	oscillator	bo	10			
+espca-016a7f	spaceship	2b2o$obo$2bo	3	1,1		
+espca-016a7f	spaceship	2o$2o2$2o	51	1,1		
+espca-016a7f	spaceship	$bobo$bo2$o$o$o	234	2,2		
+espca-016a7f	spaceship	bobo$3bo$3bo2$2b2o	700	4,4		
+espca-016a7f	spaceship	$3o$bobo$3bo	393	1,1		
+espca-016a7f	spaceship	3ob2o	490	2,0		
+espca-016a7f	spaceship	o2bo$b3o	829	1,1		
+espca-016a7f	spaceship	$bobo$o$o2$o$o	212	4,4		
+espca-016a7f	spaceship	2b2o$2b2o$bobo	320	4,4		
+espca-016a7f	spaceship	b2o$b3o	719	1,1		
+espca-016a7f	spaceship	2bo$obo$2o2$bo	10	2,2		
+espca-016a7f	spaceship	3bo$obo3$obo2$bo	28	4,4		
+espca-016a7f	spaceship	$2bo$2b2o2$o$bo$o	116	4,4		
+espca-016a7f	spaceship	2o$2o$bo3$o	996	8,0		
+espca-016a7f	spaceship	$b2o$2bo$b3o	93	1,1		
+espca-016a7f	spaceship	2o2b2o$o4bo	236	2,0		
+espca-016a7f	oscillator	o	4			
+espca-016a7f	oscillator	2o	8			
+espca-016a7f	oscillator	obo$o4bo$o5bo	148			
+espca-016a7f	oscillator	bo$bob2o2$4bo	36			
+espca-016a7f	oscillator	obo$b2o	44			
+espca-016a7f	oscillator	3o	20			
+espca-016a7f	oscillator	bo$bo$2bo	20			
+espca-016a7f	oscillator	o$bo	8			
+espca-016a7f	oscillator	2o2bo	20			
+espca-016a7f	spaceship	2o$o$o$o$o	8061	3,3		
+espca-016a7f	spaceship	b2o$2bo2$b2o$bo	6104	4,4		
+espca-016a7f	spaceship	bo$b3o$bo$2bo	711	3,3		
+espca-016a7f	spaceship	7bo$2bo2bo$2obo	108	4,4		
+espca-016a7f	spaceship	2bo$2o$o$2o	58	2,2		
+espca-016a7f	spaceship	3bo2$3bo2$2b2o$bobo$2bo	932	4,4		
+espca-016a7f	spaceship	b2o$3o$o	7852	8,8		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$o	32			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$o	32			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	2o	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$bo	16			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$bo	16			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	b2o	4			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$2o	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$b2o	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$2o$o	48			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$bo$3bo	48			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$2o$3bo	32			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$2o6bo	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	obo$o	48			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$o2bo	32			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	b2o$b2o	28			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o3bo$bo2bo	24			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	2o$2o$4bo	184			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$o$3bo$2bo	112			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$obo$2bo$2o	176			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$bo$ob2o	5816			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$bo9bo$bobo	96			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	obo$o$3bo	64			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$bobo$bo2bo	56			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	bo2bo$bo2bo	8			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$2o$obo	152			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	bo$bo$2bo	24			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	bo$2bo2bo$2bo	152			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o2bo$o	32			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$bo$3bo$2o	160			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	bo$2bo$bo	40			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$obo	80			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$2o	40			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$5bo$3b2o	56			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	2o2bo2bo$o	96			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$bo2bo	4			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o4b2o$5bo$8bo$bo	400			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	$o$bo$5bo$5bo	40			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	oscillator	o$o$2bo$3bo	80			
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	3o$obo	52	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$b2o$obo	20	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	2b2o$b2o	20	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$b2o$2o	60	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	2o$obo	60	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$o3bo$3obo	60	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	2o$o$o	352	4,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$bo$bo$bo$bo	1376	4,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$b2o$o$bo	352	4,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	o$2o$bo	800	4,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$bob2o$2b2o	52	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$bo$2o$o	800	4,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	$o$o$obo	268	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	bo$o$obo	268	2,0		
+3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12	spaceship	bo$bo$bo$bo	1376	4,0		
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2o$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o$o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o$o$2bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$2bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o2$o	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o2bo$bo$bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo2$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$o2bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bo$2b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2o$obo$o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bo$2b2o2$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o2$2bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$obo2$o	10			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$2bobo2$2bo	18			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$bo$bo$o	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b3o$3b2o2$4bo2b2o$8bo$7b2o$4bo5b2o$3bo6bo$8bo$2b2o3b2o	120			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$bo$3b2o$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob2o$b2o$bo3bo$2bo$4bo	18			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b3o2$2o2bo$4bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o2$3bo$4bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bob2o$2b2o$2bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$bobo$2bo$2bo2bo$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob2o$2bobo2$o2bobo	10			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o$bobo$3bo$3bo$3bo$5bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2b3o$6bo$2bo$2bo$bo3bo$3bo2bo$3bo$7b2o$8bo$6bo	64			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2obo$b2o$2bo	20			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b3o$2b2o$2bo$2bo$bobo$bo3b2o$4bo2$3bo	264			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o$o$2bo$3bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	4o	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2o$3b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo$2bo$3bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo$3bo$4bo$bo$2b2o$b2o	60			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o2$2bo$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b4o$bo$3bo$bo	22			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo$2bo2$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o2$2o	22			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o2$3bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$3b2o2$4bob2o2$5bo$5bo	18			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2o$bo$2bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob2o2$2bo$3bo$4bo$4bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o2bo$b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo2$bobo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2b3o$bo3b2o$bo4bo$bo$2bo$3b2o$2bo	60			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bo$2bo$3b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$b2o	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$3bo$2bo$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bobo$2bo$2bo$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bobo$2bob2o$2b3o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b3o$3b2o$5bo	20			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob3o2$2bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$bob2o2$3bo$4bo$5bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$bo$bo2bo$4bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob2o$bo$4bo$5bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	4o$o3$b2o$o$o$bo	32			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b3o$4bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$bobo$2b2o$bo2bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obobo$b2o2bo$4bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2bo2bo$b2obo2$4bo$6b2o$9bo$7bo	40			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$2bo$2bo	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2obo$b2o	14			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$4bo$2bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$b2o2$obo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$2bo$3b2o	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2o$3b3o$2bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o2bo$b2o$bo	4			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	obo$bo$bo2bo$3bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	b2o$2bobo$bo2b2o	20			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2bo2bo$b2obo2$3b2obo$2bo$b2o4b2o$4b2o$o2bo$2bo	104			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	4o$2o$3bo$o$4bo$5bo	44			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	ob2o$2bob2o$6bo$3bo$3bo	36			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$2bo$o3bo$obo	26			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o$3bo2$bo	6			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	o$b2o2$2bobo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	2obo2$bo$2bo$4bo	8			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$3b2o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	still life	o	1			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	still life	o$bo	1			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	still life	o$bo$2bo	1			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	still life	o$bo$2bo$3bo	1			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	still life	2o$2o	1			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o2$2b2o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	3o$3o	12			
+0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15	oscillator	6o$o4bo	20			
+0,3,10,1,5,4,6,7,12,9,2,11,8,13,14,15	oscillator	b2o$b2o	22			
+bbm	still life	b2o$b2o	1			
+bbm	oscillator	3b4o$3b5o$5bo2$7b6o$2o4b4ob2o$2obo2bobo2bo$2b8obo$b6o2b3o$3ob2o5bo$3ob3o2b3o$b9ob5o$5b2ob2o2b4o$5b4o$6b2o	360			
+bbm	spaceship	o	1	1,1		
+15,10,13,3,11,14,6,8,7,12,1,4,9,2,5,0	oscillator	$2o$2o$2o$o	236328			
+15,10,13,3,11,14,6,8,7,12,1,4,9,2,5,0	still life	2b2o$b2o$2o$o	2			
+15,10,13,3,11,14,6,8,7,12,1,4,9,2,5,0	oscillator	$2o$b3o	88			
+15,10,13,3,11,14,6,8,7,12,1,4,9,2,5,0	oscillator	$b5o	14008874			
+0,2,1,12,8,5,9,11,4,6,10,7,3,14,13,15	spaceship	o	2	2,0		
+0,2,1,12,8,5,9,11,4,6,10,7,3,14,13,15	spaceship	o$2o$bo	6	2,0		
+0,2,1,12,8,5,9,11,4,6,10,7,3,14,13,15	spaceship	o3bo$3obo$b2o	6	2,0		
+0,2,1,12,8,5,9,11,4,6,10,7,3,14,13,15	spaceship	o$3o$b2obo$4bo	6	2,0		
+0,2,1,12,8,5,9,11,4,6,10,7,3,14,13,15	spaceship	o$2o$bo$o$obo$2bo	6	2,0		
+15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0	spaceship	bo$o$o$bo	4	2,0		
+15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0	spaceship	bo$o$2o$2o$o$bo	4	2,0		
+15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0	spaceship	bo$o$o$bo$bo$o$o$bo	8	2,0		
+15,7,11,3,13,5,6,8,14,9,10,4,12,2,1,0	spaceship	bobo$obo$obo$bobo	4	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	3o$2bo	10	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o3bo$ob2o	392	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$2bo$2bo$2bo	608	8,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo$bo$2bo$b2o	560	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2ob3o	666	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2b2o$b2obo	230	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b3o$3bo$bo	716	8,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo2$b2o$b2o	346	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2obo$bo2bo	290	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	$o2bo$b2o$o	50	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$bob2o	886	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo2bo$2b2o$4bo	50	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	5o	560	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o2$b2o$o$2bo	568	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	3o$obo	1094	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o$o$o$o	584	8,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$bobo$2bo	1150	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$bo$b2o	1346	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o$2o$o$b2o	5648	16,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	3b3o$bobobo	924	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$o2bo$obo	38	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2bo3bo$4bo$bo2b2o	894	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2bo$bobo$3bo$2bo	506	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bobo2$b4o	30	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$3b2o2$3bo$2bo	18	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$obo$obo	132	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o3bo$bo2bo$obo	140	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o$o$o2$2o	2080	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	4bo$b3ob2o	764	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo$2bo2$b2o$b2o	4162	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	3ob3o	8336	20,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b3ob2o$bo	1574	10,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2obo$3bo$b2o	1062	14,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	obo2$b2o$o2bo	32	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bob2o$2bo2b2o	40	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o$o2$2o$o	4388	0,2		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$bo2$bo$3bo$b2o	1148	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2b2o$3bo$2bo$2b2o$bo	598	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	obo$2bo$3o	332	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo2bo$2b3o$4bo	148	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o3bo$obo$bobo	58	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$2bobo$2b2o	542	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	ob2o$bo2bo$2bo$3bo	802	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2obo2$2b3o	5078	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o	4			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2o	8			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo	8			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2bo$bo$2bo	12			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$o$o	24			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2o$3bobo$3bo3bo	216			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2o2$o$bo$bo	24			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	obo$2bo$2o	428			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	b2o2bo$4bo$bo	16			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	$o$2o$bo$o	64			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo2$bo$o	36			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo$2o	52			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$o$2o	24			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	3o	24			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo$bo$bo$o	392			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	$o$o$bo$o	36			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2o$o	16			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo$bo$o$o$2o	2616	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$obo$2o	2362	10,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b2o$2o$2bo	890	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2ob2o	84			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$b2o	12			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo$bo	12			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2o2$2bo	12			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo3$o	12			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	$2o3$o$o$2bo	40			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	2bo$3bo$3bo2$2b2o2$bo	180			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	oscillator	o$bo2$o$o	32			
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	3b3o$bob2o	1946	6,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	b3o$bo2b2o	988	4,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o$2o$bo$2o	2928	12,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	bo2bo$ob2obo	74	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	o$2o$bo$bo	618	2,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o$2o$o$bo	3078	10,0		
+0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15	spaceship	2o$o$bo2$2o	1778	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	b2o2$b2o	12	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	3o2$2bo	28	2,2		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2bobo$b2o	44	2,2		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	b2o2$2o	48	2,2		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2o$bo$bo$o	167	7,7		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	b3o$bo	61	1,1		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	b3o2$b2o	100	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	o$4o$3bo	160	2,2		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2ob2o	368	2,2		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2o2bo$2bobo	244	4,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	b2o$bo$2bo$bo	2196	4,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	$b3o2$2b2o	100	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	3o$o3bo	416	4,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	o2b2o$b2o	230	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o	4			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo$bo$2o	5148			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	bobo3$2b2o$bo2bo	44	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2o2$o2$2o	242	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	o$o2$bo$bo$2o	178	4,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	o3$bo$2o2$o$o	210	2,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2o2$o$o$o$bo	547	1,1		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2o$2o	4			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	4o$o2bo$o2bo$4o	40			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2o$o	16			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	2b2o2$bo2bo$bob2o	238	6,0		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	spaceship	obo$2bo$o$obo	251	5,5		
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2o	16			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o$bo	8			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	3o	24			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o$bo	28			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o2$bo$2bo	408			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	ob3o	36			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o2b2o	52			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo$bo	36			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo$bo$bo	56			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo$bo2bo	128			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o$2bo	4			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2b3o$bo	32			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o$bo2bo	12			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o2bo$bo2bo	40			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2o$o3$o	12			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o3$2bo	28			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo$b2o	400			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b3o2$3bobo	40			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	o2$o$b2o2$bo	124			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2bo$bo$bo$bo	32			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	obo4b2o$3bo	824			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o3bo$4bo	192			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	3o$bo	36			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	bo$2bo$2bo$2bo2$bo	420			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	2o$2bo$2bo	28			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	b2o4$bo$2bo2$2bo	476			
+0,2,8,3,1,5,6,14,4,9,10,13,12,11,7,15	oscillator	bob2o2$bo$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	3o$2bo	10	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo2bo$2b2o$4bo	50	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$2bo$b2o	182	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$bo$obo$bo	654	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo2$b2o$b2o	368	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	$o2bo$b2o$o	50	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$2bo$2bo$2bo	464	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$2obo$o	8	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bob2o$2bo2b2o	40	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$2bo$3o	506	10,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2b3o$bob2o	24	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$bo$o$o	930	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$bobo$bobo	708	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo$bobo$3bo$2bo	506	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$o2bo$2bobo	96	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$obo$bo$2bo	14	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo2$b2o$o2bo	32	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	ob2o2$3o	88	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo2$b2o$b2o	344	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	$2bo$2bobo$b2o2bo	544	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o2b2ob3o	3274	10,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2b2o$b3o2$2bo	798	6,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$2bo$b2o$2bo	7266	10,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$bo$o$o$o	274	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	4bo$2bobo$bo2b2o	544	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bobo2$b4o	30	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$obo$obo	26	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$b2o$o$2o	1140	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$2o$bo2$o	2856	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$2o$o$o	204	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	6o	4064	12,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	3o$o2$b2o	2244	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2b2o2bo$bobo2bo	1200	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$2o$o$2o	668	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$bo$2o$2o	370	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o2$b2o$2bo$2bo	360	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2ob2o$bo2bo	934	6,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o2bo$b2o2bo	3690	14,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$bo$obo$2o	332	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	$o4bo$5bo$2bo2bo$bo	198	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo3bo$2b4o	708	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	ob2o2b3o	9180	12,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bob2o$bo2b2o	576	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$2o2$b2o	114	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$3b2o$bobo	58	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	ob3o$3b2o	474	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o	4			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o	8			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo	8			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	obo$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$o$o	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o2b2o	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$2bo$o	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo2bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo$bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo$2o$bo	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$b2o	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	3o	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b3o$bo	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o2$4bo$bo$2bo$o2bo	312			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bobo$b2o$bo	20			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$2bo$o$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo2b2o$4bo3bo	36			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$2bo$o$bo	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$o2b2o	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$b2o$o$bo	328			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo$3o2$2o	144			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o3bo$4bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o2bo$bo$bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$o$o	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$b2o$bo	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$2o$bo2$o	360			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o$3bo$3bo	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	obo$2bo$o	48			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o2$2bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o$bo2bo	84			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo$2o2$b2o$b2o	354	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o2$2bo$obo$o	146	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$bo$b2o$b2o	1140	16,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo$3bo$b2o$bobo	2140	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$bo$3o	2654	18,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	4o$o$2bo	588	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo$bo$obo$2bo$2bo	146	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$bo$3bo$2bo$bo	380	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o2bo$2bob2o	1708	12,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$o$o$o	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o2$o$bo$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$3bo$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$b2o3$o	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo3$o	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo2$bo$2bo$b2o$2bo	292	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$bo$2bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo2bo$bo$bo	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo$bo$2bo$bo	36			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$o	4			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo2bo$bo$2b2o2$bo	56			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo$2bo3$b2o$bo	56			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b3o3$o3bo$3bo	84			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo$o$3bo2$2o	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$o3bo$2bo	4			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	4bo$obo$2o	56			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo2$o$2o	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o3$b2o	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o$obo	96			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o2bo$4bo	44			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	$o2bo$2o	84			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo3$bo$2bo$bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o2bo$bo2bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$bo	8			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$bo$bo$2o$o	2546	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$bo$2bo$b2o$2bo	370	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$2bo$3o	3418	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$obo$2bo2$o	3122	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$bo$b2o$2bo	1188	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$o$b2o2$2o	34	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$2o2$2o$o	924	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo2$b2o$2bo$b2o	692	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bobobo$b2o2bo	234	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	$obo$o$2o$2bo	666	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bobo2b2o$bo2bo3bo	150	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$3b2o2$3bo$2bo	18	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o2$3o$obo	3774	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$bobo$3bo$2bo	276	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	ob2ob2o2bo	4328	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo$2o$ob2o	2350	6,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o$bo$3bo$3bo$bo	2224	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2o$2bo$o$b2o	2184	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$2bo$bo$2o$o	134	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	2bo2bob2o$bo5bo	46	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b2o2$2bo$b3o	5002	14,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$obo$2bo$bo$o$o	632	4,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	4o$obo	16	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	5o$3bo	474	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o3bo$2o$2b2o	2350	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	4b2o$b2ob2o	3240	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	obo$2bo$b2o$o	666	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$2o2$b2o$b2o	1826	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo2bo$ob2obo	74	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	$ob2o2$ob2o	214	2,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	b3o$3bo$bo$bo	13456	8,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$3bo$o3bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o$obo	20			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2o2$bo$2bo	120			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo2b2o4$4b2o2$o$bob2o	120			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2b2o2$3obo	68			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	6bo$b2o$bo3b2o	156			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2b2o2$bo$3bo$3bo	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	$o$2o$2bo$bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bobo2bo$3bo2bo	164			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo3$o$bo$bo	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$b2o$bo	8			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo2bo2$3bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	$o$3o	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bob2o	24			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2bo$bo$2bo$2bo2$o	80			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	b2obo2$2o	36			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	bo2bo$o3bo	56			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	2o2bo2$2bo	16			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo2$o$o	32			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	4o	40			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	o$bo2$b2o	44			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	oscillator	ob3o	12			
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	o$2b2o$3o	2350	6,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	bo$bob2o$b3o	3396	12,0		
+0,2,8,3,1,10,6,11,4,9,5,7,12,14,13,15	spaceship	3o$2bo$bobo	126	2,0		

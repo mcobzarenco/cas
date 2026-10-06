@@ -486,6 +486,10 @@ fn of_family(args: &Args, done: &HashSet<String>, most: u64) -> Result<(String, 
         return Ok((said, drawn, left));
     };
     let said = format!("{named}: {rules} rules, {} canonical", worlds.len());
+    // The whole family in one order, whatever the table holds already: runs cut differently
+    // measure the same rules.
+    let mut worlds = worlds;
+    shuffle(&mut worlds);
     let mut todo: Vec<BlockRule> = worlds.into_iter().filter(|rule| !done.contains(&rule.to_string())).collect();
     let left = todo.len();
     if let Some(limit) = args.limit.filter(|limit| left > *limit && !args.sample) {
@@ -494,18 +498,19 @@ fn of_family(args: &Args, done: &HashSet<String>, most: u64) -> Result<(String, 
              all, or add --sample to measure {limit} of them picked at random."
         ));
     }
-    shuffle(&mut todo);
     todo.truncate(args.limit.unwrap_or(left));
     Ok((said, todo, left))
 }
 
 /// So many canonical rules of the family drawn at random, different from each other and from
-/// those already measured, and how many draws that took: fewer of them if a thousand draws in
-/// a row find nothing new.
+/// those already measured, and how many draws that took: fewer of them if so many draws in a
+/// row find nothing new, a thousand and one more for every rule the table holds, since a
+/// search taken up again draws the rules it measured before first.
 fn draw(family: &Family, wanted: usize, seed: u64, done: &HashSet<String>) -> (Vec<BlockRule>, usize) {
     let mut rng = Rng::new(seed);
+    let patience = 1000 + done.len();
     let (mut drawn, mut seen, mut draws, mut in_vain) = (Vec::new(), HashSet::new(), 0, 0);
-    while drawn.len() < wanted && in_vain < 1000 {
+    while drawn.len() < wanted && in_vain < patience {
         draws += 1;
         match family.draw(&mut rng).map(|rule| rule.canonical()) {
             Some(rule) if !done.contains(&rule.to_string()) && seen.insert(rule.clone()) => {
@@ -518,8 +523,8 @@ fn draw(family: &Family, wanted: usize, seed: u64, done: &HashSet<String>) -> (V
     (drawn, draws)
 }
 
-/// Always the same shuffle: what is left of a family after some runs does not depend on how
-/// the runs were cut.
+/// Always the same shuffle, of the whole family: what is left of it after some runs does not
+/// depend on how the runs were cut.
 fn shuffle(rules: &mut [BlockRule]) {
     let mut rng = Rng::new(0);
     for i in (1..rules.len()).rev() {
@@ -563,6 +568,17 @@ mod tests {
         let (_, rest, left) = of_family(&args("--family quarter-turn --limit 484"), &done, COUNTABLE).unwrap();
         assert_eq!((rest.len(), left), (484, 484));
         assert!(rest.iter().all(|rule| !done.contains(&rule.to_string())));
+        // Runs cut differently measure the same rules: two samples of a hundred, the second
+        // with the first in the table, are one sample of two hundred.
+        let (_, second, _) = of_family(&args("--family quarter-turn --limit 100 --sample"), &done, COUNTABLE).unwrap();
+        let (_, two_hundred, _) =
+            of_family(&args("--family quarter-turn --limit 200 --sample"), &none, COUNTABLE).unwrap();
+        let sorted = |rules: &[BlockRule]| {
+            let mut rules: Vec<String> = rules.iter().map(|rule| rule.to_string()).collect();
+            rules.sort();
+            rules
+        };
+        assert_eq!(sorted(&[sample.clone(), second].concat()), sorted(&two_hundred));
         // A family too big to go through is only drawn from: as many canonical rules as asked
         // for, all different.
         let refused = of_family(&args("--family half-turn"), &none, 1000).unwrap_err();
@@ -573,6 +589,15 @@ mod tests {
         let unique: HashSet<&BlockRule> = drawn.iter().collect();
         assert_eq!((drawn.len(), unique.len()), (50, 50));
         assert!(drawn.iter().all(|rule| rule.canonical() == *rule));
+        // A sample taken up again draws the rules it measured before first, however many,
+        // and goes on to new ones.
+        let (_, before, _) =
+            of_family(&args("--family half-turn --limit 1200 --sample --seed 3"), &none, 1000).unwrap();
+        let measured: HashSet<String> = before.iter().map(|rule| rule.to_string()).collect();
+        let (_, more, _) =
+            of_family(&args("--family half-turn --limit 50 --sample --seed 3"), &measured, 1000).unwrap();
+        assert_eq!(more.len(), 50);
+        assert!(more.iter().all(|rule| !measured.contains(&rule.to_string())));
         // A sample says how many.
         assert!(Args::try_parse_from(["cas-search", "--sample"]).is_err());
     }

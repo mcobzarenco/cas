@@ -13,7 +13,7 @@ use std::{
 };
 
 use cas_core::{
-    families::{self, ENUMERABLE, Family},
+    families::{self, COUNTABLE, Family, Progress},
     library::{Library, usual_file},
     rules::{BlockRule, Population},
     search::{self, Effort, Report},
@@ -32,8 +32,9 @@ struct Args {
     /// The rules to measure: those with all of the properties named, joined by `+`, as in
     /// `mirror+conserving`.
     ///
-    /// Rules that make the same world are measured once. A family of more than eight million
-    /// rules is not gone through but sampled: `--limit` rules of it, drawn with `--seed`.
+    /// Rules that make the same world are measured once: the family's canonical rules, all of
+    /// them unless `--sample` is given. A family of more than 250 million rules is too big to
+    /// go through, and can only be sampled.
     #[arg(long, value_parser = FamilyParser, default_value = "quarter-turn")]
     family: Vec<Family>,
     /// Measure these rules instead of a family: presets, ESPCA numbers or tables.
@@ -43,7 +44,7 @@ struct Args {
     /// first. With --limit and more seeds or generations: a closer look at so many of its best.
     #[arg(long)]
     from: Option<PathBuf>,
-    /// The seed the rules of a family too big to go through are drawn with.
+    /// The seed the rules of a sample are drawn with, of a family too big to go through.
     #[arg(long, default_value_t = 1)]
     seed: u64,
     /// Small random patterns each rule is tried on.
@@ -60,11 +61,16 @@ struct Args {
     /// first line how hard its rules were looked at, and takes no rules looked at otherwise.
     #[arg(long)]
     out: Option<PathBuf>,
-    /// Measure at most this many rules now. Those of a family are taken in a shuffled order,
-    /// so that a part of it is a fair sample; of a family too big to go through, so many are
-    /// drawn, 1000 unless said.
+    /// Measure at most this many rules now. A family with more of them left to measure is not
+    /// measured at all, unless `--sample` is given; of a table (`--from`), the best so many
+    /// are measured.
     #[arg(long)]
     limit: Option<usize>,
+    /// Measure `--limit` rules of the family, picked at random, rather than all of it: its
+    /// canonical rules are taken in a shuffled order, the same every time; of a family too big
+    /// to go through, rules are drawn with `--seed` until so many canonical ones are found.
+    #[arg(long, requires = "limit")]
+    sample: bool,
     /// How many of the best rules to print at the end.
     #[arg(long, default_value_t = 20)]
     top: usize,
@@ -81,9 +87,6 @@ struct Args {
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
 }
-
-/// So many rules are drawn of a family too big to go through, unless `--limit` says.
-const DRAWN: usize = 1000;
 
 /// Reads a family, and tells the help what may be written for one.
 #[derive(Clone)]
@@ -252,46 +255,34 @@ fn main() {
         None => (None, Vec::new()),
     };
     let chosen = !args.rules.is_empty() || args.from.is_some();
-    let rules = if !args.rules.is_empty() {
-        args.rules.clone()
-    } else if let Some(path) = &args.from {
-        let (_, mut lines) = table(path).unwrap_or_else(|error| fail(&error));
-        if lines.is_empty() {
-            fail(&format!("no table of rules in {}", path.display()));
-        }
-        lines.sort_by_key(|line| Reverse(merit(line)));
-        // The best so many of the table, whichever of them an earlier run got to.
-        lines.truncate(args.limit.unwrap_or(lines.len()));
-        let rule = |line: &Vec<String>| line[0].parse().unwrap_or_else(|error: String| fail(&error));
-        lines.iter().map(rule).collect()
-    } else {
-        let family = Family::new(args.family.iter().flat_map(|family| family.constraints().iter().copied()));
-        let named = match family.constraints() {
-            [] => "every rule there is".to_string(),
-            constraints => constraints.iter().map(|constraint| constraint.to_string()).collect::<Vec<_>>().join("+"),
-        };
-        let (said, rules) = match family.count(ENUMERABLE) {
-            Some(count) => (format!("{count} rules"), family.rules()),
-            None => {
-                let drawn = args.limit.unwrap_or(DRAWN);
-                let said = format!("too many rules to go through, {drawn} drawn with seed {}", args.seed);
-                (said, family.sample(drawn, args.seed))
-            }
-        };
-        // Rules that make the same world would measure the same: the canonical one of each
-        // is measured, and the count says how many those are.
-        let rules = families::distinct(rules);
-        eprintln!("{named}: {said} · {} canonical", rules.len());
-        rules
-    };
-
-    let done: HashSet<&str> = lines.iter().map(|line| line[0].as_str()).collect();
-    let mut todo: Vec<BlockRule> = rules.into_iter().filter(|rule| !done.contains(rule.to_string().as_str())).collect();
-    let left = todo.len();
-    if !chosen {
-        shuffle(&mut todo);
+    if chosen && args.sample {
+        fail("--sample picks rules of a family; --rule and --from name them");
     }
-    todo.truncate(args.limit.unwrap_or(left));
+    let done: HashSet<String> = lines.iter().map(|line| line[0].clone()).collect();
+    let (todo, left) = if chosen {
+        let rules = if !args.rules.is_empty() {
+            args.rules.clone()
+        } else {
+            let path = args.from.as_ref().expect("a table is named");
+            let (_, mut lines) = table(path).unwrap_or_else(|error| fail(&error));
+            if lines.is_empty() {
+                fail(&format!("no table of rules in {}", path.display()));
+            }
+            lines.sort_by_key(|line| Reverse(merit(line)));
+            // The best so many of the table, whichever of them an earlier run got to.
+            lines.truncate(args.limit.unwrap_or(lines.len()));
+            let rule = |line: &Vec<String>| line[0].parse().unwrap_or_else(|error: String| fail(&error));
+            lines.iter().map(rule).collect()
+        };
+        let mut todo: Vec<BlockRule> = rules.into_iter().filter(|rule| !done.contains(&rule.to_string())).collect();
+        let left = todo.len();
+        todo.truncate(args.limit.unwrap_or(left));
+        (todo, left)
+    } else {
+        let (said, todo, left) = of_family(&args, &done, COUNTABLE).unwrap_or_else(|error| fail(&error));
+        eprintln!("{said}");
+        (todo, left)
+    };
     eprintln!("{} rules to measure of {left}, {} already in the table", todo.len(), lines.len());
 
     let started = Instant::now();
@@ -459,6 +450,74 @@ fn show(title: &str, lines: &[&Vec<String>], columns: &[&str]) {
     }
 }
 
+/// The rules of the family to measure now, those of the table left out, with what to say of
+/// them and how many there were to measure; or why none are measured. A family of more than
+/// `most` rules is not gone through.
+fn of_family(args: &Args, done: &HashSet<String>, most: u64) -> Result<(String, Vec<BlockRule>, usize), String> {
+    let family = Family::new(args.family.iter().flat_map(|family| family.constraints().iter().copied()));
+    let named = match family.constraints() {
+        [] => "every rule there is".to_string(),
+        constraints => constraints.iter().map(|constraint| constraint.to_string()).collect::<Vec<_>>().join("+"),
+    };
+    // Going through a large family takes a while: it says how far it has got.
+    let progress = Progress::default();
+    let listed = std::thread::scope(|scope| {
+        let going = scope.spawn(|| family.canonical_rules(args.threads, most, &progress));
+        let started = Instant::now();
+        let mut said = Duration::ZERO;
+        while !going.is_finished() {
+            std::thread::sleep(Duration::from_millis(50));
+            if started.elapsed() >= said + Duration::from_secs(5) {
+                said = started.elapsed();
+                eprintln!("{named}: {} rules gone through", progress.rules());
+            }
+        }
+        going.join().expect("going through the family did not fail")
+    });
+    let Some((rules, worlds)) = listed else {
+        let too_many = format!("{named}: more than {most} rules, too many to go through");
+        let Some(limit) = args.limit.filter(|_| args.sample) else {
+            return Err(format!("{too_many}. --sample with --limit N measures N of them, drawn at random."));
+        };
+        let (drawn, draws) = draw(&family, limit, args.seed, done);
+        let said =
+            format!("{too_many}; {} canonical rules drawn with seed {} in {draws} draws", drawn.len(), args.seed);
+        let left = drawn.len();
+        return Ok((said, drawn, left));
+    };
+    let said = format!("{named}: {rules} rules, {} canonical", worlds.len());
+    let mut todo: Vec<BlockRule> = worlds.into_iter().filter(|rule| !done.contains(&rule.to_string())).collect();
+    let left = todo.len();
+    if let Some(limit) = args.limit.filter(|limit| left > *limit && !args.sample) {
+        return Err(format!(
+            "{said}, {left} of them still to measure: more than --limit {limit}. Leave out --limit to measure them \
+             all, or add --sample to measure {limit} of them picked at random."
+        ));
+    }
+    shuffle(&mut todo);
+    todo.truncate(args.limit.unwrap_or(left));
+    Ok((said, todo, left))
+}
+
+/// So many canonical rules of the family drawn at random, different from each other and from
+/// those already measured, and how many draws that took: fewer of them if a thousand draws in
+/// a row find nothing new.
+fn draw(family: &Family, wanted: usize, seed: u64, done: &HashSet<String>) -> (Vec<BlockRule>, usize) {
+    let mut rng = Rng::new(seed);
+    let (mut drawn, mut seen, mut draws, mut in_vain) = (Vec::new(), HashSet::new(), 0, 0);
+    while drawn.len() < wanted && in_vain < 1000 {
+        draws += 1;
+        match family.draw(&mut rng).map(|rule| rule.canonical()) {
+            Some(rule) if !done.contains(&rule.to_string()) && seen.insert(rule.clone()) => {
+                drawn.push(rule);
+                in_vain = 0;
+            }
+            _ => in_vain += 1,
+        }
+    }
+    (drawn, draws)
+}
+
 /// Always the same shuffle: what is left of a family after some runs does not depend on how
 /// the runs were cut.
 fn shuffle(rules: &mut [BlockRule]) {
@@ -482,6 +541,41 @@ fn fail(message: &str) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_family_is_measured_whole_unless_a_sample_is_asked_for() {
+        let args =
+            |words: &str| Args::try_parse_from(["cas-search"].into_iter().chain(words.split_whitespace())).unwrap();
+        let none = HashSet::new();
+        // All of it, in canonical form.
+        let (said, todo, left) = of_family(&args("--family quarter-turn"), &none, COUNTABLE).unwrap();
+        assert_eq!((said.as_str(), todo.len(), left), ("quarter-turn: 1536 rules, 584 canonical", 584, 584));
+        assert!(todo.iter().all(|rule| rule.canonical() == *rule));
+        assert_eq!(of_family(&args("--family quarter-turn --limit 584"), &none, COUNTABLE).unwrap().1.len(), 584);
+        // More than the limit is not measured at all, unless a sample is asked for.
+        let refused = of_family(&args("--family quarter-turn --limit 100"), &none, COUNTABLE).unwrap_err();
+        assert!(refused.contains("584 of them still to measure") && refused.contains("--sample"), "{refused}");
+        let (_, sample, left) =
+            of_family(&args("--family quarter-turn --limit 100 --sample"), &none, COUNTABLE).unwrap();
+        assert_eq!((sample.len(), left), (100, 584));
+        // What the table has already is left out, and counts no longer.
+        let done: HashSet<String> = sample.iter().map(|rule| rule.to_string()).collect();
+        let (_, rest, left) = of_family(&args("--family quarter-turn --limit 484"), &done, COUNTABLE).unwrap();
+        assert_eq!((rest.len(), left), (484, 484));
+        assert!(rest.iter().all(|rule| !done.contains(&rule.to_string())));
+        // A family too big to go through is only drawn from: as many canonical rules as asked
+        // for, all different.
+        let refused = of_family(&args("--family half-turn"), &none, 1000).unwrap_err();
+        assert!(refused.starts_with("half-turn: more than 1000 rules, too many to go through"), "{refused}");
+        let (said, drawn, _) =
+            of_family(&args("--family half-turn --limit 50 --sample --seed 3"), &none, 1000).unwrap();
+        assert!(said.contains("50 canonical rules drawn with seed 3"), "{said}");
+        let unique: HashSet<&BlockRule> = drawn.iter().collect();
+        assert_eq!((drawn.len(), unique.len()), (50, 50));
+        assert!(drawn.iter().all(|rule| rule.canonical() == *rule));
+        // A sample says how many.
+        assert!(Args::try_parse_from(["cas-search", "--sample"]).is_err());
+    }
 
     #[test]
     fn the_best_finds_are_kept_once() {

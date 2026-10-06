@@ -608,29 +608,35 @@ impl BlockRule {
     /// under the same world ([`BlockRule::world`]), be it one that only flickers where this
     /// one stands still, or one of another texture.
     pub fn canonical(&self) -> BlockRule {
+        // The rule itself is among them.
+        let mut least = self.table;
+        self.each_in_world(|table| {
+            least = least.min(*table);
+            true
+        });
+        BlockRule::new(least).expect("a permutation relabelled is a permutation")
+    }
+
+    /// Hands every rule that makes the same world as this one ([`BlockRule::canonical`]) to
+    /// `visit` as its table, the rule itself among them, until `visit` says to stop. Some
+    /// come more than once. Returns whether it went through them all.
+    pub fn each_in_world(&self, mut visit: impl FnMut(&[u8; 16]) -> bool) -> bool {
         let world = self.world();
-        let mut least: Option<[u8; 16]> = None;
-        let mut consider = |table: [u8; 16]| {
-            if least.is_none_or(|least| table < least) {
-                least = Some(table);
-            }
-        };
         // The world begun at every generation of its cycle, over every vacuum that makes it:
         // the empty block may become anything, as long as what differs from the vacuum still
         // goes through the same tables. And each of those rules through every turn and mirror.
         for begun in 0..world.len() {
             for empty in 0..16u8 {
                 let table = world[begun].table.map(|outcome| outcome ^ empty);
-                if goes_through(&table, &world, begun) {
-                    consider(table);
-                    for transform in TURNS_AND_MIRRORS {
-                        consider(seen_through(&table, transform));
-                    }
+                if goes_through(&table, &world, begun)
+                    && !(visit(&table)
+                        && TURNS_AND_MIRRORS.iter().all(|&transform| visit(&seen_through(&table, transform))))
+                {
+                    return false;
                 }
             }
         }
-        BlockRule::new(least.expect("the rule itself is among them"))
-            .expect("a permutation relabelled is a permutation")
+        true
     }
 
     /// The rule as it is for a world that begins at a later generation of the vacuum's cycle,

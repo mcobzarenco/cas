@@ -90,7 +90,9 @@ cargo test --release --workspace
 
 * `--rule RULE`: the rule to start with. A preset, by its name in the tables below in lower
   case with hyphens (`critters`, `ship-factory`); Morita's number of a rule (`espca-01c5ef`);
-  or any reversible table (`0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`).
+  any reversible table (`0,8,4,3,2,5,9,7,1,6,10,11,12,13,14,15`); or the same table as
+  sixteen hex digits (`0843259716abcdef`), which is the rule's name in the folder of kept
+  patterns.
 * `--width W`, `--height H`: the size of the grid, even numbers; 256 unless given.
 * `--init KIND`: what the grid starts with. `blob`, a random square in the middle; `cloud`,
   random cells thinning out from the middle; `soup`, random cells all over; or `empty`.
@@ -360,8 +362,9 @@ back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-
   * *Vacuum*: the empty world through the generations of its cycle.
 
   For a custom rule the main panel says the first of these in a sentence.
-* **Rule string**: the table as text, with Morita's number under it if the rule has one. Type
-  or paste a table, a preset name or such a number and it is applied as soon as it is valid
+* **Rule string**: the table as text, with the table in hex under it, a name for the rule that
+  stays whatever the rule is called, and Morita's number if the rule has one. Type or paste a
+  table, a preset name, the hex or such a number and it is applied as soon as it is valid
   (otherwise the reason is shown below the field); **Copy** and **Paste** use the system
   clipboard, and `ctrl+a`, `ctrl+c`, `ctrl+v` work in the field. While the field has focus the
   single-key shortcuts are off.
@@ -567,10 +570,12 @@ along a diagonal or neither: what was found in this world so far, at a glance. T
 come first; of two as fast the one of the shorter period, then the one of fewer cells.
 Oscillators go by their period and then their cells, still lifes by their cells.
 
-They are in `patterns.tsv`, next to the library's `rules.tsv`: a pattern to a line, with tabs in
-between (the rule, the sort, the pattern as text, its period, how far it moves, a name and a
-note), to be read, edited by hand, and added to by whatever else looks at rules. Like the library's file it is written at every change and read again whenever something
-else wrote it, and a scripted run has none.
+They are in the folder `patterns`, next to the library's `rules.tsv`: a file to a rule, named by
+the rule's table in hex (`0283156749abcdef.tsv` for Single rotation), and in it a pattern to a
+line, with tabs in between (the sort, the pattern as text, its period, how far it moves, a name
+and a note), to be read, edited by hand, and added to by whatever else looks at rules: the search
+does, when asked to. Like the library's file, the file of a rule is written whole at every change
+and read again whenever something else wrote it, and a scripted run has no folder.
 
 ## Searching for rules
 
@@ -581,9 +586,11 @@ finish:
 ```sh
 # 1. Go through a family. Interrupted, the same command takes the table up where it stopped.
 cargo run --release -p cas-search -- --family half-turn --out searches/half-turn.tsv
-# 2. Look closer at the best of it: for longer, and with more seeds.
+# 2. Look closer at the best of it, for longer and with more seeds, and keep what they have:
+#    their spaceships, oscillators and still lifes go into the app's folder of kept patterns,
+#    a file to a rule, where its kept panels show them.
 cargo run --release -p cas-search -- --from searches/half-turn.tsv --limit 200 \
-    --seeds 1600 --generations 12000 --blob 32000 --out searches/half-turn-closer.tsv
+    --seeds 1600 --generations 12000 --blob 32000 --out searches/half-turn-closer.tsv --patterns
 # 3. See a find in the app, or have a rule of your own measured.
 cargo run --release -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
 cargo run --release -p cas-search -- --rule 0,1,11,5,13,12,15,14,8,9,3,2,10,4,7,6
@@ -600,7 +607,15 @@ that is no find. The names are to be going on with: the app, which shows the fin
 is open, is where one gets a better name. The file is the app's, wherever the search is run from,
 unless `--library` names another.
 
-A run ends by saying how many rules of each character are in the table, and by listing the best.
+`--patterns` keeps what was found, in the app's [folder of kept patterns](#keeping-patterns) or in
+the folder named after it: every kind of spaceship, oscillator and still life of a rule that is a
+find, or that was named with `--rule`, goes into the file of its rule, each with the note
+`search`, and what is there already stays. Only the rules measured in the run count: one that
+the table has already is not measured again. Nothing is kept without the flag.
+
+A run ends by saying how many rules of each character are in the table, and by listing the best:
+the worlds with things that travel and things that stay, by the speeds of their spaceships, then
+their kinds, then the kinds that stay.
 The table is tab-separated under a line of column names, so `sort`, `awk` or a spreadsheet take
 it from there. Its first line, a comment, says how hard its rules were looked at (`--seeds`,
 `--generations`, `--blob`): a table takes no rules looked at otherwise, since their counts
@@ -612,13 +627,16 @@ The trials, and the columns they fill:
   comes back to its shape in place (`oscillating`) or elsewhere (`travelling`), flies apart
   (`scattering`), grows without bound (`growing`), or does none of it in time (`undecided`): the
   share of each in percent, with the number of different `periods` among the oscillating ones
-  and the `longest`.
+  and the `longest`, and the kinds of `oscillators` and `still-lifes` among them, each a seed
+  that came back as one thing, by the form it is filed under.
 * **Growth**: a seed that grows spreads over the plane like a fire, or grows along lines as a gun
   does. `growth` is the power of time its cells go with, 2 or 1; of the first seeds that grow,
   the slowest, so that a rule with guns counts for its guns. A seed that seems to grow along
   lines is followed four times as long before it is believed: some spread late.
 * **Spaceships**: the kinds of spaceship slower than light, among the seeds, among what a seed
-  that grows along lines sends out, and among what leaves the blob.
+  that grows along lines sends out, and among what leaves the blob; their different `speeds`,
+  the `fastest` and the `slowest` of them as fractions of *c*, and their `headings`: whether
+  they fly straight, along a diagonal or neither.
 * **Damage**: one cell of a random soup is flipped; the share in percent that differs, a hundred
   generations on, of the cells the flip could have reached.
 * **Blob**: a random blob on a closed grid. `blob` is its cells in the end as a multiple of what

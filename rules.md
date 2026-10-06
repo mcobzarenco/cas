@@ -3,7 +3,7 @@
 What was found out about some of the rules, a section to a rule: what the rule does, the
 patterns worth keeping, what was measured and how, and what is still open. The rules that have
 a name are in [`rules.tsv`](rules.tsv), the library of the app, and the patterns kept with the
-app in `patterns.tsv` next to it.
+app in the folder `patterns` next to it, a file to a rule.
 
 A pattern is written as the app writes it: run-length encoded (`b` dead, `o` alive, `$` next
 row) from a corner of the blocks the next step rewrites, at an even generation. Typed or pasted

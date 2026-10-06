@@ -14,6 +14,7 @@ the right and y down; a speed of c/N is a cell in N generations.
 * [Weighted Undecided 0](#weighted-undecided-0)
 * [15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0](#1576311124814135910210)
 * [Their relatives](#their-relatives)
+* [Undecidable Involution 1](#undecidable-involution-1)
 
 ## Weighted Undecided 0
 
@@ -228,3 +229,107 @@ of each happens to lie.
 | `15,7,6,5,11,10,4,8,14,13,3,9,12,2,1,0` | 12 % | 147 502 | 1 844 620 (0, −4) |
 | `15,7,6,3,11,10,4,8,14,13,12,9,5,2,1,0` | 12 % | 147 502 | 1 844 620 (0, 4): the one before run backwards |
 | `15,7,6,3,11,12,2,8,14,13,5,4,10,9,1,0` | 11 % | 816 850 | none (backwards it is `15,7,6,10,11,3,2,8,14,13,5,4,12,9,1,0`, further down the table) |
+
+## Undecidable Involution 1
+
+`1,0,2,3,10,5,6,7,9,8,4,11,13,12,15,14`, in the library under this name. Its own inverse, with
+no symmetry of the square, and canonical as it stands.
+
+Of a million involutions drawn at random and followed for 100 000 000 generations
+(`--family involution --generations 100000000 --seeds 1000`, which now needs
+`--sample --limit 1000000`), it had the most seeds still undecided by then: 57 %, with 33 %
+grown and 10 % oscillating, their periods up to 4. The search calls it `linear`. Nothing in it
+grows to speak of: its small patterns build a line of cells, a cell at a time, each taking
+about one and a half times as long as the one before.
+
+### What the rule does
+
+* **The vacuum goes through four states**, empty, a cell bottom-right, cells top-left and
+  bottom-right, a cell top-left, and is empty again. So the table changes every block, and on
+  what differs from the vacuum the rule acts through four tables, one for each generation of
+  the cycle. With TL, TR, BL, BR the corners of a block:
+
+  | generation | what changes |
+  |---|---|
+  | 0 | TR ⇄ TL+TR · TR+BL ⇄ TL+TR+BL · BL → TL+TR+BR → TR+BR → TL+BL → BL |
+  | 1 | TR → TL+BL+BR → BL+BR → TL+TR → TR · TR+BR ⇄ TL+TR+BR · TR+BL+BR ⇄ TL+TR+BL+BR |
+  | 2 | TR → TL+TR → BL+BR → TL+BL+BR → TR · TR+BR ⇄ TL+TR+BR · TR+BL+BR ⇄ TL+TR+BL+BR |
+  | 3 | TR ⇄ TL+TR · TR+BL ⇄ TL+TR+BL · BL → TL+BL → TR+BR → TL+TR+BR → BL |
+
+* **It keeps the cells of one kind and frees the other.** With (0, 0) a corner of the even
+  blocks, a cell where x + y is odd is at the top-right or the bottom-left of its block, in
+  both partitions, and every one of the four tables keeps the number of such cells in a block:
+  a pattern has as many of them for ever, and they are the ones that move. A cell where x + y
+  is even, top-left or bottom-right of its block, is left alone by every table when it is alone
+  in its block, and is made and unmade next to a moving one. (The search says `not
+  conserved`: a weight of 1 and 0 is none it tries.)
+* **A lone moving cell** (`bo`) is the smallest pattern that does not repeat. It goes up and to
+  the right along the diagonal x + y = const through its block, making and unmaking frozen
+  cells beside it, and leaves some behind on that diagonal; then it goes back and forth over
+  them, turning them on and off as it passes, and now and then gets one cell further than it
+  has been. A head on a tape, which it writes as it reads: what it does next depends on the
+  cells it finds, and those are the record of where it has been. After 4 000 000 generations
+  the tape is 22 cells long. Nothing goes down or to the left: the box a pattern is in has
+  its first block for a corner.
+* **How far the head gets grows like the logarithm of time**, and in bursts: the line of
+  `bo$2o` first reaches 4 cells out at generation 64, 8 at 576, 12 at 2 368, 16 at 4 928, 20 at
+  114 176, 24 at 248 960, 28 at 2 947 584, 32 at 17 306 304 and 36 at 46 967 232: a cell and a
+  half for every doubling of the generations, each cell taking one and a half times as long
+  as the last on average, though three can come within a few hundred generations and the
+  next take ten times as long. A plain binary counter would take exactly twice as long for
+  each cell; what this one counts in is not known.
+
+### Patterns
+
+* `o` and `$bo`, a lone frozen cell, and `o$bo`, two on a diagonal: still lifes, as every
+  frozen cell is that has no moving cell near it. A pattern leaves many of them behind: at
+  4 000 000 generations `bo$2o` is seventeen still lifes and two moving cells, one near where
+  it began and one somewhere along the line.
+* `bo`, `$o`, `2o`, `o$o`, `3o`, `o$2o`, `2o$bo`: one moving cell, which by 4 000 000 generations
+  has a line of 21 or 22 cells.
+* `bo$o`, `bo$2o`, `2o$o`, `b2o$2o`, `2o$2o`: two moving cells, and lines of 32 to 34 cells by
+  then. Two heads on one tape get further than one.
+
+None of them is worth keeping: the app keeps what comes back to its shape, and these never
+have.
+
+### What was measured
+
+**`bo$2o` followed on its own**, at the start of the vacuum's cycle, with the analyser's limits
+raised (the fate is undecided at every phase of the cycle alike):
+
+| generations | cells, fewest and most | box | pieces at the end, of which still lifes |
+|---|---|---|---|
+| 2^18 | 3 to 38 | 28×28 | 14 · 12 |
+| 2^20 | 3 to 40 | 28×28 | 12 · 11 |
+| 2^22 | 3 to 44 | 32×32 | 16 · 14 |
+| 2^24 | 3 to 48 | 34×34 | 17 · 15 |
+| 2^26 | 3 to 54 | 40×40 | 19 · 17 |
+| 2^28 | 3 to 62 | 44×44 | 19 · 17 |
+
+About 2.9 cells change from one generation to the next, whatever the length of the line.
+
+**The same on a torus of 192×192**, stepped 64 generations at a time, for the first generation
+at which the line reached each cell further out (above, under what the rule does) and for
+pictures of it: the line lies on the diagonal x + y = 192 through the block the pattern began
+in, every cell of it frozen, dense near the beginning and sparse far out, with the two moving
+cells on it.
+
+### Open
+
+* Does the line grow for ever? Nothing says it must stop, and nothing says it cannot: a head
+  that writes what it reads could in principle run through all the tapes of some length and
+  come back to its start, with a period beyond anything that has been followed. The analyser
+  calls the pattern undecided at 67 million generations, and would at any number.
+* What the head counts in. The times to the next cell are not the doublings of a binary
+  counter; a closer look at what the head does over a short tape would say.
+* What two heads do to each other: `bo$2o` has one that stays near the beginning. Do they ever
+  part, or meet?
+* What a blob does. The search's blob ends with four times its cells (`blob 4.10`), which has
+  not been looked at.
+
+### How
+
+The fates with `Analyser::study` and `max_generations` set high, a phase at a time; the first
+generations and the frontier with `Universe` on a torus, stepping and reading the cells. A
+scratch program, not in the repository.

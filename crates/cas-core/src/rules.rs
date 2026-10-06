@@ -737,7 +737,7 @@ impl FromStr for BlockRule {
 }
 
 /// A table as it looks when the plane is turned or mirrored by `transform`.
-fn seen_through(table: &[u8; 16], transform: fn(u8) -> u8) -> [u8; 16] {
+pub(crate) fn seen_through(table: &[u8; 16], transform: fn(u8) -> u8) -> [u8; 16] {
     let mut seen = [0; 16];
     for block in 0..16u8 {
         seen[transform(block) as usize] = transform(table[block as usize]);

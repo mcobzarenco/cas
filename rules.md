@@ -14,7 +14,7 @@ the right and y down; a speed of c/N is a cell in N generations.
 * [Weighted Undecided 0](#weighted-undecided-0)
 * [15,7,6,3,11,12,4,8,14,13,5,9,10,2,1,0](#1576311124814135910210)
 * [Their relatives](#their-relatives)
-* [Undecidable Involution 1](#undecidable-involution-1)
+* [Scribe 0](#scribe-0)
 
 ## Weighted Undecided 0
 
@@ -230,7 +230,7 @@ of each happens to lie.
 | `15,7,6,3,11,10,4,8,14,13,12,9,5,2,1,0` | 12 % | 147 502 | 1 844 620 (0, 4): the one before run backwards |
 | `15,7,6,3,11,12,2,8,14,13,5,4,10,9,1,0` | 11 % | 816 850 | none (backwards it is `15,7,6,10,11,3,2,8,14,13,5,4,12,9,1,0`, further down the table) |
 
-## Undecidable Involution 1
+## Scribe 0
 
 `1,0,2,3,10,5,6,7,9,8,4,11,13,12,15,14`, in the library under this name. Its own inverse, with
 no symmetry of the square, and canonical as it stands.

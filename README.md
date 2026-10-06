@@ -327,11 +327,14 @@ back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-
   table (it only turns blocks, is linear, is its own inverse, treats the two states alike,
   leaves the empty world empty, changes at most so many blocks). Under the chips it says how
   many rules have all that is asked for and how many of them are canonical, one for every world
-  they make, counted up to two million; some properties have nothing in common, and then no
-  rule is drawn. A rule is drawn evenly among the rules, and *In canonical form* evenly among
-  the canonical ones instead. Of a family too large to count, a table is filled in at random
-  under the properties, which is not even: every outcome a block can have is as likely as any
-  other, however many rules lie behind it.
+  they make. The counting goes on while the world runs, through up to 250 million rules; a
+  family whose rules leave the empty world empty is counted by its symmetry, and every rule
+  there is was counted once: 552 613 396 971 canonical rules of 16!. Some properties have
+  nothing in common, and then no rule is drawn. A family of up to two million rules is kept,
+  and a rule is drawn evenly among them, with *In canonical form* evenly among the canonical
+  ones instead. Of a larger family a table is filled in at random under the properties, which
+  is not even: every outcome a block can have is as likely as any other, however many rules
+  lie behind it.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
@@ -660,35 +663,41 @@ everywhere else: Critters conserves cells.
 | `quarter-turn` | look the same after a quarter turn: Morita's ESPCAs | 1536 | 584 |
 | `half-turn` | look the same after a half turn | 1 105 920 | 146 040 |
 | `mirror`, `flip` | look the same in a mirror, left to right or top to bottom (the same worlds, turned) | 1 105 920 | 287 455 |
-| `diagonal`, `anti-diagonal` | look the same in a mirror across a diagonal | 15 482 880 | sampled |
+| `diagonal`, `anti-diagonal` | look the same in a mirror across a diagonal | 15 482 880 | 2 617 748 |
 | `conserving` | patterns keep their number of cells | 845 040 | 79 612 |
 | `weighted` | patterns keep a weighted number of cells and not their number; `weights=1,2,4,1` names the weights of the corners | 216 480 | 20 729 |
 | `momentum` | patterns keep their momentum, a cell's corner being the way it is going, as Morita reads it | 228 | 41 |
 | `parity` | patterns keep the parity of their number of cells | 3.3 billion | sampled |
 | `turning` | every block becomes a turn or a mirror of itself: Single rotation, the billiard ball machine, the HPP gas | 27 648 | 3 808 |
-| `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933) | | 2 351, 24 995, 263 646 |
+| `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933, 7: 23 541 693, 8: 214 442 403) | | 2 351, 24 995, 263 646, 2 541 756, 22 172 495 |
 | `linear` | patterns superpose: the rule is affine over the field of two elements | 322 560 | 2 606 |
-| `involution` | the rule is its own inverse | 46 million | sampled |
-| `complement` | dead and alive are interchangeable | 10 million | sampled |
-| `stable-vacuum` | the empty world stays empty | | sampled |
-| `random` | nothing required: every rule there is | 16! | sampled |
+| `involution` | the rule is its own inverse | 46 206 736 | 4 538 049 |
+| `complement` | dead and alive are interchangeable | 10 321 920 | 220 923 |
+| `stable-vacuum` | the empty world stays empty | 15! | 163 459 883 712 |
+| `random` | nothing required: every rule there is | 16! | 552 613 396 971 |
 
 *Tables* is how many rules have the property, *worlds* how many are left to measure: rules that
 make the same world are measured once, those that differ only by a turn or a mirror, by the
 generation of the vacuum's cycle they begin at (Critters, and Critters with dead and alive
 exchanged), or by the vacuum alone: one that flickers where another stands still, or has
-another texture, while patterns do the same over both. A world takes 7 to 15 ms on
-four threads, the tame ones longest: the half-turn family 17 minutes, the turning rules one.
+another texture, while patterns do the same over both. The worlds are counted by going through
+the tables, on as many threads as the search has, but for the three families too large for
+that: the worlds of a stable vacuum are counted from their symmetry, those of every rule there
+is were counted once, and parity is only sampled. A world takes 7 to 15 ms on four threads, the
+tame ones longest: the half-turn family 17 minutes, the turning rules one.
 
 Together the properties cut each other down to size, which is how to get at the ones too large
 to go through: `diagonal+conserving` is 241 worlds, `half-turn+involution` 2 695,
 `mirror+flip` 200, `quarter-turn+mirror` (every turn and mirror) 40. Some have nothing in common:
-no rule keeps a weight of its own and looks the same after a half turn. A family of more than
-eight million tables is not gone through but sampled: `--limit` rules of it (1000 unless said)
-are drawn with `--seed`, by filling in tables at random under the properties. That is no even
-sample: of the rules that are their own inverse, more than a fifth leave the empty world empty,
-and one draw in sixteen does. `--limit` also measures a fair sample of a family that is gone
-through, or with `--from` the best of a table.
+no rule keeps a weight of its own and looks the same after a half turn. A family is gone through
+whole, up to 250 million tables, and all its worlds are measured. `--limit N` stops a run that
+would have more than N of them left to measure, and with `--sample` measures N of them picked
+at random instead, the first of a shuffled order that is the same every time. A family of more
+than 250 million tables (`parity`, `stable-vacuum`, `random`) can only be sampled: tables are
+drawn with `--seed`, by filling them in at random under the properties, until N different
+worlds are found. That is no even sample: of the rules that are their own inverse, more than a
+fifth leave the empty world empty, and one draw in sixteen does. With `--from`, `--limit`
+takes the best of a table.
 
 How hard to look is set by `--seeds` (400), `--generations` (3000, for each seed) and `--blob`
 (8000 generations). That is enough to go through a family: what character a rule has hardly

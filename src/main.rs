@@ -48,8 +48,9 @@ struct Args {
     height: usize,
     /// Rule to start with: a preset (single-rotation, critters, bbm, bounce-gas, hpp-gas, tron,
     /// rotations, double-rotation, string-thing, swap-on-diagonal, or a found one such as
-    /// steady-blob or ship-factory), Morita's number of a rule such as espca-01c5ef, or a
-    /// table of 16 block states such as 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15.
+    /// steady-blob or ship-factory), Morita's number of a rule such as espca-01c5ef, a
+    /// table of 16 block states such as 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15, or the same
+    /// in hex such as 0283156749abcdef.
     #[arg(long, default_value = "single-rotation")]
     rule: BlockRule,
     /// Initial pattern: a random square in the middle, a cloud that thins out from the middle,
@@ -85,7 +86,7 @@ struct Args {
     /// The file of the rule library: the rules that were kept, a rule to a line. Without
     /// this it is `rules.tsv` of the repository the program was built from; a scripted run
     /// has no file unless it names one, and keeps what it changes to itself. The patterns
-    /// that were kept lie next to it, in `patterns.tsv`.
+    /// that were kept lie next to it, in the folder `patterns`, a file to a rule.
     #[arg(long)]
     library: Option<PathBuf>,
 }
@@ -185,7 +186,7 @@ fn main() -> AppExit {
             .set(LogPlugin { filter: format!("{DEFAULT_FILTER}bevy_input_focus::tab_navigation=error"), ..default() }),
     )
     .insert_resource(ClearColor(view::BACKGROUND))
-    .insert_resource(kept::Collected::at(library.as_ref().map(|rules| rules.with_file_name("patterns.tsv"))))
+    .insert_resource(kept::Collected::at(library.as_ref().map(|rules| rules.with_file_name("patterns"))))
     .insert_resource(library::RuleLibrary::at(library))
     .insert_resource(universe)
     .insert_resource(rng)

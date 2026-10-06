@@ -319,10 +319,11 @@ pub fn usual_file() -> PathBuf {
     core.ancestors().nth(2).unwrap_or(core).join("rules.tsv")
 }
 
-/// Writes a file whole or not at all: beside itself first, and then in its place.
+/// Writes a file whole or not at all: beside itself first, under a name of this process's
+/// own, and then in its place.
 pub(crate) fn write_whole(path: &Path, text: &str) -> io::Result<()> {
     let mut beside = path.as_os_str().to_owned();
-    beside.push(".new");
+    beside.push(format!(".{}.new", std::process::id()));
     fs::write(&beside, text)?;
     fs::rename(&beside, path)
 }

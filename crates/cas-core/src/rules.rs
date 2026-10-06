@@ -24,7 +24,9 @@
 //!
 //! As text, a rule is its table: sixteen comma-separated states, the outcome of state 0 first,
 //! e.g. `0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15` for Single Rotation. That is the notation of
-//! dmishin's simulator and, with an `MS,D` prefix and `;` separators, of MCell.
+//! dmishin's simulator and, with an `MS,D` prefix and `;` separators, of MCell. The same table
+//! as sixteen hex digits, `0283156749abcdef`, names the rule in short ([`BlockRule::hex`]):
+//! the files of its patterns go by it.
 //!
 //! The rules that look the same after a quarter turn have a second name. They are Morita's
 //! *elementary square partitioned cellular automata* seen at 45°, and he numbers them with six
@@ -442,6 +444,22 @@ impl BlockRule {
         self.preset().map_or("Custom", |preset| preset.name)
     }
 
+    /// The table as sixteen hex digits, the outcome of each block one digit: a name for the
+    /// rule that is short and the same whatever the rule is called.
+    pub fn hex(&self) -> String {
+        self.table
+            .iter()
+            .map(|&outcome| char::from_digit(outcome as u32, 16).expect("a block state is a hex digit"))
+            .collect()
+    }
+
+    /// The rule whose table the text gives in hex ([`BlockRule::hex`]), if it is one.
+    pub fn from_hex(text: &str) -> Option<Self> {
+        let digits: Option<Vec<u8>> = text.chars().map(|c| c.to_digit(16).map(|digit| digit as u8)).collect();
+        let table: [u8; 16] = digits?.try_into().ok()?;
+        Self::new(table).ok()
+    }
+
     /// The rule Morita calls ESPCA-`number` (*Reversible World of Cellular Automata*, 2024).
     ///
     /// In an elementary square partitioned automaton every square cell has four parts, each
@@ -691,8 +709,9 @@ impl FromStr for BlockRule {
     type Err = String;
 
     /// Accepts a preset (`critters`, `Single Rotation`, `hpp-gas`, ...), Morita's number of a
-    /// rule (`ESPCA-01c5ef`), or a table of sixteen states separated by commas, semicolons or
-    /// spaces, optionally with MCell's `MS,D` prefix.
+    /// rule (`ESPCA-01c5ef`), a table in hex (`0283156749abcdef`), or a table of sixteen
+    /// states separated by commas, semicolons or spaces, optionally with MCell's `MS,D`
+    /// prefix.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Presets match however their words are joined: "Single Rotation", "single-rotation".
         let key = |text: &str| -> String {
@@ -708,6 +727,10 @@ impl FromStr for BlockRule {
         if let Some(number) = wanted.strip_prefix("espca") {
             return Self::from_espca(number).map_err(|error| error.to_string());
         }
+        if wanted.len() == 16 && wanted.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Self::from_hex(&wanted)
+                .ok_or_else(|| format!("{s:?} is no rule: a table in hex has each of the 16 block states once"));
+        }
 
         let body = s.trim();
         let body = match body.get(..4) {
@@ -721,7 +744,7 @@ impl FromStr for BlockRule {
             let ids: Vec<_> = PRESETS.iter().map(|preset| preset.id).collect();
             return Err(format!(
                 "unknown rule {s:?}; expected 16 block states like \
-                 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15 or one of: {}",
+                 0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15, the same in hex like 0283156749abcdef, or one of: {}",
                 ids.join(", ")
             ));
         }
@@ -1437,6 +1460,21 @@ mod tests {
         for text in ["ESPCA-04cadf", "espca-04cadf", "espca 04CADF", "Espca04cadf"] {
             assert_eq!(text.parse(), Ok(single_rotation.clone()), "{text}");
         }
+        // The table in hex, which names the rule's file of patterns, read back however it is
+        // written; sixteen digits exactly, of a permutation.
+        assert_eq!(single_rotation.hex(), "0283156749abcdef");
+        for text in ["0283156749abcdef", "0283156749ABCDEF", " 0283 1567 49ab cdef "] {
+            assert_eq!(text.parse(), Ok(single_rotation.clone()), "{text}");
+        }
+        assert_eq!(
+            BlockRule::from_hex("1023a567984bdcfe").map(|rule| rule.to_string()).as_deref(),
+            Some("1,0,2,3,10,5,6,7,9,8,4,11,13,12,15,14")
+        );
+        assert_eq!(BlockRule::from_hex("0283156749abcde"), None);
+        assert_eq!(BlockRule::from_hex("0283156749abcdee"), None);
+        assert!("0283156749abcde".parse::<BlockRule>().is_err());
+        let wrong = "0283156749abcdee".parse::<BlockRule>().unwrap_err();
+        assert!(wrong.contains("each of the 16 block states once"), "{wrong}");
     }
 
     #[test]

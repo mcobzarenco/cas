@@ -11,8 +11,11 @@ rule single-rotation
 
 # The editor: click two outcomes to exchange them.
 click EditRule; wait 6; shot rules-2-editor
+# Under the rule's text, its table in hex: a name for the rule that stays whatever it is called.
+expect_text RuleHex 0283156749abcdef
 click Out1; wait 3; click Out2; wait 3
 expect_rule 0,8,2,3,1,5,6,7,4,9,10,11,12,13,14,15
+expect_text RuleHex 0823156749abcdef
 # It no longer looks the same after a quarter turn, so it has no number of Morita's.
 expect_text RuleEspca
 shot rules-3-custom
@@ -53,6 +56,9 @@ expect_text RuleEspca ESPCA-01c5ef
 shot rules-7-morita
 click RuleString; wait 2; key Ctrl+a; type espca-04cadf; wait 3; expect_rule single-rotation
 key Ctrl+a; type ESPCA-04c5bf; wait 3; expect_rule 0,2,8,3,1,5,9,13,4,6,10,7,12,14,11,15
+# The table in hex is typed as well, in either case.
+key Ctrl+a; type 0283156749abcdef; wait 3; expect_rule single-rotation
+key Ctrl+a; type 1023A567984BDCFE; wait 3; expect_rule 1,0,2,3,10,5,6,7,9,8,4,11,13,12,15,14
 key Escape; wait 2
 
 # The rules the search found have names for what they do; one of them is pinned.

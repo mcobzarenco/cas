@@ -1,43 +1,50 @@
 //! The collection: the patterns that were kept, rule by rule.
 //!
 //! A pattern that comes back to its shape is worth keeping: a spaceship, an oscillator, a
-//! still life. The kept ones lie in a plain text file next to the library's, a pattern to a
-//! line, which is meant to be read, edited by hand and kept under version control, and which
-//! the app, the search and whatever else looks at rules may all add to:
+//! still life. The kept ones lie in a folder next to the library's file, `patterns`, a plain
+//! text file to a rule, named by the rule's table in hex, and a pattern to a line. The files
+//! are meant to be read, edited by hand and kept under version control, and the app, the
+//! search and whatever else looks at rules may all add to them:
 //!
 //! ```text
-//! rule             sort        pattern   period  moves  name  note
-//! single-rotation  spaceship   b2o2$b2o  12      2,0          the lightest
-//! single-rotation  still life  2o$2o     1
+//! patterns/0283156749abcdef.tsv
+//!
+//! sort        pattern   period  moves  name  note
+//! spaceship   b2o2$b2o  12      2,0          the lightest
+//! still life  2o$2o     1
 //! ```
 //!
 //! The columns are separated by tabs, one between any two (they are drawn apart here), and
-//! go by the names in the line that begins with `rule`, as the library's do. A
-//! pattern is written as the app writes one: run-length encoded, from a corner of the blocks
-//! the next step rewrites, at the start of the vacuum's cycle. It is the form its kind is
-//! filed under ([`Motion::canonical`](crate::pattern::Motion)), so that a kind is kept once
-//! whichever way it was found lying.
+//! go by the names in the line that begins with `sort`, as the library's do. The rule is the
+//! file's name ([`BlockRule::hex`]), and its table in full is in the comment the file begins
+//! with. A pattern is written as the app writes one: run-length encoded, from a corner of the
+//! blocks the next step rewrites, at the start of the vacuum's cycle. It is the form its kind
+//! is filed under ([`Motion::canonical`](crate::pattern::Motion)), so that a kind is kept
+//! once whichever way it was found lying.
 
-use std::{fmt, fs, io, path::Path, path::PathBuf, str::FromStr};
+use std::{collections::HashSet, fmt, fs, io, path::Path, path::PathBuf, str::FromStr};
 
 use crate::{
     library::{self, Fields},
     pattern::{Cell, from_rle, settled, to_rle},
-    rules::{BlockRule, PRESETS},
+    rules::BlockRule,
 };
 
-/// What the file begins with: what it is, and its columns by name.
-const HEADING: &str = "\
-# The patterns kept for cas, a pattern to a line, with tabs in between: the rule it is a
-# pattern of (its table, or the id of a built-in rule), what it is (a spaceship, an
-# oscillator or a still life), the pattern (run-length encoded, from a corner of the blocks
-# the next step rewrites, at the start of the vacuum's cycle), its period, how far it moves
-# in a period, a name, and a note.
-rule\tsort\tpattern\tperiod\tmoves\tname\tnote
-";
+/// What a rule's file begins with: whose it is, what it holds, and its columns by name.
+fn heading(rule: &BlockRule) -> String {
+    let named = rule.preset().map(|preset| format!(" ({})", preset.name)).unwrap_or_default();
+    format!(
+        "# The patterns kept for cas under the rule {rule}{named}:\n\
+         # a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a\n\
+         # still life), the pattern (run-length encoded, from a corner of the blocks the next step\n\
+         # rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,\n\
+         # a name, and a note. The file is named by the rule's table in hex.\n\
+         sort\tpattern\tperiod\tmoves\tname\tnote\n"
+    )
+}
 
-/// The columns of the file, in the order they are written.
-const COLUMNS: [&str; 7] = ["rule", "sort", "pattern", "period", "moves", "name", "note"];
+/// The columns of a file, in the order they are written.
+const COLUMNS: [&str; 6] = ["sort", "pattern", "period", "moves", "name", "note"];
 
 /// The sorts of pattern that are kept: what comes back to its shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -125,15 +132,29 @@ impl Kept {
 }
 
 /// The patterns that were kept, in the order they were.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct Collection {
     kept: Vec<Kept>,
+    /// The rules whose patterns changed since their files were last written.
+    changed: HashSet<BlockRule>,
+}
+
+impl PartialEq for Collection {
+    fn eq(&self, other: &Self) -> bool {
+        self.kept == other.kept
+    }
 }
 
 impl Collection {
-    /// The collection a file describes. A line that cannot be read is an error, with its
-    /// number: a file read in part would lose the rest when it is written again.
-    pub fn parse(text: &str) -> Result<Self, String> {
+    /// The file of a rule's patterns in a folder: named by the rule's table in hex.
+    pub fn file(folder: &Path, rule: &BlockRule) -> PathBuf {
+        folder.join(format!("{}.tsv", rule.hex()))
+    }
+
+    /// The patterns of a rule that its file describes. A line that cannot be read is an
+    /// error, with its number: a file read in part would lose the rest when it is written
+    /// again.
+    pub fn parse(text: &str, rule: &BlockRule) -> Result<Self, String> {
         let mut collection = Self::default();
         let mut line = Fields::of(&COLUMNS);
         for (number, text) in text.lines().enumerate() {
@@ -142,7 +163,6 @@ impl Collection {
             }
             let (period, moves) = (line.get("period"), line.get("moves"));
             let wrong = |error: String| format!("line {}: {error}", number + 1);
-            let rule: BlockRule = line.get("rule").parse().map_err(wrong)?;
             let sort: Sort = line.get("sort").parse().map_err(wrong)?;
             let cells = from_rle(line.get("pattern")).map_err(wrong)?;
             if cells.is_empty() {
@@ -158,25 +178,107 @@ impl Collection {
                 None => return Err(wrong(format!("{moves:?} is no way to move"))),
             };
             let (name, note) = (line.get("name").to_string(), line.get("note").to_string());
-            let kept = Kept { name, note, ..Kept::new(&rule, sort, &cells, period, moves) };
+            let kept = Kept { name, note, ..Kept::new(rule, sort, &cells, period, moves) };
             // The same pattern twice is the same pattern.
             let _ = collection.keep(kept);
         }
+        // What was read is as the file has it.
+        collection.changed.clear();
         Ok(collection)
     }
 
-    /// The collection of a file. Where there is no file yet, nothing was kept.
-    pub fn read(path: &Path) -> Result<Self, String> {
+    /// The patterns of a rule, from its file. Where there is no file, none were kept.
+    pub fn read_file(path: &Path, rule: &BlockRule) -> Result<Self, String> {
         match fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text),
+            Ok(text) => Self::parse(&text, rule),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(error.to_string()),
         }
     }
 
-    /// Writes the file, whole or not at all, as the library writes its own.
-    pub fn write(&self, path: &Path) -> io::Result<()> {
-        library::write_whole(path, &self.to_string())
+    /// The collection of a folder: the patterns of every file in it that is a rule's, named
+    /// by the rule's table in hex, in lower case. Where there is no folder yet, nothing was
+    /// kept. A file that cannot be read is an error, with its name, and so is one named like
+    /// a rule's that is no rule's: a table mistyped, or in capitals, would be a rule twice
+    /// over. Other files are left alone.
+    pub fn read(folder: &Path) -> Result<Self, String> {
+        let entries = match fs::read_dir(folder) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(error) => return Err(error.to_string()),
+        };
+        let mut files: Vec<(BlockRule, PathBuf)> = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let (extension, stem) =
+                (path.extension().and_then(|e| e.to_str()), path.file_stem().and_then(|s| s.to_str()));
+            let (Some("tsv"), Some(stem)) = (extension, stem) else {
+                continue;
+            };
+            if stem.len() != 16 || !stem.chars().all(|c| c.is_ascii_hexdigit()) {
+                continue;
+            }
+            match BlockRule::from_hex(stem).filter(|rule| rule.hex() == stem) {
+                Some(rule) => files.push((rule, path)),
+                None => {
+                    return Err(format!(
+                        "{}: not a rule's file: a file is named by its rule's table in hex, in lower case",
+                        path.display()
+                    ));
+                }
+            }
+        }
+        // In one order whatever the folder's: the files are a rule each.
+        files.sort_by(|a, b| a.1.cmp(&b.1));
+        let mut collection = Self::default();
+        for (rule, path) in files {
+            let file = Self::read_file(&path, &rule).map_err(|error| format!("{}: {error}", path.display()))?;
+            collection.kept.extend(file.kept);
+        }
+        Ok(collection)
+    }
+
+    /// Writes the files of the rules whose patterns changed, each whole or not at all, as the
+    /// library writes its own file; the file of a rule with no patterns left is removed.
+    pub fn write(&mut self, folder: &Path) -> io::Result<()> {
+        fs::create_dir_all(folder)?;
+        let changed: Vec<BlockRule> = self.changed.iter().cloned().collect();
+        for rule in changed {
+            let path = Self::file(folder, &rule);
+            match self.text_of(&rule) {
+                Some(text) => library::write_whole(&path, &text)?,
+                None => match fs::remove_file(&path) {
+                    Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+                    _ => {}
+                },
+            }
+            self.changed.remove(&rule);
+        }
+        Ok(())
+    }
+
+    /// A rule's file: its patterns in the order they were kept. None for a rule with none.
+    pub fn text_of(&self, rule: &BlockRule) -> Option<String> {
+        let kept: Vec<&Kept> = self.kept.iter().filter(|kept| kept.rule == *rule).collect();
+        if kept.is_empty() {
+            return None;
+        }
+        let mut text = heading(rule);
+        let line = |text: &str| text.split(['\t', '\n', '\r']).collect::<Vec<_>>().join(" ").trim().to_string();
+        for kept in kept {
+            let moves = match kept.moves {
+                (0, 0) => String::new(),
+                (dx, dy) => format!("{dx},{dy}"),
+            };
+            let (name, note) = (line(&kept.name), line(&kept.note));
+            text.push_str(&format!(
+                "{}\t{}\t{}\t{moves}\t{name}\t{note}\n",
+                kept.sort,
+                to_rle(&kept.cells),
+                kept.period
+            ));
+        }
+        Some(text)
     }
 
     pub fn all(&self) -> &[Kept] {
@@ -201,6 +303,7 @@ impl Collection {
         if let Some(known) = self.find(&kept.rule, &kept.cells) {
             return Err(known);
         }
+        self.changed.insert(kept.rule.clone());
         self.kept.push(Kept { cells: settled(&kept.cells), ..kept });
         Ok(self.kept.len() - 1)
     }
@@ -210,38 +313,16 @@ impl Collection {
         let found = self.find(rule, cells);
         if let Some(index) = found {
             self.kept.remove(index);
+            self.changed.insert(rule.clone());
         }
         found.is_some()
     }
 }
 
-/// The file: the patterns in the order they were kept.
-impl fmt::Display for Collection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(HEADING)?;
-        let line = |text: &str| text.split(['\t', '\n', '\r']).collect::<Vec<_>>().join(" ").trim().to_string();
-        for kept in &self.kept {
-            // A built-in rule goes by its id, which says more than its table.
-            let rule = match PRESETS.iter().find(|preset| preset.table == *kept.rule.table()) {
-                Some(preset) => preset.id.to_string(),
-                None => kept.rule.to_string(),
-            };
-            let moves = match kept.moves {
-                (0, 0) => String::new(),
-                (dx, dy) => format!("{dx},{dy}"),
-            };
-            let pattern = to_rle(&kept.cells);
-            let (name, note) = (line(&kept.name), line(&kept.note));
-            writeln!(f, "{rule}\t{}\t{pattern}\t{}\t{moves}\t{name}\t{note}", kept.sort, kept.period)?;
-        }
-        Ok(())
-    }
-}
-
-/// The file of the collection where no other is named: `patterns.tsv`, next to the library's
+/// The folder of the collection where no other is named: `patterns`, next to the library's
 /// own file.
-pub fn usual_file() -> PathBuf {
-    library::usual_file().with_file_name("patterns.tsv")
+pub fn usual_folder() -> PathBuf {
+    library::usual_file().with_file_name("patterns")
 }
 
 #[cfg(test)]
@@ -290,71 +371,122 @@ mod tests {
         ship.note = "eight cells up\nin a period".to_string();
         collection.keep(ship).unwrap();
         collection.keep(Kept::new(&rule("single-rotation"), Sort::StillLife, &cells("2o$2o"), 1, (0, 0))).unwrap();
-        let file = collection.to_string();
+        // A file to a rule, which says whose it is.
+        let file = collection.text_of(&slow).unwrap();
+        assert!(
+            file.starts_with("# The patterns kept for cas under the rule 15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0:\n# a")
+        );
         let lines: Vec<&str> = file.lines().filter(|line| !line.starts_with('#')).collect();
         assert_eq!(
             lines,
             [
-                "rule\tsort\tpattern\tperiod\tmoves\tname\tnote",
-                "15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0\tspaceship\tbobo$obo\t7328092\t0,-8\tThe slowest\teight cells up in a period",
-                "single-rotation\tstill life\t2o$2o\t1\t\t\t",
+                "sort\tpattern\tperiod\tmoves\tname\tnote",
+                "spaceship\tbobo$obo\t7328092\t0,-8\tThe slowest\teight cells up in a period",
             ]
         );
+        let other = collection.text_of(&rule("single-rotation")).unwrap();
+        assert!(other.contains("0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15 (Single rotation):\n"));
+        assert!(other.ends_with("sort\tpattern\tperiod\tmoves\tname\tnote\nstill life\t2o$2o\t1\t\t\t\n"));
+        assert_eq!(collection.text_of(&rule("critters")), None);
         // Read again, it is the same collection, but for the tab and the line break that a
         // line cannot hold.
-        let read = Collection::parse(&file).unwrap();
+        let read = Collection::parse(&file, &slow).unwrap();
         assert_eq!(read.all()[0].name, "The slowest");
-        assert_eq!(read.all()[1], collection.all()[1]);
-        assert_eq!(Collection::parse(&read.to_string()).unwrap(), read);
+        assert_eq!(read.all()[0].rule, slow);
+        assert_eq!(Collection::parse(&read.text_of(&slow).unwrap(), &slow).unwrap(), read);
     }
 
     #[test]
     fn a_file_is_read_whole_or_not_at_all() {
+        let critters = rule("critters");
         // Comments, the names of the columns, a line with nothing after the period, and the
         // same pattern twice.
-        let file = "# kept\n\ncritters\toscillator\to\t4\nCritters\tStill Life\t2o$2o\t2\t\tA block\n\
-                    critters\toscillator\to\t4\t\tagain";
-        let collection = Collection::parse(file).unwrap();
+        let file = "# kept\n\noscillator\to\t4\nStill Life\t2o$2o\t2\t\tA block\noscillator\to\t4\t\tagain";
+        let collection = Collection::parse(file, &critters).unwrap();
         assert_eq!(collection.all().len(), 2);
         assert_eq!((collection.all()[1].sort, collection.all()[1].name.as_str()), (Sort::StillLife, "A block"));
+        assert!(collection.all().iter().all(|kept| kept.rule == critters));
         // A file from when the day a pattern was kept had a column: read by the names of its
         // columns, and written again without the day.
-        let older = "rule\tsort\tpattern\tperiod\tmoves\tname\tadded\tnote\n\
-                     single-rotation\tspaceship\tb2o2$b2o\t12\t2,0\tLightest\t2026-10-04\ta note";
-        let read = Collection::parse(older).unwrap();
+        let older = "sort\tpattern\tperiod\tmoves\tname\tadded\tnote\n\
+                     spaceship\tb2o2$b2o\t12\t2,0\tLightest\t2026-10-04\ta note";
+        let read = Collection::parse(older, &rule("single-rotation")).unwrap();
         let ship = &read.all()[0];
         assert_eq!(
             (ship.name.as_str(), ship.note.as_str(), ship.period, ship.moves),
             ("Lightest", "a note", 12, (2, 0))
         );
-        assert!(!read.to_string().contains("2026") && !read.to_string().contains("added"));
+        let written = read.text_of(&rule("single-rotation")).unwrap();
+        assert!(!written.contains("2026") && !written.contains("added"));
         // What is wrong is said, with its line.
-        let wrong = |line: &str| Collection::parse(&format!("critters\toscillator\to\t4\n{line}")).unwrap_err();
-        assert_eq!(wrong("0,1,2\tspaceship\to\t4"), "line 2: a rule has 16 entries, found 3");
-        assert_eq!(wrong("critters\tgun\to\t4"), "line 2: \"gun\" is no sort of pattern");
-        assert_eq!(wrong("critters\tspaceship\to\tsoon"), "line 2: \"soon\" is no period");
-        assert_eq!(wrong("critters\tspaceship\to\t4\tup"), "line 2: \"up\" is no way to move");
-        assert_eq!(wrong("critters\tspaceship\t\t4"), "line 2: a pattern has cells");
-        assert!(wrong("critters\tspaceship\t2x\t4").starts_with("line 2: "));
+        let wrong = |line: &str| Collection::parse(&format!("oscillator\to\t4\n{line}"), &critters).unwrap_err();
+        assert_eq!(wrong("gun\to\t4"), "line 2: \"gun\" is no sort of pattern");
+        assert_eq!(wrong("spaceship\to\tsoon"), "line 2: \"soon\" is no period");
+        assert_eq!(wrong("spaceship\to\t4\tup"), "line 2: \"up\" is no way to move");
+        assert_eq!(wrong("spaceship\t\t4"), "line 2: a pattern has cells");
+        assert!(wrong("spaceship\t2x\t4").starts_with("line 2: "));
         // The sorts by what a pattern does.
         assert_eq!(Sort::of((0, 0), true), Sort::StillLife);
         assert_eq!(Sort::of((0, 0), false), Sort::Oscillator);
         assert_eq!(Sort::of((2, 0), false), Sort::Spaceship);
-        assert!(usual_file().ends_with("patterns.tsv") && usual_file().with_file_name("Cargo.toml").exists());
+        assert!(usual_folder().ends_with("patterns") && usual_folder().with_file_name("Cargo.toml").exists());
     }
 
     #[test]
-    fn the_file_is_written_and_read_again() {
+    fn the_folder_is_written_and_read_again() {
         let folder = std::env::temp_dir().join(format!("cas-collection-{}", std::process::id()));
         let _ = fs::remove_dir_all(&folder);
-        fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("patterns.tsv");
-        assert_eq!(Collection::read(&path).unwrap(), Collection::default());
+        // No folder yet: nothing was kept. The folder is made when something is.
+        assert_eq!(Collection::read(&folder).unwrap(), Collection::default());
+        let (rotation, critters) = (rule("single-rotation"), rule("critters"));
         let mut collection = Collection::default();
-        collection.keep(Kept::new(&rule("single-rotation"), Sort::Spaceship, &cells("b2o2$b2o"), 12, (2, 0))).unwrap();
-        collection.write(&path).unwrap();
-        assert_eq!(Collection::read(&path).unwrap(), collection);
-        assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
+        collection.keep(Kept::new(&rotation, Sort::Spaceship, &cells("b2o2$b2o"), 12, (2, 0))).unwrap();
+        collection.keep(Kept::new(&critters, Sort::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
+        collection.write(&folder).unwrap();
+        assert_eq!(Collection::read(&folder).unwrap(), collection);
+        let names = |folder: &Path| {
+            let mut names: Vec<String> = fs::read_dir(folder)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(names(&folder), ["0283156749abcdef.tsv", "fed3b56179a2c480.tsv"]);
+        // Only the file of a rule whose patterns changed is written again; a file that is
+        // not a rule's is left alone and not read.
+        fs::write(folder.join("notes.txt"), "mine").unwrap();
+        let written = fs::metadata(folder.join("fed3b56179a2c480.tsv")).unwrap().modified().unwrap();
+        collection.keep(Kept::new(&rotation, Sort::StillLife, &cells("2o$2o"), 1, (0, 0))).unwrap();
+        collection.write(&folder).unwrap();
+        assert_eq!(fs::metadata(folder.join("fed3b56179a2c480.tsv")).unwrap().modified().unwrap(), written);
+        let read = Collection::read(&folder).unwrap();
+        assert_eq!(read.all().len(), 3);
+        assert_eq!(Collection::read_file(&Collection::file(&folder, &rotation), &rotation).unwrap().all().len(), 2);
+        // The file of a rule with nothing kept any more goes.
+        assert!(collection.forget(&critters, &cells("o")));
+        collection.write(&folder).unwrap();
+        assert_eq!(names(&folder), ["0283156749abcdef.tsv", "notes.txt"]);
+        assert_eq!(
+            Collection::read_file(&Collection::file(&folder, &critters), &critters).unwrap(),
+            Collection::default()
+        );
+        // A file of a rule's that cannot be read is an error, with its name; so is a file
+        // named like a rule's that is no rule's, or not in lower case: it would make a rule
+        // twice over. A file named otherwise is not a rule's and is left alone.
+        fs::write(folder.join("0283156749abcdef.tsv"), "oscillator\to\tsoon\n").unwrap();
+        let wrong = Collection::read(&folder).unwrap_err();
+        assert!(wrong.contains("0283156749abcdef.tsv: line 1: \"soon\" is no period"), "{wrong}");
+        fs::remove_file(folder.join("0283156749abcdef.tsv")).unwrap();
+        assert_eq!(Collection::read(&folder).unwrap(), Collection::default());
+        for name in ["0283156749ABCDEF.tsv", "0283156749abcdee.tsv"] {
+            fs::write(folder.join(name), "oscillator\to\t4\n").unwrap();
+            let wrong = Collection::read(&folder).unwrap_err();
+            assert!(wrong.contains(name) && wrong.contains("not a rule's file"), "{wrong}");
+            fs::remove_file(folder.join(name)).unwrap();
+        }
+        fs::write(folder.join("some-rule.tsv"), "oscillator\to\t4\n").unwrap();
+        assert_eq!(Collection::read(&folder).unwrap(), Collection::default());
         let _ = fs::remove_dir_all(&folder);
     }
 }

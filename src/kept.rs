@@ -1,10 +1,11 @@
 //! The patterns kept under a rule: the spaceships, the oscillators and the still lifes, each
 //! sort in a panel of its own.
 //!
-//! What is kept lies in a file next to the library's ([`cas_core::collection`]), which is
-//! written when something is kept or let go of, and read again whenever something else wrote
-//! it ([`Synced`]). Nothing gets there by itself: a pattern is kept with a button, in the
-//! analysis panel or in the list of what was caught.
+//! What is kept lies in a folder next to the library's file, a file to a rule
+//! ([`cas_core::collection`]), which is written when something is kept or let go of, and read
+//! again whenever something else wrote it ([`Synced`]). Nothing gets there by itself: a
+//! pattern is kept with a button, in the analysis panel or in the list of what was caught, or
+//! by a search that was asked to.
 
 use std::{cmp::Ordering, path::PathBuf};
 
@@ -42,7 +43,8 @@ fn shelf(sort: Sort) -> Option<usize> {
 
 #[derive(Resource)]
 pub struct Collected {
-    /// The collection, and the file it lies in. A scripted run has none, and keeps to itself.
+    /// The collection, and the folder it lies in. A scripted run has none, and keeps to
+    /// itself.
     collection: Synced<Collection>,
     open: [bool; 3],
     /// Counts the changes that show, here or wherever a pattern says whether it is kept.
@@ -52,7 +54,7 @@ pub struct Collected {
 }
 
 impl Collected {
-    /// The collection of the file at `path`. Without a path it is written nowhere.
+    /// The collection of the folder at `path`. Without a path it is written nowhere.
     pub fn at(path: Option<PathBuf>) -> Self {
         Self { collection: Synced::at(path), open: [false; 3], revision: 0, listed: Default::default() }
     }
@@ -123,7 +125,7 @@ impl Collected {
         }
     }
 
-    /// What is wrong with the file, for as long as it is.
+    /// What is wrong with the folder's files, for as long as it is.
     pub fn trouble(&self) -> Option<&str> {
         self.collection.trouble()
     }
@@ -417,7 +419,7 @@ fn forget_kept(mut click: On<Pointer<Click>>, buttons: Query<&KeptForget>, mut c
     }
 }
 
-/// Looks at the file every now and then, and reads it again if something else wrote it.
+/// Looks at the folder every now and then, and reads again what something else wrote.
 fn watch_file(mut collected: ResMut<Collected>, time: Res<Time>, mut since: Local<f32>) {
     *since += time.delta_secs();
     if *since < LOOKS_EVERY {
@@ -546,7 +548,7 @@ mod tests {
         let folder = std::env::temp_dir().join(format!("cas-kept-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&folder);
         std::fs::create_dir_all(&folder).unwrap();
-        let path = folder.join("patterns.tsv");
+        let path = folder.join("patterns");
         let rule: BlockRule = "single-rotation".parse().unwrap();
         let (ship, block) = (vec![(1, 0), (2, 0), (1, 2), (2, 2)], vec![(0, 0), (1, 0), (0, 1), (1, 1)]);
         let mut collected = Collected::at(Some(path.clone()));
@@ -561,7 +563,7 @@ mod tests {
         let on_disk = Collection::read(&path).unwrap();
         assert_eq!(on_disk.all().len(), 2);
         assert_eq!((collected.of(&rule, Sort::StillLife).len(), collected.of(&rule, Sort::Oscillator).len()), (1, 0));
-        // What something else puts in the file is not written over by the next change here.
+        // What something else puts in the files is not written over by the next change here.
         let mut outside = on_disk.clone();
         outside.keep(Kept::new(&rule, Sort::Oscillator, &[(0, 0)], 4, (0, 0))).unwrap();
         outside.write(&path).unwrap();

@@ -124,7 +124,8 @@ enum Finding {
     Momentum,
     Parity,
     Linear,
-    /// Morita's number, and a word about it.
+    /// The table in hex, Morita's number, and a word about them.
+    Hex,
     Espca,
     EspcaNote,
 }
@@ -155,6 +156,8 @@ enum Part {
     /// of weights is.
     Flow,
     Weights,
+    /// Morita's number, which only a rule that looks the same after a quarter turn has.
+    Espca,
 }
 
 // `bsn!` builds a component from its default.
@@ -388,10 +391,17 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                     }
                     Children [
                         (
+                            #RuleHex
+                            mono("", 12.0, palette::LIGHT_GRAY_1)
+                            template_value(Finding::Hex)
+                        ),
+                        (
+                            // Not there without a number: an empty text would still have
+                            // the row's gap on either side of it.
                             #RuleEspca
                             mono("", 12.0, palette::LIGHT_GRAY_1)
-                            TextLayout { justify: Justify::Center }
                             template_value(Finding::Espca)
+                            template_value(Part::Espca)
                         ),
                         (caption("") template_value(Finding::EspcaNote)),
                     ]
@@ -793,6 +803,7 @@ fn sync_findings(
             Part::VacuumTile(generation) => generation < vacuum.len(),
             Part::Flow => weights.is_none(),
             Part::Weights => weights.is_some(),
+            Part::Espca => rule.espca().is_some(),
         };
         node.display = if shown { Display::Flex } else { Display::None };
     }
@@ -811,9 +822,10 @@ fn sync_findings(
             Finding::Parity => kept(Constraint::Parity.holds(rule)).to_string(),
             Finding::Linear if Constraint::Linear.holds(rule) => "patterns superpose".to_string(),
             Finding::Linear => "patterns do not superpose".to_string(),
+            Finding::Hex => rule.hex(),
             Finding::Espca => number.as_ref().map(|number| format!("ESPCA-{number}")).unwrap_or_default(),
-            Finding::EspcaNote if number.is_some() => "Morita's number".to_string(),
-            Finding::EspcaNote => "No ESPCA number: the rule changes with a quarter turn.".to_string(),
+            Finding::EspcaNote if number.is_some() => "the table in hex, and Morita's number".to_string(),
+            Finding::EspcaNote => "the table in hex; no ESPCA number, the rule changes with a quarter turn".to_string(),
         };
         text.set_if_neq(Text(content));
     }

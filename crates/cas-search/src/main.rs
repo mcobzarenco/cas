@@ -3,7 +3,7 @@
 
 use std::{
     cmp::Reverse,
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     ffi::OsStr,
     fs::{File, OpenOptions},
     io::Write,
@@ -13,8 +13,10 @@ use std::{
 };
 
 use cas_core::{
+    collection::{self, Collection, Kept, Sort},
     families::{self, COUNTABLE, Family, Progress},
     library::{Library, usual_file},
+    pattern::{Heading, Motion},
     rules::{BlockRule, Population},
     search::{self, Effort, Report},
     universe::Rng,
@@ -37,7 +39,8 @@ struct Args {
     /// go through, and can only be sampled.
     #[arg(long, value_parser = FamilyParser, default_value = "quarter-turn")]
     family: Vec<Family>,
-    /// Measure these rules instead of a family: presets, ESPCA numbers or tables.
+    /// Measure these rules instead of a family: presets, ESPCA numbers, tables, or tables in
+    /// hex.
     #[arg(long = "rule")]
     rules: Vec<BlockRule>,
     /// Measure the rules of a table that an earlier search wrote instead of a family, its best
@@ -83,6 +86,13 @@ struct Args {
     /// was built from, which is the app's, unless another is named.
     #[arg(long)]
     library: Option<PathBuf>,
+    /// Keep the patterns found: the spaceships, the oscillators and the still lifes of every
+    /// rule measured in this run that is a find, or that was named with --rule, each in the
+    /// file of its rule in the folder of the app's kept patterns, `patterns` next to
+    /// `rules.tsv`, or in DIR. A rule that an --out table has already is not measured again,
+    /// so nothing of it is kept either. Without this nothing is kept.
+    #[arg(long, value_name = "DIR", num_args = 0..=1)]
+    patterns: Option<Option<PathBuf>>,
     /// Threads to search on.
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
@@ -111,7 +121,7 @@ fn default_threads() -> usize {
     (cores / 2).max(1)
 }
 
-const COLUMNS: [&str; 19] = [
+const COLUMNS: [&str; 25] = [
     "rule",
     "espca",
     "character",
@@ -124,8 +134,14 @@ const COLUMNS: [&str; 19] = [
     "undecided",
     "growth",
     "spaceships",
+    "speeds",
+    "fastest",
+    "slowest",
+    "headings",
     "periods",
     "longest",
+    "oscillators",
+    "still-lifes",
     "damage",
     "blob",
     "remaining",
@@ -137,9 +153,55 @@ fn column(name: &str) -> usize {
     COLUMNS.iter().position(|&column| column == name).expect("a column of the table")
 }
 
+/// What the spaceships of a report come to: their speeds, each once; the fastest and the
+/// slowest; and whether they fly straight, along a diagonal or neither.
+#[derive(Default)]
+struct Ships {
+    speeds: BTreeSet<(u32, u32)>,
+    fastest: Option<(u32, u32)>,
+    slowest: Option<(u32, u32)>,
+    headings: Vec<&'static str>,
+}
+
+fn ships_of(report: &Report) -> Ships {
+    let mut ships = Ships::default();
+    // Speeds compared as fractions, without dividing.
+    let faster = |a: (u32, u32), b: (u32, u32)| (a.0 as u64 * b.1 as u64) > (b.0 as u64 * a.1 as u64);
+    for found in report.found.iter().filter(|found| found.sort == Sort::Spaceship) {
+        let motion = Motion { period: found.period, displacement: found.moves, canonical: Vec::new() };
+        let speed = motion.speed();
+        ships.speeds.insert(speed);
+        ships.fastest = Some(ships.fastest.filter(|&fastest| !faster(speed, fastest)).unwrap_or(speed));
+        ships.slowest = Some(ships.slowest.filter(|&slowest| !faster(slowest, speed)).unwrap_or(speed));
+        let heading = match motion.heading() {
+            Heading::Orthogonal => "orthogonal",
+            Heading::Diagonal => "diagonal",
+            _ => "oblique",
+        };
+        if !ships.headings.contains(&heading) {
+            ships.headings.push(heading);
+        }
+    }
+    // In one order, whatever came first: straight, along a diagonal, neither.
+    ships.headings.sort_by_key(|heading| ["orthogonal", "diagonal", "oblique"].iter().position(|h| h == heading));
+    ships
+}
+
+/// A speed as the app writes one: so many cells in so many generations, as a fraction of the
+/// speed of light.
+fn speed_name((cells, period): (u32, u32)) -> String {
+    match (cells, period) {
+        (1, 1) => "c".to_string(),
+        (1, period) => format!("c/{period}"),
+        (cells, period) => format!("{cells}c/{period}"),
+    }
+}
+
 /// A line of the table. Shares of the seeds are in percent, as is the damage; what was not
 /// tried is left empty.
 fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
+    let ships = ships_of(report);
+    let of_sort = |sort: Sort| report.found.iter().filter(|found| found.sort == sort).count();
     let percent = |share: f32| format!("{:.1}", 100.0 * share);
     let cells = match rule.population() {
         Population::Conserved => "conserved".to_string(),
@@ -162,8 +224,14 @@ fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
         percent(report.undecided),
         format!("{:.2}", report.growth),
         report.spaceships.to_string(),
+        ships.speeds.len().to_string(),
+        ships.fastest.map(speed_name).unwrap_or_default(),
+        ships.slowest.map(speed_name).unwrap_or_default(),
+        ships.headings.join("+"),
         report.periods.to_string(),
         report.longest_period.to_string(),
+        of_sort(Sort::Oscillator).to_string(),
+        of_sort(Sort::StillLife).to_string(),
         format!("{:.2}", 100.0 * report.damage),
         multiple(report.blob),
         multiple(report.remaining),
@@ -226,17 +294,18 @@ fn open(path: &Path, effort: &Effort) -> Result<(File, Vec<Vec<String>>), String
     Ok((file, lines))
 }
 
-/// What makes a rule a find, the more the better. First the worlds with things that travel
-/// and things that stay: by the lesser of their kinds of spaceship and their periods (by
-/// kinds alone, rules in which a lone cell already flies would lead). Then the rules whose
-/// seeds grow along lines and send out spaceships, by the kinds they send. What explodes,
-/// ignites or stands still is no find.
+/// The worth of a rule, as the lines of the table are sorted: the worlds with things that
+/// travel and things that stay come first, by how many speeds their spaceships have, then by
+/// their kinds of spaceship, then by the kinds that stay. Then the rules whose seeds grow
+/// along lines and send out spaceships, by the same. What explodes, ignites or stands still
+/// is no find.
 fn merit(line: &[String]) -> (u8, u64, u64, u64) {
     let number = |name: &str| line[column(name)].parse::<u64>().unwrap_or(0);
-    let (spaceships, periods) = (number("spaceships"), number("periods"));
+    let (spaceships, speeds) = (number("spaceships"), number("speeds"));
+    let stays = number("oscillators") + number("still-lifes");
     match line[column("character")].as_str() {
-        "spaceships" => (2, spaceships.min(periods), spaceships, periods),
-        "linear" if spaceships > 0 => (1, spaceships, periods, 0),
+        "spaceships" => (2, speeds, spaceships, stays),
+        "linear" if spaceships > 0 => (1, speeds, spaceships, stays),
         _ => (0, 0, 0, 0),
     }
 }
@@ -286,12 +355,26 @@ fn main() {
     eprintln!("{} rules to measure of {left}, {} already in the table", todo.len(), lines.len());
 
     let started = Instant::now();
-    // The table, the lines of this run, and when progress was last reported.
-    let progress = Mutex::new((file, Vec::new(), started));
+    // The patterns found go to the folder, if one was asked for: of the finds, and of the
+    // rules that were named.
+    let folder = args.patterns.as_ref().map(|folder| folder.clone().unwrap_or_else(collection::usual_folder));
+    let named = !args.rules.is_empty();
+    // The table, the lines of this run, when progress was last reported, and how many
+    // patterns were kept, of how many rules.
+    let progress = Mutex::new((file, Vec::new(), started, (0usize, 0usize)));
     search::survey(&todo, &effort, |rule, report| {
         let line = line(rule, &report);
         let mut progress = progress.lock().unwrap();
-        let (file, measured, reported) = &mut *progress;
+        let (file, measured, reported, kept) = &mut *progress;
+        // The patterns before the line: a rule whose patterns could not be kept is not in
+        // the table as done, and is measured again next time.
+        if let Some(folder) = &folder
+            && (named || merit(&line).0 > 0)
+        {
+            let new = keep_patterns(folder, rule, &report).unwrap_or_else(|error| fail(&error));
+            kept.0 += new;
+            kept.1 += usize::from(new > 0);
+        }
         if let Some(file) = file {
             // One write for the whole line: a search that is cut short leaves no half lines.
             // A line that cannot be written ends the search: its rules would be lost.
@@ -307,8 +390,11 @@ fn main() {
             eprintln!("{} of {} measured, about {} to go", measured.len(), todo.len(), clock(left));
         }
     });
-    let (_, measured, _) = progress.into_inner().unwrap();
+    let (_, measured, _, kept) = progress.into_inner().unwrap();
     eprintln!("{} rules measured in {}", measured.len(), clock(started.elapsed().as_secs_f64()));
+    if let Some(folder) = &folder {
+        eprintln!("{} patterns kept for {} rules in {}", kept.0, kept.1, folder.display());
+    }
     // Rules asked for by name, and not for a table: all there is to say about each.
     if !args.rules.is_empty() && args.out.is_none() {
         for line in &measured {
@@ -330,14 +416,26 @@ fn main() {
     lines.sort_by_key(|line| Reverse(merit(line)));
     let best = |kind: u8| lines.iter().filter(move |line| merit(line).0 == kind).take(args.top).collect::<Vec<_>>();
     show(
-        "The best worlds, with things that travel and things that stay:",
+        "The best worlds, with things that travel and things that stay, by their speeds:",
         &best(2),
-        &["rule", "espca", "spaceships", "periods", "longest", "damage", "blob", "remaining", "cells"],
+        &[
+            "rule",
+            "espca",
+            "speeds",
+            "fastest",
+            "slowest",
+            "headings",
+            "spaceships",
+            "oscillators",
+            "still-lifes",
+            "blob",
+            "cells",
+        ],
     );
     show(
-        "The best of the rules whose seeds grow along lines, by the kinds of spaceship they send out:",
+        "The best of the rules whose seeds grow along lines, by the speeds of the spaceships they send out:",
         &best(1),
-        &["rule", "espca", "growing", "growth", "spaceships", "blob"],
+        &["rule", "espca", "growing", "growth", "speeds", "spaceships", "blob"],
     );
     // A list of nothing is not printed: with no list at all, that is said.
     if args.top > 0 && !lines.is_empty() && lines.iter().all(|line| merit(line).0 == 0) {
@@ -355,6 +453,24 @@ fn main() {
         println!();
     }
     store(&args, &lines);
+}
+
+/// Keeps what a rule's report found in the rule's file of patterns, in the folder, among
+/// what was kept there already: how many were new. A pattern that cannot be kept ends the
+/// search, as a line that cannot be written does.
+fn keep_patterns(folder: &Path, rule: &BlockRule, report: &Report) -> Result<usize, String> {
+    let file = Collection::file(folder, rule);
+    let mut kept = Collection::read_file(&file, rule).map_err(|error| format!("{}: {error}", file.display()))?;
+    let mut new = 0;
+    for found in &report.found {
+        let mut pattern = Kept::new(rule, found.sort, &found.cells, found.period, found.moves);
+        pattern.note = "search".to_string();
+        new += usize::from(kept.keep(pattern).is_ok());
+    }
+    if new > 0 {
+        kept.write(folder).map_err(|error| format!("cannot write {}: {error}", file.display()))?;
+    }
+    Ok(new)
 }
 
 /// Keeps the best of the rules, which come best first, in the file of the rule library, if
@@ -704,18 +820,63 @@ mod tests {
     }
 
     #[test]
+    fn a_report_is_summed_up_and_its_patterns_kept() {
+        use cas_core::{pattern::from_rle, search::Found};
+        let found = |sort, rle: &str, period, moves| Found { sort, cells: from_rle(rle).unwrap(), period, moves };
+        let rule: BlockRule = "single-rotation".parse().unwrap();
+        let report = Report {
+            found: vec![
+                found(Sort::Spaceship, "b2o2$b2o", 12, (2, 0)),
+                found(Sort::Spaceship, "3o$o$bo", 15, (1, 1)),
+                found(Sort::Spaceship, "2o$o", 8, (2, 2)),
+                found(Sort::Spaceship, "o$2o", 24, (4, 0)),
+                found(Sort::Spaceship, "3o", 16, (2, 0)),
+                found(Sort::Oscillator, "o", 4, (0, 0)),
+                found(Sort::StillLife, "$2o$2o", 1, (0, 0)),
+            ],
+            ..search::measure(&rule, &Effort { seeds: 0, generations: 10, blob: 0 })
+        };
+        // The speeds each once (c/6 and 2c/12 are one), the fastest and the slowest as
+        // fractions, and the headings in one order whatever came first.
+        let ships = ships_of(&report);
+        assert_eq!(ships.speeds.len(), 4);
+        assert_eq!((ships.fastest, ships.slowest), (Some((1, 4)), Some((1, 15))));
+        assert_eq!(ships.headings, ["orthogonal", "diagonal"]);
+        assert_eq!([speed_name((1, 1)), speed_name((1, 6)), speed_name((2, 5))], ["c", "c/6", "2c/5"]);
+        let cells = line(&rule, &report);
+        assert_eq!(cells.len(), COLUMNS.len());
+        let cell = |name: &str| cells[column(name)].as_str();
+        assert_eq!((cell("speeds"), cell("fastest"), cell("slowest")), ("4", "c/4", "c/15"));
+        assert_eq!((cell("headings"), cell("oscillators"), cell("still-lifes")), ("orthogonal+diagonal", "1", "1"));
+        // Kept in the rule's file, with the note that says where they came from; kept again,
+        // nothing is new, and what the file had stays.
+        let folder = folder("patterns");
+        assert_eq!(keep_patterns(&folder, &rule, &report).unwrap(), 7);
+        assert_eq!(keep_patterns(&folder, &rule, &report).unwrap(), 0);
+        let kept = Collection::read(&folder).unwrap();
+        assert_eq!(kept.all().len(), 7);
+        assert!(kept.all().iter().all(|kept| kept.note == "search" && kept.rule == rule));
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
     fn worlds_with_things_that_travel_and_things_that_stay_come_first() {
-        let line = |character: &str, spaceships: u64, periods: u64| {
+        let line = |character: &str, speeds: u64, spaceships: u64, oscillators: u64, stills: u64| {
             let mut cells = vec![String::new(); COLUMNS.len()];
             cells[column("character")] = character.to_string();
+            cells[column("speeds")] = speeds.to_string();
             cells[column("spaceships")] = spaceships.to_string();
-            cells[column("periods")] = periods.to_string();
+            cells[column("oscillators")] = oscillators.to_string();
+            cells[column("still-lifes")] = stills.to_string();
             cells
         };
-        // By the lesser of kinds and periods; then guns by their kinds; the rest is no find.
-        assert!(merit(&line("spaceships", 8, 40)) > merit(&line("spaceships", 30, 2)));
-        assert!(merit(&line("spaceships", 1, 1)) > merit(&line("linear", 9, 0)));
-        assert!(merit(&line("linear", 2, 0)) > merit(&line("linear", 1, 5)));
-        assert_eq!(merit(&line("linear", 0, 3)), merit(&line("explosive", 5, 5)));
+        // By the speeds of the spaceships, then their kinds, then the kinds that stay; then
+        // guns by the same; the rest is no find.
+        assert!(merit(&line("spaceships", 8, 10, 0, 0)) > merit(&line("spaceships", 7, 30, 50, 50)));
+        assert!(merit(&line("spaceships", 3, 5, 0, 0)) > merit(&line("spaceships", 3, 4, 9, 9)));
+        assert!(merit(&line("spaceships", 3, 4, 5, 4)) > merit(&line("spaceships", 3, 4, 8, 0)));
+        assert!(merit(&line("spaceships", 1, 1, 0, 0)) > merit(&line("linear", 9, 9, 9, 9)));
+        assert!(merit(&line("linear", 2, 2, 0, 0)) > merit(&line("linear", 1, 5, 5, 5)));
+        assert_eq!(merit(&line("linear", 0, 0, 3, 3)), merit(&line("explosive", 5, 5, 5, 5)));
     }
 }

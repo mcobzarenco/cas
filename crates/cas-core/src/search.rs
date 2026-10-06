@@ -10,7 +10,8 @@
 //! * **Growth.** A seed that grows spreads over the plane like a fire, or it grows along
 //!   lines, as a gun does: its cells go with the square of time, or with time.
 //! * **Spaceships.** What comes back elsewhere, slower than light, is counted by kind; so is
-//!   what a growing seed sends out, and what flies out of a blob through an open border.
+//!   what a growing seed sends out, and what flies out of a blob through an open border. What
+//!   came back, in place or elsewhere, is kept by kind in the report, for whoever keeps it.
 //! * **Damage.** One cell of a random soup is flipped. A hundred generations on, how much of
 //!   what the flip could have reached is different?
 //! * **Blob.** A random blob on a closed grid. Small seeds may all stay small and a blob still
@@ -21,12 +22,13 @@
 //! more. Of the others, the ones with several kinds of spaceship, many periods, little damage
 //! and a blob that stays a blob are the ones to look at.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use rayon::prelude::*;
 
 use crate::{
     census::Census,
+    collection::Sort,
     pattern::{Analyser, Cell, Fate, Motion},
     rules::{BlockRule, Population},
     universe::{Rng, Universe},
@@ -103,6 +105,20 @@ pub struct Report {
     /// How many spaceships left the blob, and how many small patterns that were none.
     pub caught: u64,
     pub others: u64,
+    /// What came back to its shape, by the form its kind is filed under: every kind of
+    /// spaceship counted above, and the oscillators and still lifes among the seeds. In the
+    /// order of their sorts and forms.
+    pub found: Vec<Found>,
+}
+
+/// A pattern that came back to its shape, as it is kept: its sort, the form its kind is filed
+/// under, its period, and how far that form moves in a period.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Found {
+    pub sort: Sort,
+    pub cells: Vec<Cell>,
+    pub period: u32,
+    pub moves: (i32, i32),
 }
 
 /// What kind of world a rule makes, as far as its trials tell.
@@ -182,7 +198,7 @@ pub fn measure(rule: &BlockRule, effort: &Effort) -> Report {
     {
         let mut universe = Universe::new(GRID, GRID, rule.clone());
         plant(&mut universe, &grower);
-        catch(&mut universe, effort.blob, analyser(), &mut seeds.spaceships);
+        catch(&mut universe, effort.blob, analyser(), &mut seeds.found);
     }
     if !explodes && effort.blob > 0 {
         let cells = closed(rule, effort.blob);
@@ -191,10 +207,12 @@ pub fn measure(rule: &BlockRule, effort: &Effort) -> Report {
         if cells <= 1.0 / BLOB_DENSITY {
             let mut universe = blob_of(rule);
             let cells = universe.population();
-            left = catch(&mut universe, effort.blob, analyser(), &mut seeds.spaceships);
+            left = catch(&mut universe, effort.blob, analyser(), &mut seeds.found);
             remaining = Some(universe.population() as f32 / cells.max(1) as f32);
         }
     }
+    let mut found: Vec<Found> = std::mem::take(&mut seeds.found).into_values().collect();
+    found.sort();
     Report {
         oscillating: seeds.share(seeds.oscillating),
         travelling: seeds.share(seeds.travelling),
@@ -202,7 +220,7 @@ pub fn measure(rule: &BlockRule, effort: &Effort) -> Report {
         growing: seeds.share(seeds.growing),
         undecided: seeds.share(seeds.undecided),
         growth: seeds.slowest(rule).map_or(0.0, |(_, growth)| growth),
-        spaceships: seeds.spaceships.len(),
+        spaceships: found.iter().filter(|found| found.sort == Sort::Spaceship).count(),
         periods: seeds.periods.len(),
         longest_period: seeds.periods.last().copied().unwrap_or(0),
         damage: damage(rule),
@@ -210,6 +228,7 @@ pub fn measure(rule: &BlockRule, effort: &Effort) -> Report {
         remaining,
         caught: left.0,
         others: left.1,
+        found,
     }
 }
 
@@ -242,7 +261,8 @@ struct Seeds {
     growing: u32,
     undecided: u32,
     periods: BTreeSet<u32>,
-    spaceships: HashSet<Vec<Cell>>,
+    /// What came back as one thing, by the form it is filed under.
+    found: HashMap<Vec<Cell>, Found>,
     /// The first few that grew and, once it has been looked at, which of them grows most
     /// slowly, with the power of time its cells go with.
     growers: Vec<Vec<Cell>>,
@@ -259,7 +279,7 @@ impl Seeds {
             growing: 0,
             undecided: 0,
             periods: BTreeSet::new(),
-            spaceships: HashSet::new(),
+            found: HashMap::new(),
             growers: Vec::new(),
             slowest: None,
         }
@@ -267,18 +287,25 @@ impl Seeds {
 
     fn follow(&mut self, seed: &[Cell]) {
         match self.analyser.fate(seed, 0) {
-            Fate::Returns { period, displacement: (0, 0) } => {
-                self.oscillating += 1;
-                self.periods.insert(period);
-            }
-            Fate::Returns { .. } => {
-                self.travelling += 1;
-                // Several ships side by side are no kind of their own.
-                if let Some(motion) = self.analyser.analyse(seed, 0)
-                    && slower_than_light(&motion)
-                    && self.analyser.parts(seed, 0, motion.period).len() == 1
+            Fate::Returns { period, displacement } => {
+                if displacement == (0, 0) {
+                    self.oscillating += 1;
+                    self.periods.insert(period);
+                } else {
+                    self.travelling += 1;
+                }
+                // What came back as one thing is a kind of its own: several ships side by
+                // side, or oscillators that never meet, are none. A ship as fast as light is
+                // no find.
+                if let Some(study) = self.analyser.study(seed, 0)
+                    && study.parts == 1
+                    && let Some(motion) = study.motion
+                    && (displacement == (0, 0) || slower_than_light(&motion))
                 {
-                    self.spaceships.insert(motion.canonical);
+                    let sort = Sort::of(motion.displacement, study.still);
+                    let found =
+                        Found { sort, period: motion.period, moves: motion.displacement, cells: motion.canonical };
+                    self.found.entry(found.cells.clone()).or_insert(found);
                 }
             }
             Fate::Scatters => self.scattering += 1,
@@ -379,13 +406,13 @@ fn closed(rule: &BlockRule, generations: i64) -> f32 {
 }
 
 /// Leaves a universe alone with its border open, and identifies the small patterns that
-/// leave. The kinds of the slow spaceships among them join `spaceships`; returns how many
+/// leave. The kinds of the slow spaceships among them join what was `found`; returns how many
 /// spaceships left, and how many small patterns that were none.
 fn catch(
     universe: &mut Universe,
     generations: i64,
     analyser: Analyser,
-    spaceships: &mut HashSet<Vec<Cell>>,
+    found: &mut HashMap<Vec<Cell>, Found>,
 ) -> (u64, u64) {
     universe.open_border = true;
     universe.catching = true;
@@ -400,8 +427,16 @@ fn catch(
             }
         }
     }
-    let slow = census.kinds().iter().filter(|kind| slower_than_light(&kind.motion));
-    spaceships.extend(slow.map(|kind| kind.motion.canonical.clone()));
+    for kind in census.kinds().iter().filter(|kind| slower_than_light(&kind.motion)) {
+        let motion = &kind.motion;
+        let ship = Found {
+            sort: Sort::Spaceship,
+            cells: motion.canonical.clone(),
+            period: motion.period,
+            moves: motion.displacement,
+        };
+        found.entry(ship.cells.clone()).or_insert(ship);
+    }
     (census.ships(), census.others())
 }
 

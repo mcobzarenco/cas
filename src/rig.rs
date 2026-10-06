@@ -661,13 +661,12 @@ impl Reading<'_, '_> {
         if let Ok(field) = self.fields.get(entity) {
             return field.value().to_string();
         }
-        // A text reads on through the spans that carry it on in another face or colour. A
-        // space that keeps a number from breaking across lines reads as a space.
+        // A text reads on through the spans that carry it on in another face or colour.
         let text = |entity: Entity| {
             let text = self.texts.get(entity).ok()?;
             let carried = self.children.get(entity).into_iter().flatten();
             let carried = carried.filter_map(|&span| self.spans.get(span).ok());
-            Some(carried.fold(text.to_string(), |read, span| read + &span.0).replace('\u{a0}', " "))
+            Some(carried.fold(text.to_string(), |read, span| read + &span.0))
         };
         // A node without text of its own, such as a button, reads as what is written in it.
         // Icons are pictures, not words: the glyphs of the icon font are left out.

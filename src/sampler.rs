@@ -157,8 +157,11 @@ impl Sampler {
                 _ if progress.stopped() => return,
                 None => Count::Many,
                 Some(size) if size.rules <= KEPT => {
-                    let worlds = family.canonical_rules(threads, KEPT, &Progress::default());
-                    Count::Known { size, kept: worlds.map(|(_, worlds)| (family.rules(), worlds)) }
+                    // Listed in a second pass, which a count no longer asked for stops too.
+                    let Some((_, worlds)) = family.canonical_rules(threads, KEPT, &progress) else {
+                        return;
+                    };
+                    Count::Known { size, kept: Some((family.rules(), worlds)) }
                 }
                 Some(size) => Count::Known { size, kept: None },
             };

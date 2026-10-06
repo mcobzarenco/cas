@@ -1,0 +1,96 @@
+# The patterns kept for cas under the rule 0,1,2,12,4,10,6,14,8,9,5,13,3,11,7,15:
+# a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a
+# still life), the pattern (run-length encoded, from a corner of the blocks the next step
+# rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
+# a name, and a note. The file is named by the rule's table in hex.
+sort	pattern	period	moves	name	note
+oscillator	2o	4			
+oscillator	o$b2o	4			
+oscillator	b2o$bo	6			
+oscillator	3o	6			
+oscillator	2o$o	4			
+oscillator	o$b2o$3bo	6			
+oscillator	3o$bo	6			
+oscillator	2o$o$2bo	4			
+oscillator	3o$2bo	6			
+oscillator	3o2$o	8			
+oscillator	o2bo$bo$bo	4			
+oscillator	2obo2$bo	6			
+oscillator	3o$o2bo	12			
+oscillator	3o$o	12			
+oscillator	o$bo$2b2o	4			
+oscillator	b2o$obo$o	12			
+oscillator	3o$3bo	6			
+oscillator	o$bo$2b2o2$3bo	6			
+oscillator	o$b2o2$2bo	6			
+oscillator	3o$obo2$o	10			
+oscillator	3o$2bobo2$2bo	18			
+oscillator	obo$bo$bo$o	6			
+oscillator	b3o$3b2o2$4bo2b2o$8bo$7b2o$4bo5b2o$3bo6bo$8bo$2b2o3b2o	120			
+oscillator	3o$bo$3b2o$3bo	6			
+oscillator	ob2o$b2o$bo3bo$2bo$4bo	18			
+oscillator	b3o2$2o2bo$4bo	12			
+oscillator	o$b2o2$3bo$4bo	4			
+oscillator	o$bob2o$2b2o$2bo	4			
+oscillator	obo$bobo$2bo$2bo2bo$bo	6			
+oscillator	ob2o$2bobo2$o2bobo	10			
+oscillator	2o$bobo$3bo$3bo$3bo$5bo	8			
+oscillator	2b3o$6bo$2bo$2bo$bo3bo$3bo2bo$3bo$7b2o$8bo$6bo	64			
+oscillator	b2obo$b2o$2bo	20			
+oscillator	b3o$2b2o$2bo$2bo$bobo$bo3b2o$4bo2$3bo	264			
+oscillator	2o$o$2bo$3bo	4			
+oscillator	4o	8			
+oscillator	b2o$3b2o	4			
+oscillator	2obo$2bo$3bo	8			
+oscillator	2obo$3bo$4bo$bo$2b2o$b2o	60			
+oscillator	o$b2o2$2bo$bo	6			
+oscillator	b4o$bo$3bo$bo	22			
+oscillator	2obo$2bo2$3bo	6			
+oscillator	3o2$2o	22			
+oscillator	o$b2o2$3bo	4			
+oscillator	3o$3b2o2$4bob2o2$5bo$5bo	18			
+oscillator	2o$bo$2bo	4			
+oscillator	ob2o2$2bo$3bo$4bo$4bo	12			
+oscillator	o2bo$b2o	4			
+oscillator	2obo2$bobo	8			
+oscillator	2b3o$bo3b2o$bo4bo$bo$2bo$3b2o$2bo	60			
+oscillator	o$bo$2bo$3b2o	4			
+oscillator	obo$b2o	6			
+oscillator	o$b2o$3bo$2bo$bo	6			
+oscillator	o$bobo$2bo$2bo$bo	6			
+oscillator	o$bobo$2bob2o$2b3o	12			
+oscillator	b3o$3b2o$5bo	20			
+oscillator	ob3o2$2bo	8			
+oscillator	o$bob2o2$3bo$4bo$5bo	6			
+oscillator	obo$bo$bo2bo$4bo	12			
+oscillator	ob2o$bo$4bo$5bo	6			
+oscillator	4o$o3$b2o$o$o$bo	32			
+oscillator	b3o$4bo	8			
+oscillator	obo$bobo$2b2o$bo2bo	12			
+oscillator	obobo$b2o2bo$4bo	8			
+oscillator	2bo2bo$b2obo2$4bo$6b2o$9bo$7bo	40			
+oscillator	o$b2o$2bo$2bo	12			
+oscillator	b2obo$b2o	14			
+oscillator	o$b2o$4bo$2bo	8			
+oscillator	obo$b2o2$obo	8			
+oscillator	o$b2o$2bo$3b2o	4			
+oscillator	b2o$3b3o$2bo	8			
+oscillator	o2bo$b2o$bo	4			
+oscillator	obo$bo$bo2bo$3bo	6			
+oscillator	b2o$2bobo$bo2b2o	20			
+oscillator	2bo2bo$b2obo2$3b2obo$2bo$b2o4b2o$4b2o$o2bo$2bo	104			
+oscillator	4o$2o$3bo$o$4bo$5bo	44			
+oscillator	ob2o$2bob2o$6bo$3bo$3bo	36			
+oscillator	3o$2bo$o3bo$obo	26			
+oscillator	o$b2o$3bo2$bo	6			
+oscillator	o$b2o2$2bobo	8			
+oscillator	2obo2$bo$2bo$4bo	8			
+oscillator	3o$3b2o	12			
+still life	o	1			
+still life	o$bo	1			
+still life	o$bo$2bo	1			
+still life	o$bo$2bo$3bo	1			
+still life	2o$2o	1			
+oscillator	3o2$2b2o	12			
+oscillator	3o$3o	12			
+oscillator	6o$o4bo	20			

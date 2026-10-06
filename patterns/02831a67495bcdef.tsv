@@ -1,0 +1,85 @@
+# The patterns kept for cas under the rule 0,2,8,3,1,10,6,7,4,9,5,11,12,13,14,15:
+# a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a
+# still life), the pattern (run-length encoded, from a corner of the blocks the next step
+# rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
+# a name, and a note. The file is named by the rule's table in hex.
+sort	pattern	period	moves	name	note
+spaceship	3o$2bo	10	2,0		
+spaceship	o3bo$ob2o	392	4,0		
+spaceship	b2o$2bo$2bo$2bo	608	8,0		
+spaceship	bo$bo$2bo$b2o	560	4,0		
+spaceship	2ob3o	666	6,0		
+spaceship	2b2o$b2obo	230	2,0		
+spaceship	b3o$3bo$bo	716	8,0		
+spaceship	bo2$b2o$b2o	346	6,0		
+spaceship	b2obo$bo2bo	290	2,0		
+spaceship	$o2bo$b2o$o	50	2,0		
+spaceship	b2o$bob2o	886	6,0		
+spaceship	bo2bo$2b2o$4bo	50	2,0		
+spaceship	5o	560	4,0		
+spaceship	2o2$b2o$o$2bo	568	4,0		
+spaceship	3o$obo	1094	6,0		
+spaceship	2o$o$o$o	584	8,0		
+spaceship	b2o$bobo$2bo	1150	2,0		
+spaceship	b2o$bo$b2o	1346	6,0		
+spaceship	o$2o$o$b2o	5648	16,0		
+spaceship	3b3o$bobobo	924	6,0		
+spaceship	b2o$o2bo$obo	38	2,0		
+spaceship	2bo3bo$4bo$bo2b2o	894	2,0		
+spaceship	2bo$bobo$3bo$2bo	506	2,0		
+spaceship	bobo2$b4o	30	2,0		
+spaceship	b2o$3b2o2$3bo$2bo	18	2,0		
+spaceship	b2o$obo$obo	132	6,0		
+spaceship	o3bo$bo2bo$obo	140	4,0		
+spaceship	2o$o$o2$2o	2080	4,0		
+spaceship	4bo$b3ob2o	764	6,0		
+spaceship	bo$2bo2$b2o$b2o	4162	2,0		
+spaceship	3ob3o	8336	20,0		
+spaceship	b3ob2o$bo	1574	10,0		
+spaceship	2obo$3bo$b2o	1062	14,0		
+spaceship	obo2$b2o$o2bo	32	4,0		
+spaceship	bob2o$2bo2b2o	40	4,0		
+spaceship	2o$o2$2o$o	4388	0,2		
+spaceship	b2o$bo2$bo$3bo$b2o	1148	4,0		
+spaceship	2b2o$3bo$2bo$2b2o$bo	598	6,0		
+spaceship	obo$2bo$3o	332	4,0		
+spaceship	bo2bo$2b3o$4bo	148	4,0		
+spaceship	o3bo$obo$bobo	58	2,0		
+spaceship	b2o$2bobo$2b2o	542	6,0		
+spaceship	ob2o$bo2bo$2bo$3bo	802	2,0		
+spaceship	b2obo2$2b3o	5078	2,0		
+oscillator	o	4			
+oscillator	2o	8			
+oscillator	o$bo	8			
+oscillator	2bo$bo$2bo	12			
+oscillator	o$o$o	24			
+oscillator	2o$3bobo$3bo3bo	216			
+oscillator	2o2$o$bo$bo	24			
+oscillator	obo$2bo$2o	428			
+oscillator	b2o2bo$4bo$bo	16			
+oscillator	$o$2o$bo$o	64			
+oscillator	o$bo2$bo$o	36			
+oscillator	o$bo$2o	52			
+oscillator	o$o$2o	24			
+oscillator	3o	24			
+oscillator	o$bo$bo$bo$o	392			
+oscillator	$o$o$bo$o	36			
+oscillator	2o$o	16			
+spaceship	bo$bo$o$o$2o	2616	4,0		
+spaceship	b2o$obo$2o	2362	10,0		
+spaceship	b2o$2o$2bo	890	2,0		
+oscillator	2ob2o	84			
+oscillator	o$b2o	12			
+oscillator	o$bo$bo	12			
+oscillator	2o2$2bo	12			
+oscillator	o$bo3$o	12			
+oscillator	$2o3$o$o$2bo	40			
+oscillator	2bo$3bo$3bo2$2b2o2$bo	180			
+oscillator	o$bo2$o$o	32			
+spaceship	3b3o$bob2o	1946	6,0		
+spaceship	b3o$bo2b2o	988	4,0		
+spaceship	o$2o$bo$2o	2928	12,0		
+spaceship	bo2bo$ob2obo	74	2,0		
+spaceship	o$2o$bo$bo	618	2,0		
+spaceship	2o$2o$o$bo	3078	10,0		
+spaceship	2o$o$bo2$2o	1778	2,0		

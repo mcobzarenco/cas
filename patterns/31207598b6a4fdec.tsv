@@ -1,0 +1,61 @@
+# The patterns kept for cas under the rule 3,1,2,0,7,5,9,8,11,6,10,4,15,13,14,12:
+# a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a
+# still life), the pattern (run-length encoded, from a corner of the blocks the next step
+# rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
+# a name, and a note. The file is named by the rule's table in hex.
+sort	pattern	period	moves	name	note
+oscillator	$o	8			
+oscillator	o	8			
+oscillator	$o$o	32			
+oscillator	o$o	32			
+oscillator	2o	8			
+oscillator	o$bo	16			
+oscillator	$o$bo	16			
+oscillator	b2o	4			
+oscillator	$2o	8			
+oscillator	$b2o	8			
+oscillator	$2o$o	48			
+oscillator	o$bo$3bo	48			
+oscillator	$2o$3bo	32			
+oscillator	$2o6bo	8			
+oscillator	obo$o	48			
+oscillator	$o$o2bo	32			
+oscillator	b2o$b2o	28			
+oscillator	o3bo$bo2bo	24			
+oscillator	2o$2o$4bo	184			
+oscillator	o$o$3bo$2bo	112			
+oscillator	$obo$2bo$2o	176			
+oscillator	o$bo$ob2o	5816			
+oscillator	$o$bo9bo$bobo	96			
+oscillator	obo$o$3bo	64			
+oscillator	$bobo$bo2bo	56			
+oscillator	bo2bo$bo2bo	8			
+oscillator	$2o$obo	152			
+oscillator	bo$bo$2bo	24			
+oscillator	bo$2bo2bo$2bo	152			
+oscillator	o2bo$o	32			
+oscillator	$bo$3bo$2o	160			
+oscillator	bo$2bo$bo	40			
+oscillator	$o$obo	80			
+oscillator	o$2o	40			
+oscillator	o$5bo$3b2o	56			
+oscillator	2o2bo2bo$o	96			
+oscillator	$bo2bo	4			
+oscillator	o4b2o$5bo$8bo$bo	400			
+oscillator	$o$bo$5bo$5bo	40			
+oscillator	o$o$2bo$3bo	80			
+spaceship	3o$obo	52	2,0		
+spaceship	$b2o$obo	20	2,0		
+spaceship	2b2o$b2o	20	2,0		
+spaceship	$b2o$2o	60	2,0		
+spaceship	2o$obo	60	2,0		
+spaceship	$o3bo$3obo	60	2,0		
+spaceship	2o$o$o	352	4,0		
+spaceship	$bo$bo$bo$bo	1376	4,0		
+spaceship	$b2o$o$bo	352	4,0		
+spaceship	o$2o$bo	800	4,0		
+spaceship	$bob2o$2b2o	52	2,0		
+spaceship	$bo$2o$o	800	4,0		
+spaceship	$o$o$obo	268	2,0		
+spaceship	bo$o$obo	268	2,0		
+spaceship	bo$bo$bo$bo	1376	4,0		

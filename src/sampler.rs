@@ -101,6 +101,11 @@ pub struct Sampler {
     size: usize,
     /// The rules drawn last, each once, in the order of their tables.
     sample: Vec<BlockRule>,
+    /// Whether a sample was drawn for what is asked for now; and whether with the family
+    /// counted, which is the best that can be drawn: one drawn while the family was being
+    /// counted is drawn again when it is, if the family is then kept.
+    drawn: bool,
+    settled: bool,
     /// Whether the sample is every rule there is with all that is asked for.
     whole: bool,
     count: Count,
@@ -135,6 +140,8 @@ impl Default for Sampler {
             canonical: false,
             size: 0,
             sample: Vec::new(),
+            drawn: false,
+            settled: false,
             whole: false,
             count: Count::Known { size: EVERY_RULE, kept: None },
             counted: Family::default(),
@@ -203,8 +210,16 @@ impl Sampler {
     /// What is asked for changed: the sample was of other rules, and the lists are to follow.
     fn changed(&mut self) {
         self.sample.clear();
+        self.drawn = false;
+        self.settled = false;
         self.whole = false;
         self.revision += 1;
+    }
+
+    /// Whether a sample is to be drawn: there is none for what is asked for, or the one
+    /// there is was drawn while the family was being counted, and the family is kept now.
+    fn wants_sample(&self) -> bool {
+        !self.drawn || (!self.settled && matches!(self.known(), Some(Count::Known { kept: Some(_), .. })))
     }
 
     /// What is known of the family asked for now: nothing, where what was counted was another.
@@ -279,7 +294,9 @@ impl Sampler {
             None => (self.filled(want, rng), false),
         };
         drawn.sort_by(|a, b| a.table().cmp(b.table()));
+        self.settled = !matches!(self.known(), None | Some(Count::Counting(_)));
         self.sample = drawn;
+        self.drawn = true;
         self.whole = whole;
         self.revision += 1;
     }
@@ -435,14 +452,15 @@ pub(crate) fn properties_card() -> impl Scene {
     }
 }
 
-/// The controls of a sample: whether its rules are in canonical form, how many rules have all
-/// that is asked for, the button that draws it, and how many rules it is of.
+/// The controls of a sample, on one line: whether its rules are in canonical form, the button
+/// that draws it again, and how many rules it is of; and under them how many rules have all
+/// that is asked for.
 pub(crate) fn generate_controls() -> impl Scene {
     let sizes: Vec<_> = (0..SIZES.len()).map(size_chip).collect();
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
-            row_gap: px(8),
+            row_gap: px(6),
             flex_shrink: 0.0,
         }
         Children [
@@ -455,7 +473,7 @@ pub(crate) fn generate_controls() -> impl Scene {
                 }
                 Children [
                     (
-                        checkbox("In canonical form", "GenerateCanonical", Aspect::Rule, "")
+                        checkbox("Canonical", "GenerateCanonical", Aspect::Rule, "")
                         Node { flex_shrink: 0.0 }
                         CanonicalBox
                         on(|change: On<ValueChange<bool>>, mut sampler: ResMut<Sampler>| {
@@ -463,32 +481,25 @@ pub(crate) fn generate_controls() -> impl Scene {
                         })
                     ),
                     (
-                        // A count of trillions takes two lines, on its own side.
-                        #GenerateCount
-                        caption("")
-                        Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
-                        TextLayout { justify: Justify::Right }
-                        Counted
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(5),
+                        }
+                        Children [
+                            (
+                                #Generate
+                                button("Generate")
+                                Node { margin: UiRect { right: px(3) } }
+                                on(generate)
+                            ),
+                            { sizes },
+                        ]
                     ),
                 ]
             ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    column_gap: px(5),
-                }
-                Children [
-                    (
-                        #Generate
-                        button("Generate")
-                        Node { margin: UiRect { right: px(3) } }
-                        on(generate)
-                    ),
-                    { sizes },
-                    words("rules"),
-                ]
-            ),
+            // A count of trillions breaks between its numbers, not within one.
+            (#GenerateCount caption("") Counted),
         ]
     }
 }
@@ -551,7 +562,7 @@ fn step(name: &'static str, sign: &'static str, by: i8) -> impl Scene {
     }
 }
 
-/// A chip for how many rules a sample is of.
+/// A chip for how many rules a sample is of: another number, another sample.
 fn size_chip(index: usize) -> impl Scene {
     let (_, written) = SIZES[index];
     let name = Name::new(format!("Generate{written}"));
@@ -565,12 +576,13 @@ fn size_chip(index: usize) -> impl Scene {
                 && sampler.size != index
             {
                 sampler.size = index;
+                sampler.changed();
             }
         })
     }
 }
 
-/// Draws a sample.
+/// Draws a sample again.
 fn generate(_: On<Activate>, mut sampler: ResMut<Sampler>, mut rng: ResMut<Rng>) {
     sampler.generate(&mut rng);
 }
@@ -586,10 +598,19 @@ fn counting(sampler: Res<Sampler>) -> bool {
     matches!(sampler.count, Count::Counting(_))
 }
 
-/// While a sample is asked for, the family asked for is counted: as soon as it is another.
-fn keep_counted(library: Res<RuleLibrary>, mut sampler: ResMut<Sampler>) {
-    if library.generating() && sampler.known().is_none() {
+/// While the sample is what the panel shows, the family asked for is counted as soon as it
+/// is another, and a sample is drawn as soon as there is none for it: when the tab is first
+/// opened, and whenever what is asked for changes. One drawn while the family was being
+/// counted is drawn again, evenly, once the family is counted and kept.
+fn keep_counted(library: Res<RuleLibrary>, mut sampler: ResMut<Sampler>, mut rng: ResMut<Rng>) {
+    if !library.generating() {
+        return;
+    }
+    if sampler.known().is_none() {
         sampler.ask();
+    }
+    if sampler.wants_sample() {
+        sampler.generate(&mut rng);
     }
 }
 
@@ -690,20 +711,25 @@ mod tests {
         for name in ["quarter-turn", "mirror", "conserving", "stable-vacuum"] {
             sampler.want(CHIPS.iter().position(|chip| chip.name == name).unwrap());
         }
-        assert!(sampler.sample().is_empty() && sampler.known().is_none());
+        assert!(sampler.sample().is_empty() && sampler.known().is_none() && sampler.wants_sample());
         sampler.ask();
+        // Drawn while the family is being counted, the sample is wanted again once it is.
+        sampler.generate(&mut rng);
+        assert!(sampler.drawn && !sampler.settled);
         while matches!(sampler.count, Count::Counting(_)) {
             std::thread::sleep(std::time::Duration::from_millis(5));
             sampler.hear();
         }
         let family = sampler.family();
         assert!(matches!(sampler.known(), Some(Count::Known { size: Size { rules: 16, .. }, kept: Some(_) })));
+        assert!(sampler.wants_sample());
         // All of them in a sample of thirty, in order; ten of them drawn evenly, in order too.
         sampler.size = 1;
         sampler.generate(&mut rng);
         assert_eq!(sampler.sample().len(), 16);
         assert!(sampler.whole() && in_order(sampler.sample()));
         assert!(sampler.sample().iter().all(|rule| family.holds(rule)));
+        assert!(sampler.settled && !sampler.wants_sample());
         sampler.size = 0;
         sampler.generate(&mut rng);
         assert_eq!(sampler.sample().len(), 10);
@@ -723,6 +749,14 @@ mod tests {
         let sample = sampler.sample();
         assert!(sample.len() > 1 && sample.len() <= 16 && in_order(sample) && !sampler.whole());
         assert!(sample.iter().all(|rule| family.holds(rule) && *rule == rule.canonical()));
+        assert!(!sampler.settled);
+        // Every rule there is, as a family too large to keep: a sample is as good as it gets.
+        for name in ["quarter-turn", "mirror", "conserving", "stable-vacuum"] {
+            sampler.want(CHIPS.iter().position(|chip| chip.name == name).unwrap());
+        }
+        sampler.ask();
+        sampler.generate(&mut rng);
+        assert!(sampler.settled && !sampler.wants_sample() && sampler.sample().len() == 100);
     }
 
     #[test]

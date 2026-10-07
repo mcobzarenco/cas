@@ -88,18 +88,21 @@ click LibraryProperties; wait 3
 click Has:conserving; wait 4
 expect_text LibraryFamily any rule there is
 
-# The other tab draws rules at random with the properties asked for, as many as the chip next
-# to Generate says, each once and in the order of their tables; how many rules have all of it
-# is counted meanwhile, on other threads. A quarter turn, a mirror, the cells kept and the
-# empty world left empty: sixteen rules, each a world of its own, all of them in a sample of
-# thirty, the identity first. A click puts one on the grid, and the arrow keys go through them.
+# The other tab shows rules drawn at random with the properties asked for, as many as the
+# chip next to Generate says, each once and in the order of their tables: a sample is drawn
+# as soon as the tab opens and whenever what is asked for changes, and Generate draws another.
+# How many rules have all of it is counted meanwhile, on other threads. A quarter turn, a
+# mirror, the cells kept and the empty world left empty: sixteen rules, each a world of its
+# own, all of them in a sample of thirty, the identity first. A click puts one on the grid,
+# and the arrow keys go through them.
 click GenerateTab; wait 3
 expect_checked GenerateTab on
 expect_text GenerateCount 20 922 789 888 000 rules · 552 613 396 971 canonical
+click Generate30; wait 3
 click Has:quarter-turn; click Has:mirror; click Has:conserving; click Has:stable-vacuum; wait 3
 expect_text LibraryFamily quarter-turn + mirror + conserving + stable-vacuum
 until expect_text GenerateCount 16 rules · 16 canonical
-click Generate30; wait 2; click Generate; wait 4
+wait 3
 expect_text LibraryRow0 ESPCA-08cadf quarter-turn · half-turn · mirror · flip · diagonal · anti-diagonal · conserving · parity · complement · involution · stable-vacuum · turning · sparse · linear
 click LibraryRow0; wait 4; expect_rule 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 shot library-6-generated
@@ -107,7 +110,7 @@ key ArrowDown; wait 4; expect_rule 0,1,2,3,4,5,6,14,8,9,10,13,12,11,7,15
 # In canonical form a sample is of worlds, each once: here every rule is its own.
 click GenerateCanonical; wait 3; expect_checked GenerateCanonical on
 expect_text GenerateCount 16 canonical rules
-click Generate10; wait 2; click Generate; wait 4
+click Generate10; wait 3; click Generate; wait 4
 click LibraryRow0; wait 4; key e; wait 4; click RuleCanonical; wait 3
 expect_text EditorNote This table is already canonical: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.
 key e; wait 4
@@ -127,8 +130,8 @@ expect_text LibraryFamily sparse=3
 until expect_text GenerateCount 1 241 rules · 190 canonical
 # A family of millions is counted on other threads while the world runs, and drawn from
 # meanwhile. Where the empty world stays empty the canonical rules are counted by symmetry.
-click Has:sparse; click Has:involution; wait 3
-click Generate; wait 4; click LibraryRow0; wait 4
+click Has:sparse; click Has:involution; wait 4
+click LibraryRow0; wait 4
 key e; wait 4; expect_text FindingReversed the same rule; key e; wait 4
 until expect_text GenerateCount 46 206 736 rules · 4 538 049 canonical
 click Has:involution; click Has:stable-vacuum; wait 3

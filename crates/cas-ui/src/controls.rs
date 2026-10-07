@@ -25,7 +25,10 @@ use super::{KitSystems, aspect::Aspect, cards::GUTTER, icons, text::key_hint};
 
 /// The systems that keep the controls looking as they should.
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (style_toggles, style_sliders, style_chips, show_scrollbars, fit_menus).in_set(KitSystems));
+    app.add_systems(
+        Update,
+        (style_toggles, style_sliders, style_chips, style_tabs, show_scrollbars, fit_menus).in_set(KitSystems),
+    );
 }
 
 /// Brings the `Checked` of a checkbox or of a chip in line with what it stands for: `is` says
@@ -422,6 +425,78 @@ fn style_chips(
         for &child in children.into_iter().flatten() {
             if let Ok(mut color) = signs.get_mut(child) {
                 color.set_if_neq(TextColor(ink));
+            }
+        }
+    }
+}
+
+/// The marks of a [`tab`] and of its word.
+#[derive(Component, Default, Clone)]
+struct Tab;
+
+#[derive(Component, Default, Clone)]
+struct TabWord;
+
+/// A tab of a [`tab_bar`]: a word on a line, which is in the colour of an aspect under the
+/// tab that is `Checked`, the one chosen. Whoever makes it keeps its `Checked` in step with
+/// what is shown under the bar ([`check`]).
+pub fn tab(label: &'static str, aspect: Aspect) -> impl Scene {
+    bsn! {
+        Node {
+            flex_grow: 1.0,
+            flex_basis: px(0),
+            justify_content: JustifyContent::Center,
+            padding: UiRect { top: px(3), bottom: px(5) },
+            border: UiRect { bottom: px(2) },
+        }
+        BorderColor::all(palette::GRAY_3)
+        Hovered
+        EntityCursor::System(SystemCursorIcon::Pointer)
+        Tab
+        template_value(aspect)
+        Children [(
+            Text(label)
+            TextFont {
+                font: FontSourceTemplate::Handle(fonts::REGULAR),
+                font_size: FontSize::Px(13.0),
+                weight: FontWeight::NORMAL,
+            }
+            TextColor(palette::LIGHT_GRAY_2)
+            TabWord
+            template_value(Pickable::IGNORE)
+        )]
+    }
+}
+
+/// The tabs of a panel, side by side across it, each as wide as the others: what is under
+/// the bar is the chosen one's.
+pub fn tab_bar(tabs: impl SceneList) -> impl Scene {
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Row,
+            flex_shrink: 0.0,
+        }
+        Children [ { tabs } ]
+    }
+}
+
+/// Lights the tabs: the line under the one that is chosen is in the colour of its aspect and
+/// its word is bright; the word of one under the pointer brightens a little.
+fn style_tabs(
+    mut tabs: Query<(&Aspect, &Hovered, Has<Checked>, &mut BorderColor, &Children), With<Tab>>,
+    mut words: Query<&mut TextColor, With<TabWord>>,
+) {
+    for (aspect, hovered, chosen, mut line, children) in &mut tabs {
+        let color = if chosen { aspect.color() } else { palette::GRAY_3 };
+        line.set_if_neq(BorderColor::all(color));
+        let ink = match (chosen, hovered.0) {
+            (true, _) => palette::WHITE,
+            (false, true) => palette::LIGHT_GRAY_1,
+            (false, false) => palette::LIGHT_GRAY_2,
+        };
+        for &child in children {
+            if let Ok(mut word) = words.get_mut(child) {
+                word.set_if_neq(TextColor(ink));
             }
         }
     }

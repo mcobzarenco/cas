@@ -1,7 +1,7 @@
 //! The kit: what the panels of cas are made of.
 //!
-//! Colours, text in the sizes it comes in, cards, side panels and tiles, the controls, the
-//! rows of lists and the icons, as scenes for Bevy UI on top of Feathers' widgets. Only Bevy
+//! Colours, text in the sizes it comes in, cards, side panels and tiles, the controls and tabs,
+//! the rows of lists and the icons, as scenes for Bevy UI on top of Feathers' widgets. Only Bevy
 //! is used here, nothing of the app and nothing of the automata: a panel says what it shows,
 //! and how that looks is said here, once.
 //!
@@ -58,7 +58,7 @@ pub use cards::{
 };
 pub use controls::{
     Scrolls, Sign, button, button_marked, check, checkbox, chip, chip_box, chip_marked, field_frame, icon_button,
-    icon_button_marked, keyed_button, keyed_button_marked, menu_heading, scrolling, slider,
+    icon_button_marked, keyed_button, keyed_button_marked, menu_heading, scrolling, slider, tab, tab_bar,
 };
 pub use lists::{
     CELLS_COLUMN, COLUMN_GAP, Flown, PERIOD_COLUMN, PICTURE, dial, glow, list_row, picture, share_bar, share_bar_marked,

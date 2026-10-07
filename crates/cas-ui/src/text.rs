@@ -33,7 +33,7 @@ pub fn readout(text: impl Into<String>) -> impl Scene {
 }
 
 /// A column title of a list; the name of a field or of a group as well.
-pub fn heading(title: &'static str) -> impl Scene {
+pub fn heading(title: impl Into<String>) -> impl Scene {
     bsn! {
         Text(title)
         TextFont {

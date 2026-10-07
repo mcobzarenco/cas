@@ -31,8 +31,8 @@ use cas_ui::{
     AXES, Aspect, CELLS_COLUMN, COLUMN_GAP, GLYPH, GUTTER, KitPlugin, KitSystems, ORBIT, PERIOD_COLUMN, PICTURE,
     Scrolls, Sign, button, caption, card, check, checkbox, chip, chip_box, dial, field_frame, group_digits, heading,
     icon_button, icons, key_hint, keyed_button, list_row, menu_heading, mono, number, panel_header, panel_title,
-    picture, readout, sans, scrolling, section, section_title, share_bar, side_panel, slider, tile, tile_label,
-    tile_picture, tile_value,
+    picture, readout, sans, scrolling, section, section_title, share_bar, side_panel, slider, tab, tab_bar, tile,
+    tile_label, tile_picture, tile_value,
 };
 
 /// What the gallery keeps of its own: whether its side panel is there, and which row of its
@@ -290,6 +290,11 @@ fn chips() -> impl Scene {
                 Children [ (@FeathersTextInput {}) ]
             ),
             caption("A text field in its frame."),
+            tab_bar(bsn_list![
+                (tab("Collection", Aspect::Rule) Checked on(choose)),
+                (tab("Generate", Aspect::Rule) on(choose)),
+            ]),
+            caption("The tabs of a panel: the chosen one is underlined."),
         ],
     )
 }
@@ -528,6 +533,18 @@ fn slide(change: On<ValueChange<f32>>, mut commands: Commands) {
 fn flip(click: On<Pointer<Click>>, chips: Query<Has<Checked>>, mut commands: Commands) {
     if let Ok(on) = chips.get(click.entity) {
         check(&mut commands, click.entity, on, !on);
+    }
+}
+
+/// A click on a tab chooses it, and none other of its bar.
+fn choose(click: On<Pointer<Click>>, tabs: Query<(Entity, &ChildOf, Has<Checked>)>, mut commands: Commands) {
+    let Ok((_, bar, _)) = tabs.get(click.entity) else {
+        return;
+    };
+    for (tab, of, on) in &tabs {
+        if of.parent() == bar.parent() {
+            check(&mut commands, tab, on, tab == click.entity);
+        }
     }
 }
 

@@ -326,7 +326,10 @@ back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
     diagram shows a point and its images under those, and the axes of the mirrors; a rule with
     rotations but no mirrors, like Single Rotation, shows as a pinwheel: it has a handedness.
-  * *Dead and alive*: whether exchanging the two states turns every run into another run.
+  * *Dead and alive*: whether exchanging the two states turns every run into another run; or
+    does so with a turn or mirror as well, as a rule may look the same with the two states
+    exchanged across a diagonal and neither as they are nor across the diagonal alone. The
+    sign is then half lit.
   * *Cell count*: whether a pattern keeps its number of cells (possibly only relative to the
     vacuum, as in Critters), or a weighted number of them, each cell counting for as many as its
     corner of the block says. The diagram shows where the blocks go by their number of cells,
@@ -378,8 +381,8 @@ Under the card, **Rule properties** unfolds the properties a rule may be asked f
 rule looks the same under; what it conserves (the cells of a pattern or a weight in their place,
 the parity of their number, their momentum); how it runs backwards (as itself, as itself turned
 or mirrored one way or another, with dead and alive exchanged, or both); and the form of the
-table (it only turns blocks, is linear, treats the two states alike, leaves the empty world empty,
-changes at most so many blocks). The line says in a word what is asked for, and holds whether
+table (it only turns blocks, is linear, treats the two states alike, as they are or with a turn
+or mirror, leaves the empty world empty, changes at most so many blocks). The line says in a word what is asked for, and holds whether
 the chips are unfolded or not. What is asked for narrows both of the panel's lists, the ones
 under its tabs.
 
@@ -708,6 +711,11 @@ everywhere else: Critters conserves cells.
 | `inverse=complemented` | run backwards, the rule is itself with dead and alive exchanged: Critters | 46 206 736 | 2 702 047 |
 | `inverse=mirror,complemented` | both: run backwards, the rule is itself seen in a mirror with dead and alive exchanged; so with any turn or mirror | 46 206 736 | 5 379 707 |
 | `complement` | dead and alive are interchangeable | 10 321 920 | 220 923 |
+| `complement=turned` | dead and alive are interchangeable with some turn or mirror, as they may not be as they are: the six families below together, each rule once | 23 934 368 | 1 653 499 |
+| `complement=mirror`, `complement=flip` | dead and alive are interchangeable with that mirror (the same worlds, turned) | 1 105 920 | 207 103 |
+| `complement=diagonal`, `complement=anti-diagonal` | dead and alive are interchangeable with a mirror across that diagonal | 10 321 920 | 1 344 764 |
+| `complement=half-turn` | dead and alive are interchangeable with a half turn | 1 105 920 | 106 096 |
+| `complement=quarter-turn` | dead and alive are interchangeable with a quarter turn | 1536 | 408 |
 | `stable-vacuum` | the empty world stays empty | 15! | 163 459 883 712 |
 | `random` | nothing required: every rule there is | 16! | 552 613 396 971 |
 

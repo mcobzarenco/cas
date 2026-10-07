@@ -56,9 +56,11 @@ const fn chip(name: &'static str, constraint: Constraint, sign: Sign, label: &'s
     Chip { name, constraint, sign, label }
 }
 
-/// The chips, group by group: the turns, the mirrors, what patterns keep, the table. The
-/// mirrors across the diagonals are the mirror's icon, turned to lie along them.
-pub(crate) const CHIPS: [Chip; 16] = [
+/// The chips, group by group: the turns, the mirrors, what patterns keep, the table, and how
+/// the rule runs backwards: as itself, as itself turned or mirrored, with dead and alive
+/// exchanged or not. The mirrors across the diagonals are the mirror's icon, turned to lie
+/// along them.
+pub(crate) const CHIPS: [Chip; 23] = [
     chip("quarter-turn", Constraint::Symmetric(Turn::Quarter), Sign::Written("90°"), ""),
     chip("half-turn", Constraint::Symmetric(Turn::Half), Sign::Written("180°"), ""),
     chip("mirror", Constraint::Symmetric(Turn::Mirror), Sign::Icon(icons::MIRROR), ""),
@@ -71,20 +73,47 @@ pub(crate) const CHIPS: [Chip; 16] = [
     chip("momentum", Constraint::Momentum, Sign::Icon(icons::MOMENTUM), "momentum"),
     chip("turning", Constraint::Turning, Sign::Icon(icons::TURN), "turns blocks"),
     chip("linear", Constraint::Linear, Sign::Icon(icons::LINEAR), "linear"),
-    chip("involution", Constraint::Involution, Sign::Icon(icons::INVERSE), "own inverse"),
     chip("complement", Constraint::Complement, Sign::Icon(icons::STATES), "states alike"),
     chip("stable-vacuum", Constraint::StableVacuum, Sign::Icon(icons::EMPTY), "empty stays empty"),
     chip("sparse", Constraint::Sparse(4), Sign::Written("≤4"), "blocks change"),
+    chip("involution", Constraint::INVOLUTION, Sign::Icon(icons::EQUAL), "the same"),
+    chip("inverse=quarter-turn", inverse(Turn::Quarter), Sign::Written("90°"), ""),
+    chip("inverse=half-turn", inverse(Turn::Half), Sign::Written("180°"), ""),
+    chip("inverse=mirror", inverse(Turn::Mirror), Sign::Icon(icons::MIRROR), ""),
+    chip("inverse=flip", inverse(Turn::Flip), Sign::Icon(icons::FLIP), ""),
+    chip("inverse=diagonal", inverse(Turn::Diagonal), Sign::Turned(icons::MIRROR, -45.0), ""),
+    chip("inverse=anti-diagonal", inverse(Turn::AntiDiagonal), Sign::Turned(icons::MIRROR, 45.0), ""),
+    chip(
+        "inverse=complemented",
+        Constraint::Inverse { through: None, complemented: true },
+        Sign::Icon(icons::STATES),
+        "complemented",
+    ),
 ];
+
+/// Run backwards, the rule is itself seen through the turn or mirror.
+const fn inverse(through: Turn) -> Constraint {
+    Constraint::Inverse { through: Some(through), complemented: false }
+}
+
 const TURNS: std::ops::Range<usize> = 0..2;
 const MIRRORS: std::ops::Range<usize> = 2..6;
 const KEEPS: std::ops::Range<usize> = 6..10;
-const TABLE: std::ops::Range<usize> = 10..16;
+const TABLE: std::ops::Range<usize> = 10..15;
 /// The chip that takes a number.
-const SPARSE: usize = 15;
+const SPARSE: usize = 14;
 /// The chips of which only one can be on: a rule that keeps a weight in the sense of the
 /// second is one that does not keep the number of cells.
 const EITHER: [usize; 2] = [6, 7];
+/// The chips for how the rule runs backwards: as itself or as itself seen through one turn or
+/// mirror, of which only one can be on, and with dead and alive exchanged, which goes with
+/// any of them or alone. Together they make one property.
+const REVERSAL: std::ops::Range<usize> = 15..23;
+const REVERSAL_SEEN: std::ops::Range<usize> = 15..22;
+const REVERSAL_SAME: usize = 15;
+const REVERSAL_TURNS: std::ops::Range<usize> = 16..18;
+const REVERSAL_MIRRORS: std::ops::Range<usize> = 18..22;
+const REVERSAL_COMPLEMENTED: usize = 22;
 
 #[derive(Resource)]
 pub struct Sampler {
@@ -154,13 +183,21 @@ impl Default for Sampler {
 }
 
 impl Sampler {
-    /// The family asked for: the rules with every property whose chip is on.
+    /// The family asked for: the rules with every property whose chip is on. The chips for
+    /// how the rule runs backwards make one property between them.
     pub(crate) fn family(&self) -> Family {
-        let wanted = CHIPS.iter().zip(self.wanted).filter(|(_, wanted)| *wanted);
-        Family::new(wanted.map(|(chip, _)| match chip.constraint {
+        let on = |index: &usize| self.wanted[*index];
+        let plain = (0..REVERSAL.start).filter(on).map(|index| match CHIPS[index].constraint {
             Constraint::Sparse(_) => Constraint::Sparse(self.sparse),
             constraint => constraint,
-        }))
+        });
+        let seen = REVERSAL_SEEN.clone().find(on);
+        let complemented = self.wanted[REVERSAL_COMPLEMENTED];
+        let inverse = (seen.is_some() || complemented).then(|| match seen.map(|index| CHIPS[index].constraint) {
+            Some(Constraint::Inverse { through, .. }) => Constraint::Inverse { through, complemented },
+            _ => Constraint::Inverse { through: None, complemented },
+        });
+        Family::new(plain.chain(inverse))
     }
 
     /// The rules drawn last, in the order of their tables.
@@ -188,12 +225,18 @@ impl Sampler {
         self.revision
     }
 
-    /// Asks for a property, or no longer. The number of cells or a weight in its place:
-    /// asking for one lets go of the other.
+    /// Asks for a property, or no longer. The number of cells or a weight in its place, and
+    /// one way of seeing the rule run backwards or another: asking for one lets go of the
+    /// others.
     fn want(&mut self, index: usize) {
         self.wanted[index] = !self.wanted[index];
-        if self.wanted[index] && EITHER.contains(&index) {
-            for other in EITHER.into_iter().filter(|other| *other != index) {
+        if self.wanted[index] {
+            let others: Vec<usize> = match index {
+                _ if EITHER.contains(&index) => EITHER.to_vec(),
+                _ if REVERSAL_SEEN.contains(&index) => REVERSAL_SEEN.collect(),
+                _ => Vec::new(),
+            };
+            for other in others.into_iter().filter(|other| *other != index) {
                 self.wanted[other] = false;
             }
         }
@@ -378,7 +421,11 @@ impl Plugin for SamplerPlugin {
 /// for and opens and closes the rest, and under it the chips, group by group.
 pub(crate) fn properties_card() -> impl Scene {
     let chips = |range: std::ops::Range<usize>| range.map(chip_scene).collect::<Vec<_>>();
-    let (turns, mirrors, keeps, table) = (chips(TURNS), chips(MIRRORS), chips(KEEPS), chips(TABLE));
+    let (turns, mirrors, keeps) = (chips(TURNS), chips(MIRRORS), chips(KEEPS));
+    // The chip of the sparse rules goes with its steps.
+    let table = chips(TABLE.start..SPARSE);
+    let (same, back_turns, back_mirrors) = (chip_scene(REVERSAL_SAME), chips(REVERSAL_TURNS), chips(REVERSAL_MIRRORS));
+    let complemented = chip_scene(REVERSAL_COMPLEMENTED);
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
@@ -437,13 +484,28 @@ pub(crate) fn properties_card() -> impl Scene {
                     ),
                     tile_label("CONSERVES"),
                     (row() Children [ { keeps } ]),
+                    tile_label("TIME REVERSAL"),
+                    (row() Children [ same, complemented ]),
+                    (row() Children [ label("turned"), { back_turns } ]),
+                    (row() Children [ label("mirrored"), { back_mirrors } ]),
                     tile_label("THE TABLE"),
                     (
                         row()
                         Children [
                             { table },
-                            step("SparseLess", icons::LESS, -1),
-                            step("SparseMore", icons::MORE, 1),
+                            (
+                                // The chip and its steps go on to the next line together.
+                                Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: px(5),
+                                }
+                                Children [
+                                    chip_scene(SPARSE),
+                                    step("SparseLess", icons::LESS, -1),
+                                    step("SparseMore", icons::MORE, 1),
+                                ]
+                            ),
                         ]
                     ),
                 ]
@@ -522,6 +584,15 @@ fn words(text: &'static str) -> impl Scene {
     bsn! {
         caption(text)
         Node { margin: UiRect::horizontal(px(2)) }
+    }
+}
+
+/// A word in front of a line of chips, as wide as the longest, so that the lines' chips are
+/// in a column.
+fn label(text: &'static str) -> impl Scene {
+    bsn! {
+        caption(text)
+        Node { width: px(58), margin: UiRect { left: px(2) }, flex_shrink: 0.0 }
     }
 }
 
@@ -771,5 +842,30 @@ mod tests {
         assert_eq!(named(&sampler.family()), "conserving");
         sampler.want(cells);
         assert!(sampler.family().constraints().is_empty() && sampler.known().is_some());
+    }
+
+    #[test]
+    fn the_rule_run_backwards_is_one_property_however_it_is_seen() {
+        let chip = |name: &str| CHIPS.iter().position(|chip| chip.name == name).unwrap();
+        let mut sampler = Sampler::default();
+        // As itself: an involution. As itself mirrored instead; complemented as well; then
+        // complemented alone, which is as the same complemented.
+        sampler.want(REVERSAL_SAME);
+        assert_eq!(named(&sampler.family()), "involution");
+        sampler.want(chip("inverse=mirror"));
+        assert!(!sampler.wanted[REVERSAL_SAME]);
+        assert_eq!(named(&sampler.family()), "inverse=mirror");
+        sampler.want(REVERSAL_COMPLEMENTED);
+        assert_eq!(named(&sampler.family()), "inverse=mirror,complemented");
+        sampler.want(chip("inverse=mirror"));
+        assert_eq!(named(&sampler.family()), "inverse=complemented");
+        sampler.want(REVERSAL_SAME);
+        assert_eq!(named(&sampler.family()), "inverse=complemented");
+        sampler.want(REVERSAL_COMPLEMENTED);
+        assert_eq!(named(&sampler.family()), "involution");
+        // With the others, last.
+        sampler.want(chip("quarter-turn"));
+        assert_eq!(named(&sampler.family()), "quarter-turn + involution");
+        assert_eq!(CHIPS.len(), REVERSAL.end);
     }
 }

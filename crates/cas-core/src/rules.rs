@@ -676,25 +676,25 @@ impl BlockRule {
     }
 
     pub fn reversed(&self) -> Reversed {
-        // Is the inverse the rule as seen through `transform`, with or without the two states
-        // exchanged as well?
-        let inverse_through = |transform: fn(u8) -> u8, complemented: bool| {
-            let through = |block| {
-                if complemented { complement(transform(block)) } else { transform(block) }
-            };
-            (0..16u8).all(|state| self.inverse[through(state) as usize] == through(self.table[state as usize]))
-        };
         if self.table == self.inverse {
             Reversed::SameRule
-        } else if TURNS_AND_MIRRORS.iter().any(|&turn| inverse_through(turn, false)) {
+        } else if TURNS_AND_MIRRORS.iter().any(|&turn| self.inverse_through(turn, false)) {
             Reversed::Transformed
-        } else if inverse_through(|block| block, true) {
+        } else if self.inverse_through(itself, true) {
             Reversed::Complemented
-        } else if TURNS_AND_MIRRORS.iter().any(|&turn| inverse_through(turn, true)) {
+        } else if TURNS_AND_MIRRORS.iter().any(|&turn| self.inverse_through(turn, true)) {
             Reversed::TransformedAndComplemented
         } else {
             Reversed::DifferentRule
         }
+    }
+
+    /// Is the inverse the rule as seen through `transform`, with or without the two states
+    /// exchanged as well? Run backwards, such a rule is itself seen so: through [`itself`],
+    /// its own inverse.
+    pub fn inverse_through(&self, transform: fn(u8) -> u8, complemented: bool) -> bool {
+        let through = |block| if complemented { complement(transform(block)) } else { transform(block) };
+        (0..16u8).all(|state| self.inverse[through(state) as usize] == through(self.table[state as usize]))
     }
 }
 
@@ -850,6 +850,11 @@ pub fn keeps_weight(table: &[u8; 16], weights: &[u8; 4]) -> bool {
 }
 
 /// Exchange dead and alive.
+/// A block as it is: the transform that does nothing, where one is asked for.
+pub const fn itself(block: u8) -> u8 {
+    block
+}
+
 pub const fn complement(block: u8) -> u8 {
     !block & 0xF
 }

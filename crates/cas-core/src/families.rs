@@ -23,8 +23,8 @@ use std::{
 
 use crate::{
     rules::{
-        BlockRule, Population, TURNS_AND_MIRRORS, anti_transpose, complement, flip, keeps_weight, mirror, popcount,
-        rotate_180, rotate_cw, transpose, weigh, weightings,
+        BlockRule, Population, TURNS_AND_MIRRORS, anti_transpose, complement, flip, itself, keeps_weight, mirror,
+        popcount, rotate_180, rotate_cw, transpose, weigh, weightings,
     },
     universe::Rng,
 };
@@ -79,8 +79,10 @@ pub enum Constraint {
     Momentum,
     /// Exchanging dead and alive turns every run into another run.
     Complement,
-    /// The rule is its own inverse: run backwards, it is the same rule.
-    Involution,
+    /// Run backwards, the rule is itself seen through a turn or mirror, or as it is, with
+    /// dead and alive exchanged or not: its inverse is the rule seen so. As it is and without
+    /// the exchange, the rule is its own inverse, an involution.
+    Inverse { through: Option<Turn>, complemented: bool },
     /// The empty world stays empty.
     StableVacuum,
     /// Every block becomes a turn or a mirror of itself.
@@ -138,7 +140,7 @@ const NAMES: [(&str, Constraint, &str); 16] = [
         "The 228 rules under which patterns keep their momentum, a cell's corner being the way it is going",
     ),
     ("complement", Constraint::Complement, "The rules for which dead and alive are interchangeable"),
-    ("involution", Constraint::Involution, "The rules that are their own inverse"),
+    ("involution", Constraint::INVOLUTION, "The rules that are their own inverse"),
     ("stable-vacuum", Constraint::StableVacuum, "The rules that leave the empty world empty"),
     ("turning", Constraint::Turning, "The 27 648 rules that make every block a turn or a mirror of itself"),
     ("sparse", Constraint::Sparse(4), "The rules that change at most N of the 16 blocks; 4 unless said"),
@@ -167,12 +169,31 @@ pub fn catalogue() -> Vec<(&'static str, &'static str)> {
                  of its block, B top-right, C bottom-left, D bottom-right",
             ));
         }
+        if constraint == Constraint::INVOLUTION {
+            catalogue.push((
+                "inverse=mirror",
+                "The rules that run backwards as themselves seen in a mirror, left to right: Single rotation is one; \
+                 or flip, diagonal, anti-diagonal, half-turn, quarter-turn",
+            ));
+            catalogue.push((
+                "inverse=complemented",
+                "The rules that run backwards as themselves with dead and alive exchanged: Critters is one",
+            ));
+            catalogue.push((
+                "inverse=mirror,complemented",
+                "The rules that run backwards as themselves seen in a mirror and with dead and alive exchanged; and \
+                 so with any turn or mirror",
+            ));
+        }
     }
     catalogue.push(("random", "Every rule there is: nothing is required"));
     catalogue
 }
 
 impl Constraint {
+    /// The rules that are their own inverse.
+    pub const INVOLUTION: Constraint = Constraint::Inverse { through: None, complemented: false };
+
     /// Does the rule have the property? The truth, whatever the search guessed on the way.
     pub fn holds(&self, rule: &BlockRule) -> bool {
         let relative = || rule.relative_to_vacuum();
@@ -191,7 +212,9 @@ impl Constraint {
                 (0..16u8).all(|block| momentum(rotate_180(rule.table()[block as usize])) == momentum(block))
             }),
             Constraint::Complement => rule.is_complement_symmetric(),
-            Constraint::Involution => (0..16).all(|block| table[table[block] as usize] == block as u8),
+            Constraint::Inverse { through, complemented } => {
+                rule.inverse_through(through.map_or(itself as fn(u8) -> u8, Turn::transform), complemented)
+            }
             Constraint::StableVacuum => table[0] == 0,
             Constraint::Turning => (0..16).all(|block| orbit(block as u8) >> table[block] & 1 == 1),
             Constraint::Sparse(most) => (0..16).filter(|&block| table[block] != block as u8).count() <= most as usize,
@@ -200,11 +223,22 @@ impl Constraint {
     }
 }
 
+/// The name a turn or mirror goes by, as a symmetry is asked for.
+fn turn_name(turn: Turn) -> &'static str {
+    let (name, ..) =
+        NAMES.iter().find(|(_, known, _)| *known == Constraint::Symmetric(turn)).expect("every turn has a name");
+    name
+}
+
 impl fmt::Display for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Constraint::Weighted(Some(w)) => write!(f, "weights={},{},{},{}", w[0], w[1], w[2], w[3]),
             Constraint::Sparse(most) => write!(f, "sparse={most}"),
+            Constraint::Inverse { through, complemented } if through.is_some() || complemented => {
+                let parts = through.map(turn_name).into_iter().chain(complemented.then_some("complemented"));
+                write!(f, "inverse={}", parts.collect::<Vec<_>>().join(","))
+            }
             other => {
                 let (name, ..) =
                     NAMES.iter().find(|(_, known, _)| *known == other).expect("every constraint has a name");
@@ -238,6 +272,24 @@ impl FromStr for Constraint {
                             "weights={value:?}: four weights from 1 to 9, top-left, top-right, bottom-left, bottom-right"
                         )),
                     }
+                }
+                "inverse" => {
+                    // A turn or mirror, `complemented`, or a turn or mirror and `complemented`.
+                    let (mut through, mut complemented) = (None, false);
+                    for part in value.split(',').map(str::trim) {
+                        match part.parse::<Constraint>() {
+                            Ok(Constraint::Symmetric(turn)) if through.is_none() => through = Some(turn),
+                            _ if part == "complemented" && !complemented => complemented = true,
+                            _ => {
+                                return Err(format!(
+                                    "inverse={value:?}: how the rule run backwards is the rule: seen through one of \
+                                     quarter-turn, half-turn, mirror, flip, diagonal and anti-diagonal, or \
+                                     complemented, or both, as inverse=mirror,complemented"
+                                ));
+                            }
+                        }
+                    }
+                    Ok(Constraint::Inverse { through, complemented })
                 }
                 other => Err(format!("{other:?} takes no value")),
             };
@@ -443,8 +495,12 @@ impl Family {
     /// across one axis is another after a quarter turn, and a weight of the corners another
     /// weight.
     fn kept_by_turns(&self) -> bool {
+        // A rule that runs backwards as itself turned by a quarter turn one way runs backwards
+        // as itself turned the other way as well, and a half turn is the same from any side.
+        let any_side = |turn: &Turn| matches!(turn, Turn::Quarter | Turn::Half);
         self.constraints.iter().all(|constraint| match constraint {
-            Constraint::Symmetric(turn) => matches!(turn, Turn::Quarter | Turn::Half),
+            Constraint::Symmetric(turn) => any_side(turn),
+            Constraint::Inverse { through, .. } => through.as_ref().is_none_or(any_side),
             Constraint::Weighted(_) => false,
             _ => true,
         })
@@ -791,8 +847,9 @@ impl<'a> Filler<'a> {
     }
 
     /// Gives a block its outcome, with everything that follows from it: the outcomes of the
-    /// blocks tied to it by a symmetry, its own under an involution, its complement's, the
-    /// sums of a linear rule. Returns false if the constraints forbid it.
+    /// blocks tied to it by a symmetry, its complement's, the one the inverse ties to it (of
+    /// an involution, its own), the sums of a linear rule. Returns false if the constraints
+    /// forbid it.
     fn assign(&mut self, block: u8, outcome: u8) -> bool {
         let mut pending = vec![(block, outcome)];
         while let Some((block, outcome)) = pending.pop() {
@@ -817,7 +874,13 @@ impl<'a> Filler<'a> {
                         pending.push((transform(block), transform(outcome)));
                     }
                     Constraint::Complement => pending.push((complement(block), complement(outcome))),
-                    Constraint::Involution => pending.push((outcome, block)),
+                    // The inverse is the rule seen through `see`: the block the outcome is
+                    // seen as goes to the block seen so.
+                    Constraint::Inverse { through, complemented } => {
+                        let transform = through.map_or(itself as fn(u8) -> u8, Turn::transform);
+                        let see = |block| if complemented { complement(transform(block)) } else { transform(block) };
+                        pending.push((see(outcome), see(block)));
+                    }
                     Constraint::Linear if self.table[0] != NONE => {
                         let origin = self.table[0];
                         for other in 0..16u8 {
@@ -1031,6 +1094,51 @@ mod tests {
         assert!(family("involution").holds(&preset("bbm")) && !family("involution").holds(&preset("single-rotation")));
         assert_eq!(family("quarter-turn+involution").count(ENUMERABLE), Some(128));
         assert_eq!(family("quarter-turn+complement").count(ENUMERABLE), Some(128));
+        // How a rule runs backwards: Single rotation as its mirror image, Critters with dead
+        // and alive exchanged, the HPP gas as itself. A rule that runs backwards as itself
+        // seen in a mirror is one whose table followed by the mirror is an involution, so
+        // there are as many such rules as involutions; so for the half turn, so complemented.
+        let single_rotation = preset("single-rotation");
+        for name in ["inverse=mirror", "inverse=flip", "inverse=diagonal", "inverse=anti-diagonal"] {
+            assert!(family(name).holds(&single_rotation), "{name}");
+        }
+        assert!(
+            !family("inverse=half-turn").holds(&single_rotation)
+                && !family("inverse=complemented").holds(&single_rotation)
+        );
+        assert!(
+            family("inverse=complemented").holds(&preset("critters"))
+                && !family("involution").holds(&preset("critters"))
+        );
+        assert!(family("involution").holds(&preset("hpp-gas")) && family("inverse=mirror").holds(&preset("hpp-gas")));
+        // Of the rules that look the same after a quarter turn, as many run backwards as
+        // themselves mirrored as with dead and alive exchanged as well; and the ones that run
+        // backwards as themselves turned are the involutions, since turned they are themselves.
+        assert_eq!(family("quarter-turn+inverse=mirror").count(ENUMERABLE), Some(448));
+        assert_eq!(family("quarter-turn+inverse=mirror,complemented").count(ENUMERABLE), Some(448));
+        assert_eq!(family("quarter-turn+inverse=mirror+involution").count(ENUMERABLE), Some(48));
+        assert_eq!(family("quarter-turn+inverse=complemented").count(ENUMERABLE), Some(128));
+        let sorted = |mut rules: Vec<BlockRule>| {
+            rules.sort_unstable_by(|a, b| a.table().cmp(b.table()));
+            rules
+        };
+        for name in ["quarter-turn+inverse=half-turn", "quarter-turn+inverse=quarter-turn"] {
+            assert_eq!(sorted(family(name).rules()), sorted(family("quarter-turn+involution").rules()), "{name}");
+        }
+        // A rule that runs backwards as itself seen in a mirror is one whose table followed
+        // by the mirror is an involution; with dead and alive exchanged as well, followed by
+        // both. So there are as many of them as there are involutions.
+        let followed_by = |rule: &BlockRule, see: &dyn Fn(u8) -> u8| {
+            BlockRule::new(std::array::from_fn(|block| rule.table()[see(block as u8) as usize])).unwrap()
+        };
+        for rule in family("quarter-turn+inverse=mirror").rules() {
+            assert!(rule.inverse_through(mirror, false) && rule.commutes_with(rotate_cw), "{rule}");
+            assert!(Constraint::INVOLUTION.holds(&followed_by(&rule, &mirror)), "{rule}");
+        }
+        for rule in family("half-turn+inverse=mirror,complemented").sample(30, 3) {
+            assert!(rule.inverse_through(mirror, true), "{rule}");
+            assert!(Constraint::INVOLUTION.holds(&followed_by(&rule, &|block| complement(mirror(block)))), "{rule}");
+        }
         // Cells may be kept relative to a vacuum that is not empty: only a third of these
         // tables leave the empty world empty. Some of the others make the same worlds over a
         // vacuum that flickers, and some make worlds of their own, over a vacuum of stripes.
@@ -1132,6 +1240,10 @@ mod tests {
             "complement",
             "stable-vacuum",
             "sparse=6",
+            "inverse=complemented",
+            "inverse=half-turn",
+            "inverse=quarter-turn",
+            "inverse=quarter-turn,complemented",
         ] {
             let family = family(name);
             assert!(family.kept_by_turns(), "{name}");
@@ -1142,6 +1254,12 @@ mod tests {
             }
         }
         assert!(!family("mirror").kept_by_turns() && !family("weighted").kept_by_turns());
+        assert!(!family("inverse=mirror").kept_by_turns() && !family("inverse=diagonal,complemented").kept_by_turns());
+        // Seen through a quarter turn, a rule of the mirror's family is one of the flip's.
+        let through_the_mirror = family("inverse=mirror");
+        for rule in through_the_mirror.sample(20, 9) {
+            assert!(family("inverse=flip").holds(&rule.seen_through(rotate_cw)), "{rule}");
+        }
     }
 
     #[test]
@@ -1166,12 +1284,25 @@ mod tests {
             assert_eq!(constraint.to_string().parse::<Constraint>(), Ok(constraint));
         }
         assert_eq!(Constraint::Weighted(Some([1, 2, 4, 1])).to_string(), "weights=1,2,4,1");
+        // How the rule runs backwards: a turn or mirror, complemented, or both, in any order.
+        let through = |through, complemented| Constraint::Inverse { through, complemented };
+        assert_eq!("involution".parse::<Constraint>(), Ok(Constraint::INVOLUTION));
+        assert_eq!(Constraint::INVOLUTION.to_string(), "involution");
+        assert_eq!("inverse=mirror".parse::<Constraint>(), Ok(through(Some(Turn::Mirror), false)));
+        assert_eq!("inverse=complemented".parse::<Constraint>(), Ok(through(None, true)));
+        assert_eq!("inverse=complemented, half-turn".parse::<Constraint>(), Ok(through(Some(Turn::Half), true)));
+        assert_eq!(through(Some(Turn::Half), true).to_string(), "inverse=half-turn,complemented");
+        assert_eq!(through(Some(Turn::AntiDiagonal), false).to_string(), "inverse=anti-diagonal");
+        assert_eq!(through(None, true).to_string(), "inverse=complemented");
+        for wrong in ["inverse=", "inverse=same", "inverse=turned", "inverse=mirror,flip", "inverse=conserving"] {
+            assert!(wrong.parse::<Constraint>().is_err(), "{wrong}");
+        }
         // What the help lists can be typed as it stands, with numbers for the letters.
         for (name, _) in catalogue() {
             let typed = name.replace("A,B,C,D", "1,2,4,1").replace('N', "5");
             assert!(Family::parse(&typed).is_ok(), "{name}");
         }
-        assert_eq!(catalogue().len(), NAMES.len() + 2);
+        assert_eq!(catalogue().len(), NAMES.len() + 5);
         // Every rule there is: not to be counted, only sampled.
         assert_eq!(Family::default().count(ENUMERABLE), None);
         assert_eq!(Family::default().sample(5, 1), Family::default().sample(5, 1));

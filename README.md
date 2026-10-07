@@ -382,19 +382,21 @@ unfolded or not. What is asked for narrows both of the panel's lists, the ones u
 the words typed: in their name, their tags, their note, where they are from, or their table. What
 a rule has counts too, by the names `cas-search` takes (`conserving`, `half-turn`, `linear`, ...).
 
-**Generate** draws rules at random with all that is asked for: a sample of ten, thirty or a
-hundred, each rule once and in the order of their tables, so that two samples of a small family
-show the same rules in the same places. A click puts one on the grid, and `↑` and `↓` go through
-them as well. Asked for nothing, a rule is any of the 16! permutations, nearly all of which turn
-everything to noise. Over the button it says how many rules have all that is asked for and how
-many of them are canonical, one for every world they make. The counting goes on while the world
-runs, through up to 250 million rules; a family whose rules leave the empty world empty is counted
-by its symmetry, and every rule there is was counted once: 552 613 396 971 canonical rules of
-16!. Some properties have nothing in common, and then no rule is drawn. A family of up to two
-million rules is kept, and the sample is drawn evenly among them, all of them when they are no
-more than the sample, with *In canonical form* among the canonical ones instead. Of a larger
-family tables are filled in at random under the properties, which is not even: every outcome a
-block can have is as likely as any other, however many rules lie behind it.
+**Generate** shows rules drawn at random with all that is asked for: a sample of ten, thirty or
+a hundred, each rule once and in the order of their tables, so that two samples of a small
+family show the same rules in the same places. One is drawn as soon as the tab opens and
+whenever what is asked for changes, and **Generate** draws another. A click puts a rule on the
+grid, and `↑` and `↓` go through them as well. Asked for nothing, a rule is any of the 16!
+permutations, nearly all of which turn everything to noise. Under the button it says how many
+rules have all that is asked for and how many of them are canonical, one for every world they
+make. The counting goes on while the world runs, through up to 250 million rules; a family whose
+rules leave the empty world empty is counted by its symmetry, and every rule there is was counted
+once: 552 613 396 971 canonical rules of 16!. Some properties have nothing in common, and then no
+rule is drawn. A family of up to two million rules is kept, and the sample is drawn evenly among
+them, all of them when they are no more than the sample, with *Canonical* among the canonical
+ones instead; a sample drawn while the family was still being counted is drawn again then. Of a
+larger family tables are filled in at random under the properties, which is not even: every
+outcome a block can have is as likely as any other, however many rules lie behind it.
 
 The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a plain
 text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags and a note,

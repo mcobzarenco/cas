@@ -334,7 +334,10 @@ back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-
     that keeps a weighted count it shows the four weights in a block instead.
   * *Time reversal*: how the rule run backwards relates to the rule: the same (an equals sign), its
     mirror image (the two triangles of a mirror), with the two states exchanged (the half-filled
-    circle), both, or none of it (the sign for unequal).
+    circle), both, or none of it (the sign for unequal). Two are said when both hold and neither
+    follows from the symmetries shown: a rule that runs backwards as itself complemented and as
+    itself mirrored as well looks the same mirrored with the two states exchanged, which no
+    other tile shows. The sign is the first's.
   * *Blocks*: how many of the sixteen blocks the rule changes, lit in a small copy of the cases
     above, and whether each only becomes a turn of itself, as under Single Rotation.
   * *Momentum*: whether patterns keep their momentum, taking a cell's corner of its block for

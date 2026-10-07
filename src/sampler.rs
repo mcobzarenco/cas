@@ -335,7 +335,8 @@ impl Sampler {
     /// Draws the sample: so many rules with all that is asked for, each once, in the order of
     /// their tables. Evenly from a family that was kept, all of it when it is no larger than
     /// the sample; by filling in tables at random otherwise, which is not even, until the
-    /// draws give nothing new for a while.
+    /// draws give nothing new for a while. In canonical form each world is one rule, the
+    /// first of its tables that has all that is asked for.
     fn generate(&mut self, rng: &mut Rng) {
         let (want, _) = SIZES[self.size];
         let kept = match self.known() {
@@ -347,6 +348,17 @@ impl Sampler {
             Some(from) => (some_of(from, want, rng), from.len() <= want),
             None => (self.filled(want, rng), false),
         };
+        // In canonical form, one rule for each world: the first table of the world that has
+        // all that is asked for, since the canonical form itself may not, where what is
+        // asked for is the table's own rather than the world's.
+        if self.canonical {
+            let family = self.family();
+            for rule in &mut drawn {
+                if let Some(first) = family.first_of_world(rule) {
+                    *rule = first;
+                }
+            }
+        }
         drawn.sort_by(|a, b| a.table().cmp(b.table()));
         self.settled = !matches!(self.known(), None | Some(Count::Counting(_)));
         self.sample = drawn;
@@ -839,6 +851,25 @@ mod tests {
         sampler.ask();
         sampler.generate(&mut rng);
         assert!(sampler.settled && !sampler.wants_sample() && sampler.sample().len() == 100);
+    }
+
+    #[test]
+    fn in_canonical_form_a_sample_still_has_what_is_asked_for() {
+        let mut sampler = Sampler::default();
+        let mut rng = Rng::new(3);
+        sampler.want(REVERSAL_SAME);
+        sampler.want(REVERSAL_COMPLEMENTED);
+        sampler.set_canonical(true);
+        sampler.size = 1;
+        sampler.generate(&mut rng);
+        let family = sampler.family();
+        assert_eq!(named(&family), "inverse=complemented");
+        assert_eq!(sampler.sample().len(), 30);
+        // Each the first table of its world that runs backwards as itself complemented, which
+        // the world's canonical form need not.
+        for rule in sampler.sample() {
+            assert!(family.holds(rule) && family.first_of_world(rule).as_ref() == Some(rule), "{rule}");
+        }
     }
 
     #[test]

@@ -540,6 +540,24 @@ impl Family {
         })
     }
 
+    /// The first table, in order, of the rule's world that the family has: the world in
+    /// canonical form as far as the family goes. It is the canonical form itself unless what
+    /// the family asks for is the table's own rather than the world's, as running backwards
+    /// as itself is: then the canonical form may be the world begun at another generation of
+    /// its vacuum's cycle, which does not. None where no table of the world is the family's.
+    pub fn first_of_world(&self, rule: &BlockRule) -> Option<BlockRule> {
+        let is_one =
+            |table: &[u8; 16]| self.holds(&BlockRule::new(*table).expect("a rule of the same world is a rule"));
+        let mut first: Option<[u8; 16]> = None;
+        rule.each_in_world(|table| {
+            if first.is_none_or(|first| *table < first) && is_one(table) {
+                first = Some(*table);
+            }
+            true
+        });
+        first.map(|table| BlockRule::new(table).expect("a rule of the same world is a rule"))
+    }
+
     /// Is the rule the first, in table order, of the rules of its world that the family has?
     /// Counting those counts the worlds of the family, each once.
     fn first_of_its_world(&self, rule: &BlockRule) -> bool {
@@ -1420,6 +1438,23 @@ mod tests {
                 .iter()
                 .all(|rule| family("complement=turned+half-turn").holds(rule))
         );
+    }
+
+    #[test]
+    fn the_first_table_of_a_world_that_the_family_has() {
+        // Drawn among the rules that run backwards as themselves complemented, this world's
+        // canonical form is the world begun at another generation of its vacuum's cycle,
+        // which does not; the first table that does is another one of the world.
+        let canonical: BlockRule = "1,3,14,2,5,7,13,6,4,11,10,0,12,15,9,8".parse().unwrap();
+        let complemented = family("inverse=complemented");
+        assert!(canonical.canonical() == canonical && !complemented.holds(&canonical));
+        let first = complemented.first_of_world(&canonical).unwrap();
+        assert_eq!(first.to_string(), "1,6,3,7,9,8,11,10,12,14,0,2,13,4,15,5");
+        assert!(complemented.holds(&first) && first.canonical() == canonical);
+        assert_eq!(complemented.first_of_world(&first), Some(first.clone()));
+        // What is the world's, every table of it has: the canonical form is the first.
+        assert_eq!(family("conserving").first_of_world(&preset("critters")), Some(preset("critters").canonical()));
+        assert_eq!(family("involution").first_of_world(&preset("single-rotation")), None);
     }
 
     #[test]

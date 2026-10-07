@@ -155,6 +155,13 @@ click LibraryRow0; wait 4
 key e; wait 4; expect_text FindingReversed the rule complemented; key e; wait 4
 until expect_text GenerateCount 46 206 736 rules · 2 702 047 canonical
 shot library-7-time-reversal
+# In canonical form, one rule for each world, with the property still: the first table of
+# the world that has it, since the canonical form itself may be the world begun at another
+# generation of its vacuum's cycle, which runs backwards as something else.
+click GenerateCanonical; wait 4
+click LibraryRow0; wait 4
+key e; wait 4; expect_text FindingReversed the rule complemented; key e; wait 4
+click GenerateCanonical; wait 3
 # Complemented is of the rule seen some way: letting go of the way lets go of it too, and
 # asked for alone it is of the rule as it is.
 click Has:involution; wait 3

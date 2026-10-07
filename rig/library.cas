@@ -135,9 +135,10 @@ click LibraryRow0; wait 4
 key e; wait 4; expect_text FindingReversed the same rule; key e; wait 4
 until expect_text GenerateCount 46 206 736 rules · 4 538 049 canonical
 # How a rule runs backwards: as itself, as above; as itself seen in a mirror, as Single
-# rotation does; with dead and alive exchanged as well, or that alone, as Critters does. One
-# way of seeing it lets go of another, and the exchange goes with any or alone. As many rules
-# run backwards as themselves mirrored as there are involutions, and as many complemented.
+# rotation does; with dead and alive exchanged as well, or as itself with that exchange, as
+# Critters does. One way of seeing it lets go of another, and the exchange goes with any. As
+# many rules run backwards as themselves mirrored as there are involutions, and as many
+# complemented.
 click Has:inverse=mirror; wait 4
 expect_text LibraryFamily inverse=mirror
 click LibraryRow0; wait 4
@@ -147,13 +148,22 @@ click Has:inverse=complemented; wait 4
 expect_text LibraryFamily inverse=mirror,complemented
 click LibraryRow0; wait 4
 key e; wait 4; expect_text FindingReversed the rule mirrored and complemented; key e; wait 4
-click Has:inverse=mirror; wait 4
+click Has:involution; wait 4
 expect_text LibraryFamily inverse=complemented
+expect_checked Has:inverse=complemented on
 click LibraryRow0; wait 4
 key e; wait 4; expect_text FindingReversed the rule complemented; key e; wait 4
 until expect_text GenerateCount 46 206 736 rules · 2 702 047 canonical
 shot library-7-time-reversal
-click Has:inverse=complemented; click Has:stable-vacuum; wait 3
+# Complemented is of the rule seen some way: letting go of the way lets go of it too, and
+# asked for alone it is of the rule as it is.
+click Has:involution; wait 3
+expect_text LibraryFamily any rule there is
+expect_checked Has:inverse=complemented off
+click Has:inverse=complemented; wait 3
+expect_checked Has:involution on
+expect_text LibraryFamily inverse=complemented
+click Has:involution; click Has:stable-vacuum; wait 3
 until expect_text GenerateCount 1 307 674 368 000 rules · 163 459 883 712 canonical
 click Has:stable-vacuum; click LibraryProperties; wait 3
 click CollectionTab; wait 3; expect_checked CollectionTab on

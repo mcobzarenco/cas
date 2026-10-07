@@ -191,10 +191,9 @@ impl Sampler {
             Constraint::Sparse(_) => Constraint::Sparse(self.sparse),
             constraint => constraint,
         });
-        let seen = REVERSAL_SEEN.clone().find(on);
         let complemented = self.wanted[REVERSAL_COMPLEMENTED];
-        let inverse = (seen.is_some() || complemented).then(|| match seen.map(|index| CHIPS[index].constraint) {
-            Some(Constraint::Inverse { through, .. }) => Constraint::Inverse { through, complemented },
+        let inverse = REVERSAL_SEEN.clone().find(on).map(|seen| match CHIPS[seen].constraint {
+            Constraint::Inverse { through, .. } => Constraint::Inverse { through, complemented },
             _ => Constraint::Inverse { through: None, complemented },
         });
         Family::new(plain.chain(inverse))
@@ -227,7 +226,8 @@ impl Sampler {
 
     /// Asks for a property, or no longer. The number of cells or a weight in its place, and
     /// one way of seeing the rule run backwards or another: asking for one lets go of the
-    /// others.
+    /// others. Complemented is of the rule seen some way: asked for alone it is of the rule
+    /// as it is, and letting go of the way lets go of it too.
     fn want(&mut self, index: usize) {
         self.wanted[index] = !self.wanted[index];
         if self.wanted[index] {
@@ -239,6 +239,11 @@ impl Sampler {
             for other in others.into_iter().filter(|other| *other != index) {
                 self.wanted[other] = false;
             }
+            if index == REVERSAL_COMPLEMENTED && !REVERSAL_SEEN.clone().any(|seen| self.wanted[seen]) {
+                self.wanted[REVERSAL_SAME] = true;
+            }
+        } else if REVERSAL_SEEN.contains(&index) {
+            self.wanted[REVERSAL_COMPLEMENTED] = false;
         }
         self.changed();
     }
@@ -848,8 +853,9 @@ mod tests {
     fn the_rule_run_backwards_is_one_property_however_it_is_seen() {
         let chip = |name: &str| CHIPS.iter().position(|chip| chip.name == name).unwrap();
         let mut sampler = Sampler::default();
-        // As itself: an involution. As itself mirrored instead; complemented as well; then
-        // complemented alone, which is as the same complemented.
+        // As itself: an involution. As itself mirrored instead; complemented as well; as
+        // itself again, complemented still; then no way at all, which lets go of the
+        // complement as well.
         sampler.want(REVERSAL_SAME);
         assert_eq!(named(&sampler.family()), "involution");
         sampler.want(chip("inverse=mirror"));
@@ -857,9 +863,13 @@ mod tests {
         assert_eq!(named(&sampler.family()), "inverse=mirror");
         sampler.want(REVERSAL_COMPLEMENTED);
         assert_eq!(named(&sampler.family()), "inverse=mirror,complemented");
-        sampler.want(chip("inverse=mirror"));
+        sampler.want(REVERSAL_SAME);
         assert_eq!(named(&sampler.family()), "inverse=complemented");
         sampler.want(REVERSAL_SAME);
+        assert!(sampler.family().constraints().is_empty() && !sampler.wanted[REVERSAL_COMPLEMENTED]);
+        // Complemented alone is of the rule as it is, and says so.
+        sampler.want(REVERSAL_COMPLEMENTED);
+        assert!(sampler.wanted[REVERSAL_SAME]);
         assert_eq!(named(&sampler.family()), "inverse=complemented");
         sampler.want(REVERSAL_COMPLEMENTED);
         assert_eq!(named(&sampler.family()), "involution");

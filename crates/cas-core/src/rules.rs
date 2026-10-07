@@ -675,18 +675,55 @@ impl BlockRule {
         self.relative_to_vacuum().iter().enumerate().map(later).collect()
     }
 
+    /// How the rule run backwards relates to the rule: the first of its
+    /// [`BlockRule::reversals`].
     pub fn reversed(&self) -> Reversed {
-        if self.table == self.inverse {
-            Reversed::SameRule
-        } else if TURNS_AND_MIRRORS.iter().any(|&turn| self.inverse_through(turn, false)) {
-            Reversed::Transformed
-        } else if self.inverse_through(itself, true) {
-            Reversed::Complemented
-        } else if TURNS_AND_MIRRORS.iter().any(|&turn| self.inverse_through(turn, true)) {
-            Reversed::TransformedAndComplemented
-        } else {
-            Reversed::DifferentRule
+        self.reversals().first().copied().unwrap_or(Reversed::DifferentRule)
+    }
+
+    /// Every way the rule run backwards is the rule as the eye may see it, as far as the
+    /// symmetries shown elsewhere do not give it already: at most two, in the order of
+    /// [`Reversed`], and none for a different rule. The ways of seeing the rule as its own
+    /// inverse are any one of them seen through each symmetry of the rule in turn. Those
+    /// through the turns and mirrors the rule has, and through the exchange of the two states
+    /// if it has that, say nothing new; what is left is a second way only when the rule has a
+    /// symmetry that is a turn or mirror and the exchange together, which nothing else shows.
+    pub fn reversals(&self) -> Vec<Reversed> {
+        // The sixteen ways of seeing the rule, in the order of the kinds: as it is and
+        // through the seven turns and mirrors (by their places), with the two states as they
+        // are, then exchanged.
+        let ways = [false, true].into_iter().flat_map(|complemented| {
+            std::iter::once(None).chain((0..TURNS_AND_MIRRORS.len()).map(Some)).map(move |turn| (turn, complemented))
+        });
+        let seen = |turn: Option<usize>| turn.map_or(itself as fn(u8) -> u8, |turn| TURNS_AND_MIRRORS[turn]);
+        let as_table = |turn: Option<usize>| -> [u8; 16] { std::array::from_fn(|block| seen(turn)(block as u8)) };
+        let mut holding: Vec<(Option<usize>, bool)> =
+            ways.filter(|&(turn, complemented)| self.inverse_through(seen(turn), complemented)).collect();
+        let mut found = Vec::new();
+        while let Some(&(turn, complemented)) = holding.first() {
+            found.push(match (turn.is_some(), complemented) {
+                (false, false) => Reversed::SameRule,
+                (true, false) => Reversed::Transformed,
+                (false, true) => Reversed::Complemented,
+                (true, true) => Reversed::TransformedAndComplemented,
+            });
+            // The ways that are this one seen through a symmetry shown elsewhere say no more:
+            // this one's turn undone and the other's done is a turn the rule has, and the two
+            // exchange the states alike, or the rule looks the same exchanged.
+            let first = as_table(turn);
+            let mut undone = [0u8; 16];
+            for (block, &to) in first.iter().enumerate() {
+                undone[to as usize] = block as u8;
+            }
+            holding.retain(|&(other, exchanged)| {
+                let through = as_table(other);
+                let composed: [u8; 16] = std::array::from_fn(|block| undone[through[block] as usize]);
+                let had =
+                    (0..16).all(|block| self.table[composed[block] as usize] == composed[self.table[block] as usize]);
+                !(had && (exchanged == complemented || self.is_complement_symmetric()))
+            });
         }
+        found
     }
 
     /// Is the inverse the rule as seen through `transform`, with or without the two states
@@ -1363,6 +1400,22 @@ mod tests {
     #[test]
     fn reversal_is_classified() {
         assert_eq!(BlockRule::identity().reversed(), Reversed::SameRule);
+        // Run backwards, this rule is itself with dead and alive exchanged, and itself seen
+        // across a diagonal as well: it looks the same across that diagonal with the two
+        // states exchanged, which neither its symmetry nor the exchange alone shows. Both
+        // are said. Critters runs backwards as itself complemented, and turned and
+        // complemented too, which its turns give: one way. The identity is its own inverse
+        // every way: one way.
+        let hidden: BlockRule = "0,1,2,5,4,10,8,9,6,7,12,11,3,13,14,15".parse().unwrap();
+        assert_eq!(hidden.reversals(), [Reversed::Transformed, Reversed::Complemented]);
+        assert!(hidden.inverse_through(transpose, false) && hidden.inverse_through(itself, true));
+        assert!(hidden.symmetry() == Symmetry::None && !hidden.is_complement_symmetric());
+        assert!((0..16u8).all(|block| hidden.table[complement(transpose(block)) as usize]
+            == complement(transpose(hidden.table[block as usize]))));
+        assert_eq!(preset("critters").reversals(), [Reversed::Complemented]);
+        assert_eq!(BlockRule::identity().reversals(), [Reversed::SameRule]);
+        assert_eq!(preset("single-rotation").reversals(), [Reversed::Transformed]);
+        assert_eq!(preset("tron").reversals(), [Reversed::SameRule]);
         // A three-cycle of single cells is not its own inverse; a mirror that exchanges two of
         // its blocks runs it the other way.
         let mut cycle = BlockRule::identity();

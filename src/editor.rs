@@ -275,13 +275,21 @@ fn reversed_formula(rule: &BlockRule) -> String {
     }
 }
 
-fn reversed(rule: &BlockRule) -> &'static str {
-    match rule.reversed() {
+/// The relation of the rule run backwards to the rule, in words; a second way it has that
+/// the symmetries shown do not give is said too, short: "the rule turned or mirrored, or
+/// complemented".
+fn reversed(rule: &BlockRule) -> String {
+    let said = |way: Reversed| match way {
         Reversed::SameRule => "the same rule",
         Reversed::Transformed => "the rule turned or mirrored",
         Reversed::Complemented => "the rule complemented",
         Reversed::TransformedAndComplemented => "the rule mirrored and complemented",
         Reversed::DifferentRule => "a different rule",
+    };
+    match rule.reversals()[..] {
+        [] => said(Reversed::DifferentRule).to_string(),
+        [way] => said(way).to_string(),
+        [first, second, ..] => format!("{}, or {}", said(first), said(second).trim_start_matches("the rule ")),
     }
 }
 
@@ -824,7 +832,7 @@ fn sync_findings(
             Finding::States => states(rule).to_string(),
             Finding::CellCount => population(rule),
             Finding::Weight(corner) => weights.map_or(String::new(), |weights| weights[*corner as usize].to_string()),
-            Finding::Reversed => reversed(rule).to_string(),
+            Finding::Reversed => reversed(rule),
             Finding::ReversedFormula => reversed_formula(rule),
             Finding::Vacuum => vacuum_words(rule),
             Finding::Blocks => blocks(rule),

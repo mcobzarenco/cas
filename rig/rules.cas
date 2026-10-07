@@ -85,6 +85,11 @@ expect_text FindingBlocks 14 of 16 change, each turned
 expect_text FindingLinear patterns do not superpose
 rule swap-on-diagonal; wait 3
 expect_text FindingLinear patterns superpose
+# Run backwards, this rule is itself complemented, and itself seen across a diagonal as
+# well, which no symmetry of its own gives: both are said.
+rule 0,1,2,5,4,10,8,9,6,7,12,11,3,13,14,15; wait 3
+expect_text FindingReversed the rule turned or mirrored, or complemented
+expect_text FindingStates not interchangeable
 rule tron; wait 3; expect_text FindingBlocks 2 of 16 change
 shot rules-9-properties
 key e; wait 4; shot rules-10-editor-closed

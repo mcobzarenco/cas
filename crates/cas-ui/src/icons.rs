@@ -29,6 +29,8 @@ pub const LINEAR: &str = "\u{e3d6}";
 pub const INVERSE: &str = "\u{e0a0}";
 /// The two states, exchanged.
 pub const STATES: &str = "\u{e18c}";
+/// The two states exchanged with a mirror: the sign of states alike after a turn or mirror.
+pub const STATES_TURNED: &str = "\u{e18c}\u{ed6a}";
 /// The empty world.
 pub const EMPTY: &str = "\u{edbc}";
 pub const EQUAL: &str = "\u{e21c}";
@@ -61,7 +63,7 @@ pub const PIN: &str = "\u{e3e2}";
 pub const KEEP: &str = "\u{e0ea}";
 
 /// Every icon with its name, as the gallery shows them.
-pub const ALL: [(&str, &str); 35] = [
+pub const ALL: [(&str, &str); 36] = [
     ("TURN", TURN),
     ("MIRROR", MIRROR),
     ("FLIP", FLIP),
@@ -72,6 +74,7 @@ pub const ALL: [(&str, &str); 35] = [
     ("LINEAR", LINEAR),
     ("INVERSE", INVERSE),
     ("STATES", STATES),
+    ("STATES_TURNED", STATES_TURNED),
     ("EMPTY", EMPTY),
     ("EQUAL", EQUAL),
     ("UNEQUAL", UNEQUAL),

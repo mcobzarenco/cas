@@ -60,7 +60,7 @@ const fn chip(name: &'static str, constraint: Constraint, sign: Sign, label: &'s
 /// the rule runs backwards: as itself, as itself turned or mirrored, with dead and alive
 /// exchanged or not. The mirrors across the diagonals are the mirror's icon, turned to lie
 /// along them.
-pub(crate) const CHIPS: [Chip; 23] = [
+pub(crate) const CHIPS: [Chip; 24] = [
     chip("quarter-turn", Constraint::Symmetric(Turn::Quarter), Sign::Written("90°"), ""),
     chip("half-turn", Constraint::Symmetric(Turn::Half), Sign::Written("180°"), ""),
     chip("mirror", Constraint::Symmetric(Turn::Mirror), Sign::Icon(icons::MIRROR), ""),
@@ -74,6 +74,12 @@ pub(crate) const CHIPS: [Chip; 23] = [
     chip("turning", Constraint::Turning, Sign::Icon(icons::TURN), "turns blocks"),
     chip("linear", Constraint::Linear, Sign::Icon(icons::LINEAR), "linear"),
     chip("complement", Constraint::Complement, Sign::Icon(icons::STATES), "states alike"),
+    chip(
+        "complement=turned",
+        Constraint::ComplementTurned(None),
+        Sign::Icon(icons::STATES_TURNED),
+        "states alike, turned or mirrored",
+    ),
     chip("stable-vacuum", Constraint::StableVacuum, Sign::Icon(icons::EMPTY), "empty stays empty"),
     chip("sparse", Constraint::Sparse(4), Sign::Written("≤4"), "blocks change"),
     chip("involution", Constraint::INVOLUTION, Sign::Icon(icons::EQUAL), "the same"),
@@ -99,21 +105,21 @@ const fn inverse(through: Turn) -> Constraint {
 const TURNS: std::ops::Range<usize> = 0..2;
 const MIRRORS: std::ops::Range<usize> = 2..6;
 const KEEPS: std::ops::Range<usize> = 6..10;
-const TABLE: std::ops::Range<usize> = 10..15;
+const TABLE: std::ops::Range<usize> = 10..16;
 /// The chip that takes a number.
-const SPARSE: usize = 14;
+const SPARSE: usize = 15;
 /// The chips of which only one can be on: a rule that keeps a weight in the sense of the
 /// second is one that does not keep the number of cells.
 const EITHER: [usize; 2] = [6, 7];
 /// The chips for how the rule runs backwards: as itself or as itself seen through one turn or
 /// mirror, of which only one can be on, and with dead and alive exchanged, which goes with
 /// any of them or alone. Together they make one property.
-const REVERSAL: std::ops::Range<usize> = 15..23;
-const REVERSAL_SEEN: std::ops::Range<usize> = 15..22;
-const REVERSAL_SAME: usize = 15;
-const REVERSAL_TURNS: std::ops::Range<usize> = 16..18;
-const REVERSAL_MIRRORS: std::ops::Range<usize> = 18..22;
-const REVERSAL_COMPLEMENTED: usize = 22;
+const REVERSAL: std::ops::Range<usize> = 16..24;
+const REVERSAL_SEEN: std::ops::Range<usize> = 16..23;
+const REVERSAL_SAME: usize = 16;
+const REVERSAL_TURNS: std::ops::Range<usize> = 17..19;
+const REVERSAL_MIRRORS: std::ops::Range<usize> = 19..23;
+const REVERSAL_COMPLEMENTED: usize = 23;
 
 #[derive(Resource)]
 pub struct Sampler {

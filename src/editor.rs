@@ -214,8 +214,16 @@ pub fn describe(rule: &BlockRule) -> String {
     )
 }
 
+/// Whether dead and alive are interchangeable: as they are, or only with a turn or mirror,
+/// which no symmetry of the rule alone shows.
 fn states(rule: &BlockRule) -> &'static str {
-    if rule.is_complement_symmetric() { "interchangeable" } else { "not interchangeable" }
+    if rule.is_complement_symmetric() {
+        "interchangeable"
+    } else if Constraint::ComplementTurned(None).holds(rule) {
+        "interchangeable with a turn or mirror"
+    } else {
+        "not interchangeable"
+    }
 }
 
 fn population(rule: &BlockRule) -> String {
@@ -808,7 +816,15 @@ fn sync_findings(
     }
     for (lamp, mut color) in &mut signs {
         if let Lamp::Has(property) = *lamp {
-            color.0 = if property.holds(rule) { ALIVE } else { palette::GRAY_3 };
+            // The two states alike only with a turn or mirror: half lit.
+            let nearly = property == Constraint::Complement && Constraint::ComplementTurned(None).holds(rule);
+            color.0 = if property.holds(rule) {
+                ALIVE
+            } else if nearly {
+                ALIVE.with_alpha(0.45)
+            } else {
+                palette::GRAY_3
+            };
         }
     }
     let weights = match rule.population() {

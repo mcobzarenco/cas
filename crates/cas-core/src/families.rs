@@ -79,6 +79,11 @@ pub enum Constraint {
     Momentum,
     /// Exchanging dead and alive turns every run into another run.
     Complement,
+    /// Exchanging dead and alive and turning or mirroring the plane together turns every run
+    /// into another run: by this turn or mirror, or by some turn or mirror given none. The
+    /// rule looks the same with the two states exchanged after a turn or mirror, though it
+    /// may not as they are, nor after that turn or mirror alone.
+    ComplementTurned(Option<Turn>),
     /// Run backwards, the rule is itself seen through a turn or mirror, or as it is, with
     /// dead and alive exchanged or not: its inverse is the rule seen so. As it is and without
     /// the exchange, the rule is its own inverse, an involution.
@@ -95,7 +100,7 @@ pub enum Constraint {
 
 /// The names the constraints go by, and what each says of its rules. [`Constraint::Weighted`]
 /// with weights and [`Constraint::Sparse`] take a value after `=`.
-const NAMES: [(&str, Constraint, &str); 16] = [
+const NAMES: [(&str, Constraint, &str); 17] = [
     (
         "quarter-turn",
         Constraint::Symmetric(Turn::Quarter),
@@ -140,6 +145,12 @@ const NAMES: [(&str, Constraint, &str); 16] = [
         "The 228 rules under which patterns keep their momentum, a cell's corner being the way it is going",
     ),
     ("complement", Constraint::Complement, "The rules for which dead and alive are interchangeable"),
+    (
+        "complement=turned",
+        Constraint::ComplementTurned(None),
+        "The rules for which dead and alive are interchangeable with some turn or mirror, as they may not be as they \
+         are",
+    ),
     ("involution", Constraint::INVOLUTION, "The rules that are their own inverse"),
     ("stable-vacuum", Constraint::StableVacuum, "The rules that leave the empty world empty"),
     ("turning", Constraint::Turning, "The 27 648 rules that make every block a turn or a mirror of itself"),
@@ -167,6 +178,13 @@ pub fn catalogue() -> Vec<(&'static str, &'static str)> {
                 "weights=A,B,C,D",
                 "The rules under which patterns keep their cells weighted so: a cell counts A in the top-left corner \
                  of its block, B top-right, C bottom-left, D bottom-right",
+            ));
+        }
+        if constraint == Constraint::Complement {
+            catalogue.push((
+                "complement=mirror",
+                "The rules for which dead and alive are interchangeable with that mirror, left to right; or quarter-turn, \
+                 half-turn, flip, diagonal, anti-diagonal",
             ));
         }
         if constraint == Constraint::INVOLUTION {
@@ -212,6 +230,10 @@ impl Constraint {
                 (0..16u8).all(|block| momentum(rotate_180(rule.table()[block as usize])) == momentum(block))
             }),
             Constraint::Complement => rule.is_complement_symmetric(),
+            Constraint::ComplementTurned(Some(turn)) => rule.looks_the_same_through(turn.transform(), true),
+            Constraint::ComplementTurned(None) => {
+                TURNS_AND_MIRRORS.iter().any(|&turn| rule.looks_the_same_through(turn, true))
+            }
             Constraint::Inverse { through, complemented } => {
                 rule.inverse_through(through.map_or(itself as fn(u8) -> u8, Turn::transform), complemented)
             }
@@ -239,6 +261,7 @@ impl fmt::Display for Constraint {
                 let parts = through.map(turn_name).into_iter().chain(complemented.then_some("complemented"));
                 write!(f, "inverse={}", parts.collect::<Vec<_>>().join(","))
             }
+            Constraint::ComplementTurned(Some(turn)) => write!(f, "complement={}", turn_name(turn)),
             other => {
                 let (name, ..) =
                     NAMES.iter().find(|(_, known, _)| *known == other).expect("every constraint has a name");
@@ -273,6 +296,14 @@ impl FromStr for Constraint {
                         )),
                     }
                 }
+                "complement" => match value.trim().parse::<Constraint>() {
+                    Ok(Constraint::Symmetric(turn)) => Ok(Constraint::ComplementTurned(Some(turn))),
+                    _ if value.trim() == "turned" => Ok(Constraint::ComplementTurned(None)),
+                    _ => Err(format!(
+                        "complement={value:?}: with which turn or mirror dead and alive are interchangeable, one of \
+                         quarter-turn, half-turn, mirror, flip, diagonal and anti-diagonal, or turned for any"
+                    )),
+                },
                 "inverse" => {
                     // A turn or mirror, `complemented`, or a turn or mirror and `complemented`.
                     let (mut through, mut complemented) = (None, false);
@@ -388,15 +419,17 @@ impl Family {
         if self.constraints.is_empty() {
             return None;
         }
-        if self.constraints.contains(&Constraint::Weighted(None)) {
-            return Some(self.rules().len()).filter(|count| *count <= cap);
-        }
         let mut count = 0;
-        Filler::new(&self.constraints, None).fill(&mut |_| {
-            count += 1;
-            count < cap
-        });
-        Some(count).filter(|count| *count < cap)
+        for (family, counts) in self.each_choice() {
+            let whole = Filler::new(&family.constraints, None).fill(&mut |rule| {
+                count += counts(&rule) as usize;
+                count < cap
+            });
+            if !whole {
+                return None;
+            }
+        }
+        Some(count)
     }
 
     /// How many rules the family has, and how many canonical rules, as far as `threads`
@@ -501,6 +534,7 @@ impl Family {
         self.constraints.iter().all(|constraint| match constraint {
             Constraint::Symmetric(turn) => any_side(turn),
             Constraint::Inverse { through, .. } => through.as_ref().is_none_or(any_side),
+            Constraint::ComplementTurned(turn) => turn.as_ref().is_none_or(any_side),
             Constraint::Weighted(_) => false,
             _ => true,
         })
@@ -527,19 +561,35 @@ impl Family {
         report: bool,
         found: &(dyn Fn(&BlockRule) + Sync),
     ) -> Option<u64> {
-        // Any weighting will do: the families of every weighting but the plain one, each
-        // rule counted with the lightest weighting it keeps.
-        let Some(place) = self.constraints.iter().position(|c| *c == Constraint::Weighted(None)) else {
-            return self.go_through(threads, budget, progress, report, &|_| true, found);
-        };
         let mut total = 0;
-        for weights in weightings().into_iter().filter(|weights| *weights != [1; 4]) {
-            let mut constraints = self.constraints.clone();
-            constraints[place] = Constraint::Weighted(Some(weights));
-            let lightest = |rule: &BlockRule| rule.conserved_weights() == Some(weights);
-            total += Family::new(constraints).go_through(threads, budget, progress, report, &lightest, found)?;
+        for (family, counts) in self.each_choice() {
+            total += family.go_through(threads, budget, progress, report, &*counts, found)?;
         }
         Some(total)
+    }
+
+    /// The family as families the filler can go through: itself, unless a constraint stands
+    /// for any of several, which the filler cannot force; then the family with each of those
+    /// in its place, and with each whether a rule gone through is to count: a rule that has
+    /// the property is counted under the first of the several it has, and so once.
+    fn each_choice(&self) -> Vec<(Family, Counts)> {
+        let Some((place, choices)) = choices(&self.constraints) else {
+            return vec![(self.clone(), Box::new(|_| true))];
+        };
+        let any = self.constraints[place];
+        let mut families = Vec::new();
+        for (which, &choice) in choices.iter().enumerate() {
+            let mut constraints = self.constraints.clone();
+            constraints[place] = choice;
+            for (family, counts) in Family::new(constraints).each_choice() {
+                let before = choices[..which].to_vec();
+                let counts = move |rule: &BlockRule| {
+                    any.holds(rule) && !before.iter().any(|first| first.holds(rule)) && counts(rule)
+                };
+                families.push((family, Box::new(counts) as Counts));
+            }
+        }
+        families
     }
 
     /// As [`Family::go`], handing over and counting only the rules that `wanted` says, though
@@ -614,26 +664,15 @@ impl Family {
         if self.constraints.is_empty() {
             return Vec::new();
         }
-        // Any weighting will do: the families of every weighting but the plain one, together.
-        if let Some(place) = self.constraints.iter().position(|c| *c == Constraint::Weighted(None)) {
-            let mut seen = HashSet::new();
-            let mut rules = Vec::new();
-            for weights in weightings().into_iter().filter(|weights| *weights != [1; 4]) {
-                let mut constraints = self.constraints.clone();
-                constraints[place] = Constraint::Weighted(Some(weights));
-                for rule in Family::new(constraints).rules() {
-                    if Constraint::Weighted(None).holds(&rule) && seen.insert(rule.clone()) {
-                        rules.push(rule);
-                    }
-                }
-            }
-            return rules;
-        }
         let mut rules = Vec::new();
-        Filler::new(&self.constraints, None).fill(&mut |rule| {
-            rules.push(rule);
-            true
-        });
+        for (family, counts) in self.each_choice() {
+            Filler::new(&family.constraints, None).fill(&mut |rule| {
+                if counts(&rule) {
+                    rules.push(rule);
+                }
+                true
+            });
+        }
         rules
     }
 
@@ -657,7 +696,7 @@ impl Family {
     }
 
     /// One rule of the family drawn at random, or none if the draw found none: a family can
-    /// be empty, and where any weighting will do, one is drawn first that may have no rule
+    /// be empty, and where any of several will do, one is drawn first that may have no rule
     /// of its own.
     ///
     /// The table is filled in block by block with the outcomes tried in a random order, so
@@ -669,19 +708,42 @@ impl Family {
             return Some(BlockRule::random(|| rng.next_u64()));
         }
         let mut constraints = self.constraints.clone();
-        let weighted = constraints.iter().position(|c| *c == Constraint::Weighted(None));
-        if let Some(place) = weighted {
-            let weightings: Vec<[u8; 4]> = weightings().into_iter().filter(|weights| *weights != [1; 4]).collect();
-            constraints[place] =
-                Constraint::Weighted(Some(weightings[(rng.next_u64() % weightings.len() as u64) as usize]));
+        let mut any = Vec::new();
+        while let Some((place, choices)) = choices(&constraints) {
+            any.push(constraints[place]);
+            constraints[place] = choices[(rng.next_u64() % choices.len() as u64) as usize];
         }
         let mut found = None;
         Filler::new(&constraints, Some(rng)).fill(&mut |rule| {
             found = Some(rule);
             false
         });
-        found.filter(|rule| weighted.is_none() || Constraint::Weighted(None).holds(rule))
+        found.filter(|rule| any.iter().all(|any| any.holds(rule)))
     }
+}
+
+/// Whether a rule gone through is to count, where a constraint stands for any of several.
+type Counts = Box<dyn Fn(&BlockRule) -> bool + Sync>;
+
+/// A constraint that stands for any of several, which the filler cannot force: any weighting
+/// but the plain one, or any turn or mirror with the exchange of the two states. The place of
+/// the first such among `constraints`, and the constraints it stands for.
+fn choices(constraints: &[Constraint]) -> Option<(usize, Vec<Constraint>)> {
+    let any =
+        |constraint: &Constraint| matches!(constraint, Constraint::Weighted(None) | Constraint::ComplementTurned(None));
+    let place = constraints.iter().position(any)?;
+    let choices = match constraints[place] {
+        Constraint::Weighted(None) => weightings()
+            .into_iter()
+            .filter(|weights| *weights != [1; 4])
+            .map(|weights| Constraint::Weighted(Some(weights)))
+            .collect(),
+        _ => [Turn::Quarter, Turn::Half, Turn::Mirror, Turn::Flip, Turn::Diagonal, Turn::AntiDiagonal]
+            .into_iter()
+            .map(|turn| Constraint::ComplementTurned(Some(turn)))
+            .collect(),
+    };
+    Some((place, choices))
 }
 
 /// How many ways there are to rearrange so many blocks so that none stays where it was: one
@@ -874,6 +936,10 @@ impl<'a> Filler<'a> {
                         pending.push((transform(block), transform(outcome)));
                     }
                     Constraint::Complement => pending.push((complement(block), complement(outcome))),
+                    Constraint::ComplementTurned(Some(turn)) => {
+                        let transform = turn.transform();
+                        pending.push((complement(transform(block)), complement(transform(outcome))));
+                    }
                     // The inverse is the rule seen through `see`: the block the outcome is
                     // seen as goes to the block seen so.
                     Constraint::Inverse { through, complemented } => {
@@ -1244,6 +1310,9 @@ mod tests {
             "inverse=half-turn",
             "inverse=quarter-turn",
             "inverse=quarter-turn,complemented",
+            "complement=turned",
+            "complement=half-turn",
+            "complement=quarter-turn",
         ] {
             let family = family(name);
             assert!(family.kept_by_turns(), "{name}");
@@ -1255,6 +1324,7 @@ mod tests {
         }
         assert!(!family("mirror").kept_by_turns() && !family("weighted").kept_by_turns());
         assert!(!family("inverse=mirror").kept_by_turns() && !family("inverse=diagonal,complemented").kept_by_turns());
+        assert!(!family("complement=mirror").kept_by_turns());
         // Seen through a quarter turn, a rule of the mirror's family is one of the flip's.
         let through_the_mirror = family("inverse=mirror");
         for rule in through_the_mirror.sample(20, 9) {
@@ -1297,16 +1367,59 @@ mod tests {
         for wrong in ["inverse=", "inverse=same", "inverse=turned", "inverse=mirror,flip", "inverse=conserving"] {
             assert!(wrong.parse::<Constraint>().is_err(), "{wrong}");
         }
+        // Dead and alive interchangeable with a turn or mirror: one of them, or any.
+        assert_eq!("complement=mirror".parse::<Constraint>(), Ok(Constraint::ComplementTurned(Some(Turn::Mirror))));
+        assert_eq!("complement=turned".parse::<Constraint>(), Ok(Constraint::ComplementTurned(None)));
+        assert_eq!(Constraint::ComplementTurned(Some(Turn::Diagonal)).to_string(), "complement=diagonal");
+        assert_eq!(Constraint::ComplementTurned(None).to_string(), "complement=turned");
+        for wrong in ["complement=", "complement=same", "complement=turned,mirror", "complement=linear"] {
+            assert!(wrong.parse::<Constraint>().is_err(), "{wrong}");
+        }
         // What the help lists can be typed as it stands, with numbers for the letters.
         for (name, _) in catalogue() {
             let typed = name.replace("A,B,C,D", "1,2,4,1").replace('N', "5");
             assert!(Family::parse(&typed).is_ok(), "{name}");
         }
-        assert_eq!(catalogue().len(), NAMES.len() + 5);
+        assert_eq!(catalogue().len(), NAMES.len() + 6);
         // Every rule there is: not to be counted, only sampled.
         assert_eq!(Family::default().count(ENUMERABLE), None);
         assert_eq!(Family::default().sample(5, 1), Family::default().sample(5, 1));
         assert_eq!(Family::default().sample(5, 1).len(), 5);
+    }
+
+    #[test]
+    fn dead_and_alive_may_be_interchangeable_only_with_a_turn_or_mirror() {
+        // This rule looks the same with dead and alive exchanged across a diagonal, and not
+        // as they are, nor across the diagonal alone; the identity looks the same every way.
+        let hidden: BlockRule = "0,1,2,5,4,10,8,9,6,7,12,11,3,13,14,15".parse().unwrap();
+        assert!(family("complement=diagonal").holds(&hidden) && family("complement=turned").holds(&hidden));
+        assert!(!family("complement").holds(&hidden) && !family("diagonal").holds(&hidden));
+        assert!(!family("complement=mirror").holds(&hidden) && !family("complement=anti-diagonal").holds(&hidden));
+        assert!(
+            family("complement=turned").holds(&BlockRule::identity())
+                && family("complement").holds(&BlockRule::identity())
+        );
+        // Any turn or mirror: the rules of the six together, each once, as going through them
+        // on threads has it too; and a sample is of them.
+        let turned = family("quarter-turn+complement=turned");
+        let mut union: HashSet<BlockRule> = HashSet::new();
+        for name in ["quarter-turn", "half-turn", "mirror", "flip", "diagonal", "anti-diagonal"] {
+            union.extend(family(&format!("quarter-turn+complement={name}")).rules());
+        }
+        let rules = turned.rules();
+        assert_eq!((rules.len(), union.len()), (160, 160));
+        assert!(rules.iter().all(|rule| union.contains(rule)) && rules.iter().all(|rule| turned.holds(rule)));
+        assert_eq!(turned.count(ENUMERABLE), Some(rules.len()));
+        let size = turned.size(4, u64::MAX, &Progress::default()).unwrap();
+        assert_eq!(size.rules, rules.len() as u64);
+        assert_eq!(size.canonical, Some(distinct(rules.clone()).len() as u64));
+        assert!(family("complement=turned").sample(20, 2).iter().all(|rule| family("complement=turned").holds(rule)));
+        assert!(
+            family("complement=turned+half-turn")
+                .sample(20, 2)
+                .iter()
+                .all(|rule| family("complement=turned+half-turn").holds(rule))
+        );
     }
 
     #[test]

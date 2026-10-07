@@ -103,7 +103,7 @@ click Has:quarter-turn; click Has:mirror; click Has:conserving; click Has:stable
 expect_text LibraryFamily quarter-turn + mirror + conserving + stable-vacuum
 until expect_text GenerateCount 16 rules · 16 canonical
 wait 3
-expect_text LibraryRow0 ESPCA-08cadf quarter-turn · half-turn · mirror · flip · diagonal · anti-diagonal · conserving · parity · complement · involution · stable-vacuum · turning · sparse · linear
+expect_text LibraryRow0 ESPCA-08cadf quarter-turn · half-turn · mirror · flip · diagonal · anti-diagonal · conserving · parity · complement · complement=turned · involution · stable-vacuum · turning · sparse · linear
 click LibraryRow0; wait 4; expect_rule 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 shot library-6-generated
 key ArrowDown; wait 4; expect_rule 0,1,2,3,4,5,6,14,8,9,10,13,12,11,7,15
@@ -165,7 +165,14 @@ expect_checked Has:involution on
 expect_text LibraryFamily inverse=complemented
 click Has:involution; click Has:stable-vacuum; wait 3
 until expect_text GenerateCount 1 307 674 368 000 rules · 163 459 883 712 canonical
-click Has:stable-vacuum; click LibraryProperties; wait 3
+# Dead and alive interchangeable with a turn or mirror, though not as they are, as a rule
+# may be across a diagonal: six families in one, the rules of each counted once.
+click Has:stable-vacuum; click Has:complement=turned; wait 4
+expect_text LibraryFamily complement=turned
+click LibraryRow0; wait 4
+key e; wait 4; expect_text FindingStates interchangeable with a turn or mirror; key e; wait 4
+until expect_text GenerateCount 23 934 368 rules · 1 653 499 canonical
+click Has:complement=turned; click LibraryProperties; wait 3
 click CollectionTab; wait 3; expect_checked CollectionTab on
 expect_checked GenerateTab off
 click LibraryClose; wait 4

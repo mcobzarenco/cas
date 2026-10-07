@@ -580,7 +580,15 @@ impl BlockRule {
 
     /// Does the rule give the same result whether a block is transformed before or after it?
     pub fn commutes_with(&self, transform: fn(u8) -> u8) -> bool {
-        (0..16u8).all(|state| self.table[transform(state) as usize] == transform(self.table[state as usize]))
+        self.looks_the_same_through(transform, false)
+    }
+
+    /// Does the rule look the same seen through `transform`, with or without the two states
+    /// exchanged as well? A rule may look the same with dead and alive exchanged after a turn
+    /// or mirror, though not as they are, and not after that turn or mirror alone.
+    pub fn looks_the_same_through(&self, transform: fn(u8) -> u8, complemented: bool) -> bool {
+        let through = |block| if complemented { complement(transform(block)) } else { transform(block) };
+        (0..16u8).all(|state| self.table[through(state) as usize] == through(self.table[state as usize]))
     }
 
     pub fn symmetry(&self) -> Symmetry {
@@ -610,7 +618,7 @@ impl BlockRule {
 
     /// Does exchanging dead and alive turn every run into another run?
     pub fn is_complement_symmetric(&self) -> bool {
-        self.commutes_with(complement)
+        self.looks_the_same_through(itself, true)
     }
 
     /// The rule as it looks when the plane is turned or mirrored by `transform`.

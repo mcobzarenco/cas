@@ -332,9 +332,10 @@ struct ChipBox;
 #[derive(Component, Default, Clone)]
 struct ChipSign;
 
-/// The box of a chip, or of a small button among chips. It lights up under the pointer, and
-/// while it is `Checked` it is outlined in the colour of an aspect. Whoever makes it keeps
-/// its `Checked` in step with what it stands for ([`check`]).
+/// The box of a chip, or of a small button among chips: outlined, so that it is a box on a
+/// card of its own shade too. It lights up under the pointer, and while it is `Checked` the
+/// outline is in the colour of an aspect. Whoever makes it keeps its `Checked` in step with
+/// what it stands for ([`check`]).
 pub fn chip_box(aspect: Aspect) -> impl Scene {
     bsn! {
         Node {
@@ -346,7 +347,7 @@ pub fn chip_box(aspect: Aspect) -> impl Scene {
             border_radius: px(4),
         }
         BackgroundColor(palette::GRAY_2)
-        BorderColor::all(Color::NONE)
+        BorderColor::all(palette::GRAY_3)
         Hovered
         EntityCursor::System(SystemCursorIcon::Pointer)
         ChipBox
@@ -419,7 +420,7 @@ fn style_chips(
     for (aspect, hovered, on, mut fill, mut border, children) in &mut chips {
         let color = if hovered.0 { palette::GRAY_3 } else { palette::GRAY_2 };
         fill.set_if_neq(BackgroundColor(color));
-        let outline = if on { aspect.color() } else { Color::NONE };
+        let outline = if on { aspect.color() } else { palette::GRAY_3 };
         border.set_if_neq(BorderColor::all(outline));
         let ink = if on { palette::WHITE } else { palette::LIGHT_GRAY_2 };
         for &child in children.into_iter().flatten() {

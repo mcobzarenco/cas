@@ -401,10 +401,14 @@ make. The counting goes on while the world runs, through up to 250 million rules
 rules leave the empty world empty is counted by its symmetry, and every rule there is was counted
 once: 552 613 396 971 canonical rules of 16!. Some properties have nothing in common, and then no
 rule is drawn. A family of up to two million rules is kept, and the sample is drawn evenly among
-them, all of them when they are no more than the sample, with *Canonical* among the canonical
-ones instead; a sample drawn while the family was still being counted is drawn again then. Of a
-larger family tables are filled in at random under the properties, which is not even: every
-outcome a block can have is as likely as any other, however many rules lie behind it.
+them, all of them when they are no more than the sample, with *Canonical* one rule for each
+world instead: the first table of the world that has all that is asked for, which is the
+canonical form itself unless what is asked for is the table's own rather than the world's, as
+running backwards as itself is; then the canonical form may be the world begun at another
+generation of its vacuum's cycle, which does not. A sample drawn while the family was still
+being counted is drawn again then. Of a larger family tables are filled in at random under the
+properties, which is not even: every outcome a block can have is as likely as any other,
+however many rules lie behind it.
 
 The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a plain
 text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags and a note,

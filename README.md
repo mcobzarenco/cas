@@ -372,11 +372,13 @@ whether they have a name or not. A random rule you clicked past is still there t
 
 Under the card, **Rule properties** unfolds the properties a rule may be asked for, the same that
 [a search](#searching-for-rules) goes through, each a chip to switch on: the turns and mirrors the
-rule looks the same under, what it conserves (the cells of a pattern or a weight in their place,
-the parity of their number, their momentum), and the form of the table (it only turns blocks, is
-linear, is its own inverse, treats the two states alike, leaves the empty world empty, changes at
-most so many blocks). The line says in a word what is asked for, and holds whether the chips are
-unfolded or not. What is asked for narrows both of the panel's lists, the ones under its tabs.
+rule looks the same under; what it conserves (the cells of a pattern or a weight in their place,
+the parity of their number, their momentum); how it runs backwards (as itself, as itself turned
+or mirrored one way or another, with dead and alive exchanged, or both); and the form of the
+table (it only turns blocks, is linear, treats the two states alike, leaves the empty world empty,
+changes at most so many blocks). The line says in a word what is asked for, and holds whether
+the chips are unfolded or not. What is asked for narrows both of the panel's lists, the ones
+under its tabs.
 
 **Collection** is the rules that go by a name. **Find** narrows them to the rules that have all
 the words typed: in their name, their tags, their note, where they are from, or their table. What
@@ -695,7 +697,13 @@ everywhere else: Critters conserves cells.
 | `turning` | every block becomes a turn or a mirror of itself: Single rotation, the billiard ball machine, the HPP gas | 27 648 | 3 808 |
 | `sparse=N` | the rule changes at most N of the 16 blocks (4: 17 621 tables, 5: 209 813, 6: 2 331 933, 7: 23 541 693, 8: 214 442 403) | | 2 351, 24 995, 263 646, 2 541 756, 22 172 495 |
 | `linear` | patterns superpose: the rule is affine over the field of two elements | 322 560 | 2 606 |
-| `involution` | the rule is its own inverse | 46 206 736 | 4 538 049 |
+| `involution` | the rule is its own inverse: run backwards, it is the same rule | 46 206 736 | 4 538 049 |
+| `inverse=mirror`, `inverse=flip` | run backwards, the rule is itself seen in a mirror, left to right or top to bottom (the same worlds, turned): Single rotation | 46 206 736 | 9 039 651 |
+| `inverse=diagonal`, `inverse=anti-diagonal` | run backwards, the rule is itself seen in a mirror across a diagonal | 46 206 736 | 7 946 724 |
+| `inverse=half-turn` | run backwards, the rule is itself turned by a half turn | 46 206 736 | 3 540 487 |
+| `inverse=quarter-turn` | run backwards, the rule is itself turned by a quarter turn, either way | 1200 | 316 |
+| `inverse=complemented` | run backwards, the rule is itself with dead and alive exchanged: Critters | 46 206 736 | 2 702 047 |
+| `inverse=mirror,complemented` | both: run backwards, the rule is itself seen in a mirror with dead and alive exchanged; so with any turn or mirror | 46 206 736 | 5 379 707 |
 | `complement` | dead and alive are interchangeable | 10 321 920 | 220 923 |
 | `stable-vacuum` | the empty world stays empty | 15! | 163 459 883 712 |
 | `random` | nothing required: every rule there is | 16! | 552 613 396 971 |

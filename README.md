@@ -321,22 +321,6 @@ back; and **Keep**, next to Copy and Paste, puts the rule in the [library](#the-
   measures. A preset is not always
   in canonical form: Critters' is Critters turned, so the menu then says *Custom* of the same
   world.
-* **Random** draws a rule. Left alone it is any of the 16! permutations, nearly all of which turn
-  everything to noise. The title next to it, *Random rule*, opens the properties to ask for,
-  the same that [a search](#searching-for-rules) goes through, each a chip to switch on: the
-  turns and mirrors the rule looks the same under, what it conserves (the cells of a pattern or
-  a weight in their place, the parity of their number, their momentum), and the form of the
-  table (it only turns blocks, is linear, is its own inverse, treats the two states alike,
-  leaves the empty world empty, changes at most so many blocks). Under the chips it says how
-  many rules have all that is asked for and how many of them are canonical, one for every world
-  they make. The counting goes on while the world runs, through up to 250 million rules; a
-  family whose rules leave the empty world empty is counted by its symmetry, and every rule
-  there is was counted once: 552 613 396 971 canonical rules of 16!. Some properties have
-  nothing in common, and then no rule is drawn. A family of up to two million rules is kept,
-  and a rule is drawn evenly among them, with *In canonical form* evenly among the canonical
-  ones instead. Of a larger family a table is filled in at random under the properties, which
-  is not even: every outcome a block can have is as likely as any other, however many rules
-  lie behind it.
 * **Properties** is what analysis says about the table, each finding in words with a small
   diagram:
   * *Symmetry*: the turns and mirrors of the square under which the rule looks the same. The
@@ -386,11 +370,31 @@ The pin of a rule holds it in the rule menu of the control panel, which is for t
 switch between: the pinned ones, and after them the latest of the others that were on the grid,
 whether they have a name or not. A random rule you clicked past is still there to go back to.
 
-**Find** narrows the list to the rules that have all the words typed: in their name, their tags,
-their note, where they are from, or their table. What a rule has counts too, by the names
-[`cas-search`](#searching-for-rules) takes (`conserving`, `half-turn`, `linear`, ...), and **has**
-unfolds the same properties as chips to click, the ones a random rule is asked for with in the
-editor.
+Under the card, **Rule properties** unfolds the properties a rule may be asked for, the same that
+[a search](#searching-for-rules) goes through, each a chip to switch on: the turns and mirrors the
+rule looks the same under, what it conserves (the cells of a pattern or a weight in their place,
+the parity of their number, their momentum), and the form of the table (it only turns blocks, is
+linear, is its own inverse, treats the two states alike, leaves the empty world empty, changes at
+most so many blocks). The line says in a word what is asked for, and holds whether the chips are
+unfolded or not. What is asked for narrows both of the panel's lists, the ones under its tabs.
+
+**Collection** is the rules that go by a name. **Find** narrows them to the rules that have all
+the words typed: in their name, their tags, their note, where they are from, or their table. What
+a rule has counts too, by the names `cas-search` takes (`conserving`, `half-turn`, `linear`, ...).
+
+**Generate** draws rules at random with all that is asked for: a sample of ten, thirty or a
+hundred, each rule once and in the order of their tables, so that two samples of a small family
+show the same rules in the same places. A click puts one on the grid, and `↑` and `↓` go through
+them as well. Asked for nothing, a rule is any of the 16! permutations, nearly all of which turn
+everything to noise. Over the button it says how many rules have all that is asked for and how
+many of them are canonical, one for every world they make. The counting goes on while the world
+runs, through up to 250 million rules; a family whose rules leave the empty world empty is counted
+by its symmetry, and every rule there is was counted once: 552 613 396 971 canonical rules of
+16!. Some properties have nothing in common, and then no rule is drawn. A family of up to two
+million rules is kept, and the sample is drawn evenly among them, all of them when they are no
+more than the sample, with *In canonical form* among the canonical ones instead. Of a larger
+family tables are filled in at random under the properties, which is not even: every outcome a
+block can have is as likely as any other, however many rules lie behind it.
 
 The kept rules are in `rules.tsv`, at the root of the repository the program was built from: a plain
 text file with a rule to a line (its table, its name, a `*` if it is pinned, its tags and a note,
@@ -401,7 +405,7 @@ and read again whenever something else wrote it: a search that keeps its finds, 
 checkout. One that cannot be read is left as it is, and the panel says what is wrong with it.
 
 <p align="center">
-  <img src="docs/library.png" width="368" alt="The rule library. At the top the rule on the grid, Rotate and half-turn, with its pin, its tags and its note. Under the field that narrows the list: a rule that was on the grid of late and has no name, three kept rules, two of them as a search named them, and the first of the rules that come with the program, the pinned ones marked.">
+  <img src="docs/library.png" width="368" alt="The rule library. At the top the rule on the grid, Rotate and half-turn, with its pin, its tags and its note; under it the folded line of the properties to ask for, and the two tabs, Collection and Generate. Under the field that narrows the list: a rule that was on the grid of late and has no name, three kept rules, two of them as a search named them, and the first of the rules that come with the program, the pinned ones marked.">
 </p>
 
 ### The edge of the grid, and catching spaceships

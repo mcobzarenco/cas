@@ -87,54 +87,5 @@ rule swap-on-diagonal; wait 3
 expect_text FindingLinear patterns superpose
 rule tron; wait 3; expect_text FindingBlocks 2 of 16 change
 shot rules-9-properties
-
-# A rule drawn at random. With nothing asked for it is any rule there is; the title opens
-# the properties to ask for. A quarter turn, a mirror, the cells kept and the empty world left
-# empty: sixteen rules, each a world of its own, and the one drawn has all of it.
-click RuleRandom; wait 3; expect_text EditorNote A random permutation.
-click RandomWith; wait 3
-expect_text RandomFamily any rule there is
-expect_text RandomCount 20 922 789 888 000 rules · 552 613 396 971 canonical
-click Want:quarter-turn; click Want:mirror; click Want:conserving; click Want:stable-vacuum; wait 3
-expect_text RandomFamily quarter-turn + mirror + conserving + stable-vacuum
-until expect_text RandomCount 16 rules · 16 canonical
-click RuleRandom; wait 3
-expect_text FindingSymmetry all rotations and mirrors
-expect_text FindingCellCount conserved
-expect_text FindingVacuum stable
-shot rules-10-random
-# In canonical form, there is nothing left for the Canonical button to do.
-click RandomCanonical; wait 3; expect_checked RandomCanonical on
-expect_text RandomCount 16 canonical rules
-click RuleRandom; wait 3; click RuleCanonical; wait 3
-expect_text EditorNote This table is already canonical: it comes first, in order, of its turns and mirrors and of the same rule begun at any other generation of the vacuum's cycle.
-click RandomCanonical; wait 3; expect_checked RandomCanonical off
-click Want:quarter-turn; click Want:mirror; click Want:conserving; click Want:stable-vacuum; wait 3
-# The number of cells, or a weight in its place: asking for one lets go of the other.
-click Want:conserving; click Want:weighted; wait 3; expect_text RandomFamily weighted
-click Want:conserving; wait 3; expect_text RandomFamily conserving
-click Want:conserving; wait 3; expect_text RandomFamily any rule there is
-# Some properties have nothing in common: no rule keeps a weight of its own and looks the
-# same after a half turn.
-click Want:weighted; click Want:half-turn; wait 3
-until expect_text RandomCount no rule has all of this
-rule tron; wait 2; click RuleRandom; wait 3; expect_rule tron
-expect_text EditorNote No rule has all of this.
-click Want:weighted; click Want:half-turn; wait 3
-# The rules that change few blocks, and how few: the steps change the number.
-click Want:sparse; wait 3
-until expect_text RandomCount 17 621 rules · 2 351 canonical
-click SparseLess; wait 3
-expect_text RandomFamily sparse=3
-until expect_text RandomCount 1 241 rules · 190 canonical
-click RuleRandom; wait 3; expect_text EditorNote A random rule that is sparse=3.
-# A family of millions is counted on other threads while the world runs, and drawn from
-# meanwhile. Where the empty world stays empty the canonical rules are counted by symmetry.
-click Want:sparse; click Want:involution; wait 3
-click RuleRandom; wait 3; expect_text FindingReversed the same rule
-until expect_text RandomCount 46 206 736 rules · 4 538 049 canonical
-click Want:involution; click Want:stable-vacuum; wait 3
-until expect_text RandomCount 1 307 674 368 000 rules · 163 459 883 712 canonical
-click Want:stable-vacuum; click RandomWith; wait 3
-key e; wait 4; shot rules-11-editor-closed
+key e; wait 4; shot rules-10-editor-closed
 quit

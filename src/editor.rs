@@ -33,7 +33,6 @@ use cas_ui::{
 
 use crate::{
     library::RuleLibrary,
-    sampler::sampler_section,
     sim::{SimSystems, rule_changed},
 };
 
@@ -60,7 +59,7 @@ pub struct RuleEditor {
 }
 
 impl RuleEditor {
-    pub(crate) fn say(&mut self, message: impl Into<String>, rule: &BlockRule) {
+    fn say(&mut self, message: impl Into<String>, rule: &BlockRule) {
         self.note = Some((message.into(), rule.clone()));
     }
 
@@ -306,8 +305,7 @@ pub fn editor_panel() -> impl Scene {
     }
 }
 
-/// The cases, the buttons that replace the table, what analysis says, the drawing of a rule
-/// at random, and the rule as text.
+/// The cases, the buttons that replace the table, what analysis says, and the rule as text.
 fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
     bsn_list![
             caption("Each of the 16 blocks before → after one step. To edit the rule, swap two outcomes: click one, then the other."),
@@ -368,7 +366,6 @@ fn editor_body(orbits: Vec<impl Scene>) -> impl SceneList {
                     ),
                 ]
             ),
-            sampler_section(),
             findings(),
             section("RULE STRING", bsn_list![
                 (

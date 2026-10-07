@@ -1,14 +1,18 @@
-//! Drawing a rule at random: the part of the rule editor that asks which properties the rule
-//! should have, says how many rules have them all, and draws one.
+//! The properties a rule is asked to have, and the rules drawn at random with them: the part
+//! of the rule library that narrows its list to the rules that have some properties, says how
+//! many rules have them all, and draws a sample of those.
 //!
 //! The properties are those a search goes through ([`cas_core::families`]), each a chip to
 //! switch on. How many rules have them, and how many canonical rules, is counted on other
-//! threads, which takes up to half a minute for the largest families; a family small enough is
-//! kept, and its rules are then drawn evenly.
+//! threads while a sample is asked for, which takes up to half a minute for the largest
+//! families; a family small enough is kept, and its rules are then drawn evenly.
 
-use std::sync::{
-    Arc, Mutex,
-    mpsc::{Receiver, Sender, channel},
+use std::{
+    collections::HashSet,
+    sync::{
+        Arc, Mutex,
+        mpsc::{Receiver, Sender, channel},
+    },
 };
 
 use bevy::{
@@ -23,24 +27,24 @@ use bevy::{
 use cas_core::{
     families::{COUNTABLE, Constraint, EVERY_RULE, Family, Progress, Size, Turn},
     rules::BlockRule,
-    universe::{Rng, Universe},
+    universe::Rng,
 };
-use cas_ui::{
-    Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, icons, section_title, tile_label,
-};
+use cas_ui::{Aspect, Sign, button, caption, check, checkbox, chip_box, group_digits, heading, icons, tile_label};
 
-use crate::{editor::RuleEditor, sim::SimSystems};
+use crate::{library::RuleLibrary, sim::SimSystems};
 
 /// A family of at most so many rules is kept, to draw from evenly: among its rules, or among
 /// its canonical rules.
 const KEPT: u64 = 2_000_000;
-/// So often a draw is tried that finds no rule: where any weighting will do, the one drawn
-/// may have none.
+/// So many draws are tried for every rule of a sample that is filled in at random, before the
+/// sample is left shorter: a draw may find a rule drawn already, or none at all where any
+/// weighting will do and the one drawn has no rule of its own.
 const TRIES: usize = 20;
+/// How many rules a sample may be of, each as its chip writes it.
+const SIZES: [(usize, &str); 3] = [(10, "10"), (30, "30"), (100, "100")];
 
-/// A property that may be asked for, as the flow shows it: the name the rig knows it by, its
-/// sign, and a word or two (none where the sign says it all). The rule library narrows its
-/// list by the same properties, with the same chips.
+/// A property that may be asked for, as the panel shows it: the name the rig knows it by, its
+/// sign, and a word or two (none where the sign says it all).
 pub(crate) struct Chip {
     pub(crate) name: &'static str,
     pub(crate) constraint: Constraint,
@@ -84,18 +88,30 @@ const EITHER: [usize; 2] = [6, 7];
 
 #[derive(Resource)]
 pub struct Sampler {
+    /// Whether the chips are unfolded.
     open: bool,
     /// Which chips are on.
     wanted: [bool; CHIPS.len()],
     /// At most so many blocks may change, where that is asked for.
     sparse: u8,
-    /// Whether the rule drawn is put in canonical form.
+    /// Whether the rules drawn are in canonical form: one for every world, each as likely as
+    /// any other.
     canonical: bool,
+    /// How many rules a sample is of: a place in [`SIZES`].
+    size: usize,
+    /// The rules drawn last, each once, in the order of their tables.
+    sample: Vec<BlockRule>,
+    /// Whether the sample is every rule there is with all that is asked for.
+    whole: bool,
     count: Count,
+    /// The family the count is of.
+    counted: Family,
     /// How many counts were asked for: tells the answer to the last one from the others.
     asked: u64,
     answers: Mutex<Receiver<(u64, Count)>>,
     reply: Sender<(u64, Count)>,
+    /// Counts the changes the lists follow: of what is asked for, and of the sample.
+    revision: u64,
 }
 
 /// What is known of the family asked for.
@@ -117,22 +133,83 @@ impl Default for Sampler {
             wanted: [false; CHIPS.len()],
             sparse: 4,
             canonical: false,
+            size: 0,
+            sample: Vec::new(),
+            whole: false,
             count: Count::Known { size: EVERY_RULE, kept: None },
+            counted: Family::default(),
             asked: 0,
             answers: Mutex::new(answers),
             reply,
+            revision: 0,
         }
     }
 }
 
 impl Sampler {
-    /// The family asked for.
-    fn family(&self) -> Family {
+    /// The family asked for: the rules with every property whose chip is on.
+    pub(crate) fn family(&self) -> Family {
         let wanted = CHIPS.iter().zip(self.wanted).filter(|(_, wanted)| *wanted);
         Family::new(wanted.map(|(chip, _)| match chip.constraint {
             Constraint::Sparse(_) => Constraint::Sparse(self.sparse),
             constraint => constraint,
         }))
+    }
+
+    /// The rules drawn last, in the order of their tables.
+    pub(crate) fn sample(&self) -> &[BlockRule] {
+        &self.sample
+    }
+
+    /// Whether the sample is every rule there is with all that is asked for.
+    pub(crate) fn whole(&self) -> bool {
+        self.whole
+    }
+
+    /// Whether the rules drawn are in canonical form.
+    pub(crate) fn in_canonical_form(&self) -> bool {
+        self.canonical
+    }
+
+    /// Whether no rule has all that is asked for, as far as is known.
+    pub(crate) fn none_at_all(&self) -> bool {
+        matches!(self.known(), Some(Count::Known { size: Size { rules: 0, .. }, .. }))
+    }
+
+    /// What tells a change of what is asked for, or of the sample, from none.
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Asks for a property, or no longer. The number of cells or a weight in its place:
+    /// asking for one lets go of the other.
+    fn want(&mut self, index: usize) {
+        self.wanted[index] = !self.wanted[index];
+        if self.wanted[index] && EITHER.contains(&index) {
+            for other in EITHER.into_iter().filter(|other| *other != index) {
+                self.wanted[other] = false;
+            }
+        }
+        self.changed();
+    }
+
+    fn set_canonical(&mut self, canonical: bool) {
+        if self.canonical != canonical {
+            self.canonical = canonical;
+            self.changed();
+        }
+    }
+
+    /// What is asked for changed: the sample was of other rules, and the lists are to follow.
+    fn changed(&mut self) {
+        self.sample.clear();
+        self.whole = false;
+        self.revision += 1;
+    }
+
+    /// What is known of the family asked for now: nothing, where what was counted was another.
+    fn known(&self) -> Option<&Count> {
+        (self.counted == self.family()).then_some(&self.count)
     }
 
     /// Has the family counted, out of the way of the frames; a count asked for before is of
@@ -143,6 +220,7 @@ impl Sampler {
             progress.stop();
         }
         let family = self.family();
+        self.counted = family.clone();
         if family.constraints().is_empty() {
             self.count = Count::Known { size: EVERY_RULE, kept: None };
             return;
@@ -169,6 +247,70 @@ impl Sampler {
             let _ = reply.send((asked, count));
         });
     }
+
+    /// Takes the counts as they come in; only the answer to the last question counts. True if
+    /// one did.
+    fn hear(&mut self) -> bool {
+        let answers: Vec<(u64, Count)> =
+            self.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
+        let mut heard = false;
+        for (asked, count) in answers {
+            if asked == self.asked {
+                self.count = count;
+                heard = true;
+            }
+        }
+        heard
+    }
+
+    /// Draws the sample: so many rules with all that is asked for, each once, in the order of
+    /// their tables. Evenly from a family that was kept, all of it when it is no larger than
+    /// the sample; by filling in tables at random otherwise, which is not even, until the
+    /// draws give nothing new for a while.
+    fn generate(&mut self, rng: &mut Rng) {
+        let (want, _) = SIZES[self.size];
+        let kept = match self.known() {
+            // In canonical form every world is as likely as any other; otherwise every table is.
+            Some(Count::Known { kept: Some((rules, worlds)), .. }) => Some(if self.canonical { worlds } else { rules }),
+            _ => None,
+        };
+        let (mut drawn, whole) = match kept {
+            Some(from) => (some_of(from, want, rng), from.len() <= want),
+            None => (self.filled(want, rng), false),
+        };
+        drawn.sort_by(|a, b| a.table().cmp(b.table()));
+        self.sample = drawn;
+        self.whole = whole;
+        self.revision += 1;
+    }
+
+    /// So many different rules with all that is asked for, each filled in at random: fewer,
+    /// if the draws give nothing new for a while.
+    fn filled(&self, want: usize, rng: &mut Rng) -> Vec<BlockRule> {
+        let family = self.family();
+        let mut seen: HashSet<BlockRule> = HashSet::new();
+        let mut tries = 0;
+        while seen.len() < want && tries < TRIES * want {
+            tries += 1;
+            if let Some(rule) = family.draw(rng) {
+                seen.insert(if self.canonical { rule.canonical() } else { rule });
+            }
+        }
+        seen.into_iter().collect()
+    }
+}
+
+/// So many of the rules, each at most once and each as likely as any other: all of them where
+/// there are no more than that.
+fn some_of(rules: &[BlockRule], count: usize, rng: &mut Rng) -> Vec<BlockRule> {
+    if rules.len() <= count {
+        return rules.to_vec();
+    }
+    let mut places: HashSet<usize> = HashSet::new();
+    while places.len() < count {
+        places.insert((rng.next_u64() % rules.len() as u64) as usize);
+    }
+    places.into_iter().map(|place| rules[place].clone()).collect()
 }
 
 /// The part that opens and closes.
@@ -198,72 +340,63 @@ struct WantSign(usize);
 #[derive(Component, Default, Clone)]
 struct CanonicalBox;
 
+/// A chip for how many rules a sample is of, by its place in [`SIZES`].
+#[derive(Component, Default, Clone, Copy)]
+struct SampleSize(usize);
+
 pub struct SamplerPlugin;
 
 impl Plugin for SamplerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Sampler>().add_systems(
             Update,
-            (hear_counts, show.run_if(resource_changed::<Sampler>.or_else(counting)))
+            (keep_counted, hear_counts, show.run_if(resource_changed::<Sampler>.or_else(counting)))
                 .chain()
                 .in_set(SimSystems::Present),
         );
     }
 }
 
-/// The flow, as a section of the rule editor.
-pub fn sampler_section() -> impl Scene {
+/// The properties asked for, as a card that unfolds: a line that says in a word what is asked
+/// for and opens and closes the rest, and under it the chips, group by group.
+pub(crate) fn properties_card() -> impl Scene {
     let chips = |range: std::ops::Range<usize>| range.map(chip_scene).collect::<Vec<_>>();
     let (turns, mirrors, keeps, table) = (chips(TURNS), chips(MIRRORS), chips(KEEPS), chips(TABLE));
     bsn! {
         Node {
             flex_direction: FlexDirection::Column,
             row_gap: px(8),
+            padding: px(8),
+            border_radius: px(5),
+            flex_shrink: 0.0,
         }
+        BackgroundColor(palette::GRAY_2)
         Children [
             (
+                // The line opens and closes the chips.
+                #LibraryProperties
                 Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    column_gap: px(8),
+                    column_gap: px(6),
                 }
+                Hovered
+                EntityCursor::System(SystemCursorIcon::Pointer)
+                on(|_: On<Pointer<Click>>, mut sampler: ResMut<Sampler>| sampler.open = !sampler.open)
                 Children [
                     (
-                        // The title opens and closes the flow.
-                        #RandomWith
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: px(6),
-                            flex_grow: 1.0,
-                            flex_basis: px(0),
-                            min_width: px(0),
-                        }
-                        Hovered
-                        EntityCursor::System(SystemCursorIcon::Pointer)
-                        on(|_: On<Pointer<Click>>, mut sampler: ResMut<Sampler>| sampler.open = !sampler.open)
-                        Children [
-                            (
-                                icons::icon(icons::OPENS, 12.0, palette::LIGHT_GRAY_2)
-                                UiTransform
-                                Chevron
-                                template_value(Pickable::IGNORE)
-                            ),
-                            (section_title("RANDOM RULE") template_value(Pickable::IGNORE)),
-                            (
-                                #RandomFamily
-                                caption("")
-                                FamilyName
-                                Node { flex_grow: 1.0, flex_basis: px(0) }
-                                template_value(Pickable::IGNORE)
-                            ),
-                        ]
+                        icons::icon(icons::OPENS, 11.0, palette::LIGHT_GRAY_2)
+                        UiTransform
+                        Chevron
+                        template_value(Pickable::IGNORE)
                     ),
+                    (heading("RULE PROPERTIES") Node { flex_shrink: 0.0 } template_value(Pickable::IGNORE)),
                     (
-                        #RuleRandom
-                        button("Random")
-                        Node { flex_shrink: 0.0 }
-                        on(draw)
+                        #LibraryFamily
+                        caption("")
+                        FamilyName
+                        Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
+                        template_value(Pickable::IGNORE)
                     ),
                 ]
             ),
@@ -296,34 +429,64 @@ pub fn sampler_section() -> impl Scene {
                             step("SparseMore", icons::MORE, 1),
                         ]
                     ),
+                ]
+            ),
+        ]
+    }
+}
+
+/// The controls of a sample: whether its rules are in canonical form, how many rules have all
+/// that is asked for, the button that draws it, and how many rules it is of.
+pub(crate) fn generate_controls() -> impl Scene {
+    let sizes: Vec<_> = (0..SIZES.len()).map(size_chip).collect();
+    bsn! {
+        Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: px(8),
+            flex_shrink: 0.0,
+        }
+        Children [
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    column_gap: px(8),
+                }
+                Children [
                     (
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::SpaceBetween,
-                            column_gap: px(8),
-                            margin: UiRect::top(px(2)),
-                        }
-                        Children [
-                            (
-                                checkbox("In canonical form", "RandomCanonical", Aspect::Rule, "")
-                                Node { flex_shrink: 0.0 }
-                                CanonicalBox
-                                on(|change: On<ValueChange<bool>>, mut sampler: ResMut<Sampler>| {
-                                    sampler.canonical = change.value;
-                                })
-                            ),
-                            (
-                                // A count of trillions takes two lines, on its own side.
-                                #RandomCount
-                                caption("")
-                                Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
-                                TextLayout { justify: Justify::Right }
-                                Counted
-                            ),
-                        ]
+                        checkbox("In canonical form", "GenerateCanonical", Aspect::Rule, "")
+                        Node { flex_shrink: 0.0 }
+                        CanonicalBox
+                        on(|change: On<ValueChange<bool>>, mut sampler: ResMut<Sampler>| {
+                            sampler.set_canonical(change.value);
+                        })
                     ),
-                    caption("A rule turned, mirrored or begun later in its vacuum's cycle is another table; the canonical form is the first of them."),
+                    (
+                        // A count of trillions takes two lines, on its own side.
+                        #GenerateCount
+                        caption("")
+                        Node { flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
+                        TextLayout { justify: Justify::Right }
+                        Counted
+                    ),
+                ]
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(5),
+                }
+                Children [
+                    (
+                        #Generate
+                        button("Generate")
+                        Node { margin: UiRect { right: px(3) } }
+                        on(generate)
+                    ),
+                    { sizes },
+                    words("rules"),
                 ]
             ),
         ]
@@ -352,7 +515,7 @@ fn words(text: &'static str) -> impl Scene {
 }
 
 fn chip_scene(index: usize) -> impl Scene {
-    let name = Name::new(format!("Want:{}", CHIPS[index].name));
+    let name = Name::new(format!("Has:{}", CHIPS[index].name));
     let want = Want(index);
     bsn! {
         cas_ui::chip_marked(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule, WantSign(index))
@@ -360,23 +523,10 @@ fn chip_scene(index: usize) -> impl Scene {
         template_value(want)
         on(|click: On<Pointer<Click>>, chips: Query<&Want>, mut sampler: ResMut<Sampler>| {
             if let Ok(&Want(index)) = chips.get(click.entity) {
-                sampler.wanted[index] = !sampler.wanted[index];
-                // The number of cells or a weight in its place: asking for one lets go of
-                // the other.
-                if sampler.wanted[index] && EITHER.contains(&index) {
-                    for other in EITHER.into_iter().filter(|other| *other != index) {
-                        sampler.wanted[other] = false;
-                    }
-                }
-                sampler.ask();
+                sampler.want(index);
             }
         })
     }
-}
-
-/// The chip of a property, by its place in [`CHIPS`], as the library shows it too.
-pub(crate) fn chip_face(index: usize) -> impl Scene {
-    cas_ui::chip(CHIPS[index].sign, CHIPS[index].label, Aspect::Rule)
 }
 
 /// A small button that makes the number of the sparse chip one less or one more.
@@ -390,7 +540,7 @@ fn step(name: &'static str, sign: &'static str, by: i8) -> impl Scene {
             if sparse != sampler.sparse {
                 sampler.sparse = sparse;
                 if sampler.wanted[SPARSE] {
-                    sampler.ask();
+                    sampler.changed();
                 }
             }
         })
@@ -401,43 +551,28 @@ fn step(name: &'static str, sign: &'static str, by: i8) -> impl Scene {
     }
 }
 
-/// Draws a rule with all that is asked for, evenly from a family that was kept and by
-/// filling in a table at random otherwise.
-fn draw(
-    _: On<Activate>,
-    sampler: Res<Sampler>,
-    mut rng: ResMut<Rng>,
-    mut universe: ResMut<Universe>,
-    mut editor: ResMut<RuleEditor>,
-) {
-    let family = sampler.family();
-    let rule = match &sampler.count {
-        // In canonical form every world is as likely as any other; otherwise every table is.
-        Count::Known { kept: Some((rules, worlds)), .. } => {
-            let from = if sampler.canonical { worlds } else { rules };
-            (!from.is_empty()).then(|| from[(rng.next_u64() % from.len().max(1) as u64) as usize].clone())
-        }
-        _ => {
-            let drawn = (0..TRIES).find_map(|_| family.draw(&mut rng));
-            drawn.map(|rule| if sampler.canonical { rule.canonical() } else { rule })
-        }
-    };
-    let Some(rule) = rule else {
-        let why = match sampler.count {
-            Count::Counting(_) => "No rule drawn: the rules with all of this are still being counted.",
-            _ => "No rule has all of this.",
-        };
-        editor.say(why, universe.rule());
-        return;
-    };
-    universe.set_rule(rule);
-    let what = match (family.constraints(), sampler.canonical) {
-        ([], false) => "A random permutation.".to_string(),
-        ([], true) => "A random permutation, in canonical form.".to_string(),
-        (_, false) => format!("A random rule that is {}.", named(&family)),
-        (_, true) => format!("A random rule that is {}, in canonical form.", named(&family)),
-    };
-    editor.say(what, universe.rule());
+/// A chip for how many rules a sample is of.
+fn size_chip(index: usize) -> impl Scene {
+    let (_, written) = SIZES[index];
+    let name = Name::new(format!("Generate{written}"));
+    let size = SampleSize(index);
+    bsn! {
+        cas_ui::chip(Sign::Written(written), "", Aspect::Rule)
+        template_value(name)
+        template_value(size)
+        on(|click: On<Pointer<Click>>, chips: Query<&SampleSize>, mut sampler: ResMut<Sampler>| {
+            if let Ok(&SampleSize(index)) = chips.get(click.entity)
+                && sampler.size != index
+            {
+                sampler.size = index;
+            }
+        })
+    }
+}
+
+/// Draws a sample.
+fn generate(_: On<Activate>, mut sampler: ResMut<Sampler>, mut rng: ResMut<Rng>) {
+    sampler.generate(&mut rng);
 }
 
 /// The family by the names of its properties.
@@ -446,28 +581,32 @@ fn named(family: &Family) -> String {
     names.join(" + ")
 }
 
-/// Whether a count is on its way, which the flow says how far it has got with.
+/// Whether a count is on its way, which the panel says how far it has got with.
 fn counting(sampler: Res<Sampler>) -> bool {
     matches!(sampler.count, Count::Counting(_))
 }
 
-/// Takes the counts as they come in; only the answer to the last question counts.
-fn hear_counts(mut sampler: ResMut<Sampler>) {
-    let answers: Vec<(u64, Count)> =
-        sampler.answers.lock().map_or_else(|_| Vec::new(), |answers| answers.try_iter().collect());
-    for (asked, count) in answers {
-        if asked == sampler.asked {
-            sampler.count = count;
-        }
+/// While a sample is asked for, the family asked for is counted: as soon as it is another.
+fn keep_counted(library: Res<RuleLibrary>, mut sampler: ResMut<Sampler>) {
+    if library.generating() && sampler.known().is_none() {
+        sampler.ask();
     }
 }
 
-/// Keeps the flow showing what is asked for and what is known.
+/// Takes the counts as they come in.
+fn hear_counts(mut sampler: ResMut<Sampler>) {
+    if sampler.bypass_change_detection().hear() {
+        sampler.set_changed();
+    }
+}
+
+/// Keeps the panel showing what is asked for and what is known.
 fn show(
     sampler: Res<Sampler>,
     mut body: Single<&mut Node, With<Body>>,
     mut chevron: Single<&mut UiTransform, With<Chevron>>,
     chips: Query<(Entity, &Want, Has<Checked>)>,
+    sizes: Query<(Entity, &SampleSize, Has<Checked>)>,
     mut signs: Query<(&WantSign, &mut Text), (Without<FamilyName>, Without<Counted>)>,
     mut family_name: Single<&mut Text, (With<FamilyName>, Without<Counted>, Without<WantSign>)>,
     mut counted: Single<&mut Text, (With<Counted>, Without<FamilyName>, Without<WantSign>)>,
@@ -478,7 +617,7 @@ fn show(
     if body.display != display {
         body.display = display;
     }
-    // The mark points down while the flow is open.
+    // The mark points down while the chips are unfolded.
     let turned = if sampler.open { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
     if chevron.rotation != turned {
         chevron.rotation = turned;
@@ -486,6 +625,9 @@ fn show(
     // A chip that is asked for is on: the kit outlines it and brightens its sign.
     for (chip, &Want(index), on) in &chips {
         check(&mut commands, chip, on, sampler.wanted[index]);
+    }
+    for (chip, &SampleSize(index), on) in &sizes {
+        check(&mut commands, chip, on, sampler.size == index);
     }
     for (&WantSign(index), mut text) in &mut signs {
         if index == SPARSE {
@@ -502,25 +644,98 @@ fn show(
     // within one.
     let whole = |count: u64| group_digits(count).replace(' ', "\u{a0}");
     let so_many = |count: u64, one: &str| format!("{} {one}{}", whole(count), if count == 1 { "" } else { "s" });
-    let count = match &sampler.count {
-        Count::Counting(progress) => match progress.rules() {
+    let count = match sampler.known() {
+        None => "counting…".to_string(),
+        Some(Count::Counting(progress)) => match progress.rules() {
             0 => "counting…".to_string(),
             gone => format!("counting… {} rules so far", whole(gone)),
         },
-        Count::Many => format!("more than {} rules", whole(COUNTABLE)),
-        Count::Known { size, .. } if size.rules == 0 => "no rule has all of this".to_string(),
+        Some(Count::Many) => format!("more than {} rules", whole(COUNTABLE)),
+        Some(Count::Known { size, .. }) if size.rules == 0 => "no rule has all of this".to_string(),
         // In canonical form it is the canonical rules that are drawn from.
-        Count::Known { size: Size { canonical: Some(canonical), .. }, .. } if sampler.canonical => {
+        Some(Count::Known { size: Size { canonical: Some(canonical), .. }, .. }) if sampler.canonical => {
             so_many(*canonical, "canonical rule")
         }
-        Count::Known { size: Size { rules, canonical: Some(canonical) }, .. } => {
+        Some(Count::Known { size: Size { rules, canonical: Some(canonical) }, .. }) => {
             format!("{} · {} canonical", so_many(*rules, "rule"), whole(*canonical))
         }
-        Count::Known { size: Size { rules, canonical: None }, .. } => {
+        Some(Count::Known { size: Size { rules, canonical: None }, .. }) => {
             format!("{} · too many to count the canonical ones", so_many(*rules, "rule"))
         }
     };
     counted.set_if_neq(Text(count));
     let (checkbox, checked) = *canonical;
     check(&mut commands, checkbox, checked, sampler.canonical);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn in_order(rules: &[BlockRule]) -> bool {
+        rules.windows(2).all(|pair| pair[0].table() < pair[1].table())
+    }
+
+    #[test]
+    fn a_sample_is_of_different_rules_in_the_order_of_their_tables() {
+        let mut sampler = Sampler::default();
+        let mut rng = Rng::new(7);
+        // Every rule there is: a hundred different ones, in order, and not all there are.
+        sampler.size = 2;
+        sampler.generate(&mut rng);
+        assert_eq!(sampler.sample().len(), 100);
+        assert!(in_order(sampler.sample()) && !sampler.whole());
+        // A quarter turn, a mirror, the cells kept and the empty world left empty: sixteen
+        // rules, counted and kept, which asking for them lets go of the sample.
+        for name in ["quarter-turn", "mirror", "conserving", "stable-vacuum"] {
+            sampler.want(CHIPS.iter().position(|chip| chip.name == name).unwrap());
+        }
+        assert!(sampler.sample().is_empty() && sampler.known().is_none());
+        sampler.ask();
+        while matches!(sampler.count, Count::Counting(_)) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            sampler.hear();
+        }
+        let family = sampler.family();
+        assert!(matches!(sampler.known(), Some(Count::Known { size: Size { rules: 16, .. }, kept: Some(_) })));
+        // All of them in a sample of thirty, in order; ten of them drawn evenly, in order too.
+        sampler.size = 1;
+        sampler.generate(&mut rng);
+        assert_eq!(sampler.sample().len(), 16);
+        assert!(sampler.whole() && in_order(sampler.sample()));
+        assert!(sampler.sample().iter().all(|rule| family.holds(rule)));
+        sampler.size = 0;
+        sampler.generate(&mut rng);
+        assert_eq!(sampler.sample().len(), 10);
+        assert!(!sampler.whole() && in_order(sampler.sample()));
+        assert!(sampler.sample().iter().all(|rule| family.holds(rule)));
+        // In canonical form a sample is of worlds, each once: here every rule is its own.
+        sampler.set_canonical(true);
+        assert!(sampler.sample().is_empty());
+        sampler.size = 2;
+        sampler.generate(&mut rng);
+        assert_eq!(sampler.sample().len(), 16);
+        assert!(sampler.whole() && sampler.sample().iter().all(|rule| *rule == rule.canonical()));
+        // Before the count is in, tables are filled in at random: different ones still, in
+        // order, with all that is asked for, and not known to be all there are.
+        sampler.counted = Family::default();
+        sampler.generate(&mut rng);
+        let sample = sampler.sample();
+        assert!(sample.len() > 1 && sample.len() <= 16 && in_order(sample) && !sampler.whole());
+        assert!(sample.iter().all(|rule| family.holds(rule) && *rule == rule.canonical()));
+    }
+
+    #[test]
+    fn the_number_of_cells_or_a_weight_in_its_place() {
+        let mut sampler = Sampler::default();
+        let (cells, weight) = (EITHER[0], EITHER[1]);
+        sampler.want(cells);
+        sampler.want(weight);
+        assert_eq!((sampler.wanted[cells], sampler.wanted[weight]), (false, true));
+        assert_eq!(named(&sampler.family()), "weighted");
+        sampler.want(cells);
+        assert_eq!(named(&sampler.family()), "conserving");
+        sampler.want(cells);
+        assert!(sampler.family().constraints().is_empty() && sampler.known().is_some());
+    }
 }

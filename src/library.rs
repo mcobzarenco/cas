@@ -1,10 +1,13 @@
 //! The rule library: the rules that go by a name, in a panel to find one, to go through them
-//! on the grid one after another, and to keep the rule that is on the grid.
+//! on the grid one after another, and to keep the rule that is on the grid; and the rules
+//! drawn at random, under the same panel's other tab.
 //!
 //! The rules and their file are the core's ([`cas_core::library`]). Here are the panel, the
 //! few rules the rule menu offers (the pinned ones, and those that were on the grid of late),
 //! and the keeping of the file ([`Synced`]): it is written at every change, and read again
-//! whenever something else wrote it, a search that keeps its finds or an editor.
+//! whenever something else wrote it, a search that keeps its finds or an editor. The
+//! properties asked for, which narrow the list and are what the rules are drawn with, and the
+//! drawing are the sampler's ([`crate::sampler`]).
 
 use std::path::PathBuf;
 
@@ -19,18 +22,17 @@ use bevy::{
 };
 
 use cas_core::{
-    families::Constraint,
     library::{Entry, Library, properties},
     rules::{BlockRule, Source},
     universe::Universe,
 };
 use cas_ui::{
-    Aspect, Scrolls, button, caption, check, chip_box, field_frame, heading, icon_button_marked, icons, list_row,
-    panel_header, panel_title, sans, scrolling, side_panel,
+    Aspect, Scrolls, button, caption, check, field_frame, heading, icon_button_marked, icons, list_row, panel_header,
+    panel_title, sans, scrolling, side_panel, tab, tab_bar,
 };
 
 use crate::{
-    sampler::{CHIPS, chip_face},
+    sampler::{Sampler, generate_controls, properties_card},
     sim::SimSystems,
     synced::Synced,
 };
@@ -54,11 +56,10 @@ pub struct RuleLibrary {
     /// The rules that were on the grid of late, the latest first. One that comes back keeps
     /// its place: going through them does not shuffle them.
     recent: Vec<BlockRule>,
-    /// What the list is narrowed to: the words typed, and the properties asked for with the
-    /// chips, which are folded away unless `choosing`.
+    /// Which of the panel's lists is shown.
+    tab: Tab,
+    /// The words the list is narrowed to. The properties asked for are the sampler's.
     filter: String,
-    wanted: [bool; CHIPS.len()],
-    choosing: bool,
     /// The name typed for a rule that is not kept yet.
     draft: String,
     /// What the last button did, or what is wrong.
@@ -95,9 +96,8 @@ impl RuleLibrary {
             open: false,
             library: Synced::at(path),
             recent: Vec::new(),
+            tab: Tab::Collection,
             filter: String::new(),
-            wanted: [false; CHIPS.len()],
-            choosing: false,
             draft: String::new(),
             note: None,
             revision: 0,
@@ -288,10 +288,27 @@ impl RuleLibrary {
         Some(self.rows[next].clone())
     }
 
-    /// The properties asked for with the chips.
-    fn properties(&self) -> Vec<Constraint> {
-        CHIPS.iter().zip(self.wanted).filter(|(_, wanted)| *wanted).map(|(chip, _)| chip.constraint).collect()
+    /// Shows one of the panel's lists.
+    fn show_tab(&mut self, tab: Tab) {
+        if self.tab != tab {
+            self.tab = tab;
+            self.top = true;
+            self.revision += 1;
+        }
     }
+
+    /// Whether the rules drawn at random are what the panel shows.
+    pub(crate) fn generating(&self) -> bool {
+        self.tab == Tab::Generate
+    }
+}
+
+/// The panel's lists: the rules that go by a name, and the rules drawn at random.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+enum Tab {
+    #[default]
+    Collection,
+    Generate,
 }
 
 /// The panel.
@@ -318,19 +335,13 @@ struct PinIcon(bool);
 #[derive(Component, Default, Clone)]
 struct CardPin;
 
-/// A chip that narrows the list to the rules with a property; the button that unfolds the
-/// chips, with its mark; and the box they are in.
+/// The tab that shows one of the lists; and a part of the panel that is there with one of
+/// them.
 #[derive(Component, Default, Clone, Copy)]
-struct HasChip(usize);
+struct TabButton(Tab);
 
-#[derive(Component, Default, Clone)]
-struct Unfolds;
-
-#[derive(Component, Default, Clone)]
-struct UnfoldMark;
-
-#[derive(Component, Default, Clone)]
-struct ChipBox;
+#[derive(Component, Default, Clone, Copy)]
+struct OnTab(Tab);
 
 /// When a part of the card about the rule on the grid is there: for a rule that came with
 /// the program, for one that was kept, for one that is in the library either way, for one
@@ -385,15 +396,12 @@ impl Plugin for LibraryPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, follow_rule.in_set(SimSystems::Input)).add_systems(
             Update,
-            (watch_file, sync_fields, show_library, light_chips, list_rules, light_pins, reveal)
-                .chain()
-                .in_set(SimSystems::Present),
+            (watch_file, sync_fields, show_library, list_rules, light_pins, reveal).chain().in_set(SimSystems::Present),
         );
     }
 }
 
 pub fn library_panel() -> impl Scene {
-    let chips: Vec<_> = (0..CHIPS.len()).map(property_chip).collect();
     bsn! {
         #RuleLibrary
         side_panel(LIBRARY_WIDTH, bsn_list![
@@ -402,14 +410,30 @@ pub fn library_panel() -> impl Scene {
                 on(|_: On<Activate>, mut library: ResMut<RuleLibrary>| library.toggle())
             }),
             on_the_grid(),
+            properties_card(),
+            tab_bar(bsn_list![
+                (
+                    #CollectionTab
+                    tab("Collection", Aspect::Rule)
+                    template_value(TabButton(Tab::Collection))
+                    on(pick_tab)
+                ),
+                (
+                    #GenerateTab
+                    tab("Generate", Aspect::Rule)
+                    template_value(TabButton(Tab::Generate))
+                    on(pick_tab)
+                ),
+            ]),
             (
-                // What the list is narrowed to.
+                // The words the list is narrowed to.
                 Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
                     column_gap: px(8),
                     flex_shrink: 0.0,
                 }
+                template_value(OnTab(Tab::Collection))
                 Children [
                     (heading("FIND") Node { flex_shrink: 0.0 }),
                     (
@@ -417,43 +441,20 @@ pub fn library_panel() -> impl Scene {
                         Node { flex_basis: px(0), min_width: px(0) }
                         Children [ field("LibraryFind", Field::Filter) ]
                     ),
-                    (
-                        // Unfolds the properties to ask for; outlined while any is asked for.
-                        #LibraryHas
-                        chip_box(Aspect::Rule)
-                        Node { flex_shrink: 0.0 }
-                        Unfolds
-                        on(|_: On<Pointer<Click>>, mut library: ResMut<RuleLibrary>| library.choosing = !library.choosing)
-                        Children [
-                            (
-                                icons::icon(icons::OPENS, 11.0, palette::LIGHT_GRAY_2)
-                                UiTransform
-                                UnfoldMark
-                                template_value(Pickable::IGNORE)
-                            ),
-                            (caption("has") template_value(Pickable::IGNORE)),
-                        ]
-                    ),
                 ]
             ),
-            (
-                #LibraryChips
-                Node {
-                    display: Display::None,
-                    flex_direction: FlexDirection::Row,
-                    flex_wrap: FlexWrap::Wrap,
-                    align_items: AlignItems::Center,
-                    column_gap: px(5),
-                    row_gap: px(5),
-                    flex_shrink: 0.0,
-                }
-                ChipBox
-                Children [ { chips } ]
-            ),
+            (generate_controls() template_value(OnTab(Tab::Generate))),
             scrolling(Scrolls::Rows, bsn! { #LibraryList RuleList }),
             (#LibraryStatus caption("") template_value(Says::Status)),
         ])
         LibraryPanel
+    }
+}
+
+/// A click on a tab shows its list.
+fn pick_tab(click: On<Pointer<Click>>, tabs: Query<&TabButton>, mut library: ResMut<RuleLibrary>) {
+    if let Ok(&TabButton(tab)) = tabs.get(click.entity) {
+        library.show_tab(tab);
     }
 }
 
@@ -520,53 +521,6 @@ fn on_the_grid() -> impl Scene {
             (labelled("NOTE", "KeptNote", Field::Note) template_value(When::Kept)),
             (#LibraryAbout caption("") template_value(Says::About)),
         ]
-    }
-}
-
-/// A chip that narrows the list to the rules that have a property: the chips a random rule is
-/// asked for with, in the editor.
-fn property_chip(index: usize) -> impl Scene {
-    let name = Name::new(format!("Has:{}", CHIPS[index].name));
-    let has = HasChip(index);
-    bsn! {
-        chip_face(index)
-        template_value(name)
-        template_value(has)
-        on(|click: On<Pointer<Click>>, chips: Query<&HasChip>, mut library: ResMut<RuleLibrary>| {
-            if let Ok(&HasChip(index)) = chips.get(click.entity) {
-                library.wanted[index] = !library.wanted[index];
-                library.top = true;
-                library.revision += 1;
-            }
-        })
-    }
-}
-
-/// Says which chips are on, and the button that unfolds them while any is, for the kit to
-/// light them; and shows the chips or folds them away.
-fn light_chips(
-    library: Res<RuleLibrary>,
-    chips: Query<(Entity, &HasChip, Has<Checked>)>,
-    unfolds: Single<(Entity, Has<Checked>), With<Unfolds>>,
-    mut mark: Single<&mut UiTransform, With<UnfoldMark>>,
-    mut chip_box: Single<&mut Node, With<ChipBox>>,
-    mut commands: Commands,
-) {
-    if !library.open {
-        return;
-    }
-    for (chip, &HasChip(index), on) in &chips {
-        check(&mut commands, chip, on, library.wanted[index]);
-    }
-    let (button, on) = *unfolds;
-    check(&mut commands, button, on, library.wanted.contains(&true));
-    let turned = if library.choosing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
-    if mark.rotation != turned {
-        mark.rotation = turned;
-    }
-    let display = if library.choosing { Display::Flex } else { Display::None };
-    if chip_box.display != display {
-        chip_box.display = display;
     }
 }
 
@@ -812,17 +766,20 @@ fn sync_fields(
     }
 }
 
-/// Shows or hides the panel, and keeps the card about the rule on the grid and the line at
-/// the bottom in step.
+/// Shows or hides the panel, and keeps the card about the rule on the grid, the tabs and the
+/// line at the bottom in step.
 fn show_library(
     library: Res<RuleLibrary>,
     universe: Res<Universe>,
     panel: Single<Entity, With<LibraryPanel>>,
     parts: Query<(Entity, &When)>,
+    tabbed: Query<(Entity, &OnTab)>,
+    tabs: Query<(Entity, &TabButton, Has<Checked>)>,
     mut nodes: Query<&mut Node>,
     mut texts: Query<(Entity, &Says, &mut Text)>,
     mut pin: Single<&mut TextColor, With<CardPin>>,
     mut shown: Local<Option<(u64, BlockRule, bool, Option<String>)>>,
+    mut commands: Commands,
 ) {
     let now = (library.revision, universe.rule().clone(), library.open, library.note.clone());
     if shown.as_ref() == Some(&now) {
@@ -843,6 +800,12 @@ fn show_library(
     for (part, when) in &parts {
         show(part, when.is_now(standing));
     }
+    for (part, &OnTab(tab)) in &tabbed {
+        show(part, tab == library.tab);
+    }
+    for (button, &TabButton(tab), on) in &tabs {
+        check(&mut commands, button, on, tab == library.tab);
+    }
     let entry = library.entry(rule);
     // On the face of its button, the pin of a rule that is not pinned is grey, not dark.
     let ink = if entry.is_some_and(|entry| entry.pinned) { Aspect::Rule.color() } else { palette::LIGHT_GRAY_2 };
@@ -860,11 +823,21 @@ fn show_library(
                 None => "Not in the library. Keep puts it there, under the name typed.".to_string(),
             },
             // What is wrong with the file is said for as long as it is.
-            (Says::Status, _) => library.library.trouble().map(str::to_string).or(library.note.clone()).unwrap_or(
-                "A click puts a rule on the grid, and ↑ and ↓ go through the list. Words narrow it: of a name, a \
-                 tag, a note, or what a rule has, as conserving or half-turn."
-                    .to_string(),
-            ),
+            (Says::Status, _) => {
+                library.library.trouble().map(str::to_string).or(library.note.clone()).unwrap_or_else(|| {
+                    match library.tab {
+                        Tab::Collection => {
+                            "A click puts a rule on the grid, and ↑ and ↓ go through the list. Words narrow it: of a \
+                             name, a tag, a note, or what a rule has, as conserving or half-turn."
+                        }
+                        Tab::Generate => {
+                            "Generate draws so many rules at random with all that is asked for, each once, in the \
+                             order of their tables. A click puts one on the grid, and ↑ and ↓ go through them."
+                        }
+                    }
+                    .to_string()
+                })
+            }
         };
         // The name is there for a built-in rule, which a kept one has a field for.
         if *says != Says::Name {
@@ -885,73 +858,126 @@ fn about(entry: &Entry) -> String {
     }
 }
 
-/// Lists the rules: those that were on the grid of late and are not in the library, the kept
-/// ones with the latest first, and the built-in ones by where they are from; of the library's,
-/// those the words of the field leave.
+/// A row for a rule wherever it is from: by its name if it is in the library, with its pin
+/// and what is written of it; otherwise by what it goes by, with the rule of the library it
+/// is another form of, if there is one, or else what it has.
+fn any_row(library: &RuleLibrary, rule: &BlockRule, position: usize, current: bool, lit: bool) -> impl Scene {
+    let entries = library.library.entries();
+    match library.library.of(rule) {
+        Some(index) => {
+            let entry = &entries[index];
+            rule_row(position, entry.name.clone(), about(entry), Some((index, entry.pinned)), current, lit)
+        }
+        None => {
+            let twin = library.library.twin(rule).map(|twin| format!("“{}” in another form", entries[twin].name));
+            let about = twin.unwrap_or_else(|| properties(rule).join(" · "));
+            rule_row(position, library.label(rule), about, None, current, lit)
+        }
+    }
+}
+
+/// Lists the rules of the tab that is shown. Of the collection: those that were on the grid
+/// of late and are not in the library, the kept ones with the latest first, and the built-in
+/// ones by where they are from; of the library's, those the words of the field and the
+/// properties asked for leave. Of the other tab: the rules drawn last.
 fn list_rules(
     mut library: ResMut<RuleLibrary>,
     universe: Res<Universe>,
+    sampler: Res<Sampler>,
     list: Single<Entity, With<RuleList>>,
     old: Query<(&RuleRow, &Hovered)>,
-    mut shown: Local<Option<(u64, BlockRule)>>,
+    mut shown: Local<Option<(u64, u64, bool, BlockRule)>>,
     mut commands: Commands,
 ) {
-    let now = (library.revision, universe.rule().clone());
+    // The count may say that there is no rule to draw: the empty list says so too.
+    let now = (library.revision, sampler.revision(), sampler.none_at_all(), universe.rule().clone());
     if shown.as_ref() == Some(&now) {
         return;
+    }
+    // Narrowed to other rules, or another sample: the list goes back to its top.
+    if shown.as_ref().is_some_and(|(_, drawn, ..)| *drawn != now.1) {
+        library.bypass_change_detection().top = true;
     }
     *shown = Some(now);
     // The rows are made anew, and the pointer is only found on them a frame later: the row in
     // the place of the one it is on is lit from the start, or a click would make it blink.
     let lit = old.iter().find(|(_, hovered)| hovered.0).map(|(row, _)| row.0);
     let current = universe.rule();
-    let wanted = library.properties();
-    let found = library.library.matching(&library.filter, &wanted);
-    let entries = library.library.entries();
     let mut rules: Vec<BlockRule> = Vec::new();
     let mut rows: Vec<Entity> = Vec::new();
-    // The latest rules that have no name yet: those with the properties asked for, and none
-    // while words are looked for, of which they have none.
-    let nameless = |rule: &&BlockRule| library.library.of(rule).is_none() && wanted.iter().all(|has| has.holds(rule));
-    let loose: Vec<&BlockRule> = match library.filter.trim() {
-        "" => library.recent.iter().filter(nameless).collect(),
-        _ => Vec::new(),
-    };
-    if !loose.is_empty() {
-        rows.push(commands.spawn_scene(section("OF LATE, NOT KEPT")).id());
-    }
-    for rule in loose {
-        // A rule without a name goes by its table, and by what it has.
-        let twin = library.library.twin(rule).map(|twin| format!("“{}” in another form", entries[twin].name));
-        let about = twin.unwrap_or_else(|| properties(rule).join(" · "));
-        let row = rule_row(rules.len(), library.label(rule), about, None, rule == current, lit == Some(rules.len()));
-        rows.push(commands.spawn_scene(row).id());
-        rules.push(rule.clone());
-    }
-    let kept = found.iter().rev().filter(|&&index| entries[index].kept());
-    let from = |source: Source| found.iter().filter(move |&&index| entries[index].source == Some(source));
-    let sections: [(&str, Vec<usize>); 4] = [
-        ("KEPT", kept.copied().collect()),
-        ("FROM THE COLLECTIONS", from(Source::Collections).copied().collect()),
-        ("FROM MORITA'S BOOK", from(Source::Morita).copied().collect()),
-        ("FOUND BY SEARCH", from(Source::Search).copied().collect()),
-    ];
-    for (title, listed) in sections {
-        if !listed.is_empty() {
-            rows.push(commands.spawn_scene(section(title)).id());
+    match library.tab {
+        Tab::Generate => {
+            let sample = sampler.sample();
+            if sample.is_empty() {
+                let said = if sampler.none_at_all() { "No rule has all of this." } else { "Nothing drawn yet." };
+                rows.push(commands.spawn_scene(caption(said)).id());
+            } else {
+                let title = match (sampler.whole(), sampler.in_canonical_form()) {
+                    (true, true) => format!("ALL {} CANONICAL RULES", sample.len()),
+                    (true, false) => format!("ALL {} RULES", sample.len()),
+                    (false, _) => format!("{} DRAWN AT RANDOM", sample.len()),
+                };
+                rows.push(commands.spawn_scene(section(title)).id());
+            }
+            for rule in sample {
+                let row = any_row(&library, rule, rules.len(), rule == current, lit == Some(rules.len()));
+                rows.push(commands.spawn_scene(row).id());
+                rules.push(rule.clone());
+            }
         }
-        for index in listed {
-            let entry = &entries[index];
-            let pin = Some((index, entry.pinned));
-            let place = rules.len();
-            let row =
-                rule_row(place, entry.name.clone(), about(entry), pin, entry.rule == *current, lit == Some(place));
-            rows.push(commands.spawn_scene(row).id());
-            rules.push(entry.rule.clone());
+        Tab::Collection => {
+            let family = sampler.family();
+            let wanted = family.constraints();
+            let found = library.library.matching(&library.filter, wanted);
+            let entries = library.library.entries();
+            // The latest rules that have no name yet: those with the properties asked for,
+            // and none while words are looked for, of which they have none.
+            let nameless =
+                |rule: &&BlockRule| library.library.of(rule).is_none() && wanted.iter().all(|has| has.holds(rule));
+            let loose: Vec<&BlockRule> = match library.filter.trim() {
+                "" => library.recent.iter().filter(nameless).collect(),
+                _ => Vec::new(),
+            };
+            if !loose.is_empty() {
+                rows.push(commands.spawn_scene(section("OF LATE, NOT KEPT")).id());
+            }
+            for rule in loose {
+                let row = any_row(&library, rule, rules.len(), rule == current, lit == Some(rules.len()));
+                rows.push(commands.spawn_scene(row).id());
+                rules.push(rule.clone());
+            }
+            let kept = found.iter().rev().filter(|&&index| entries[index].kept());
+            let from = |source: Source| found.iter().filter(move |&&index| entries[index].source == Some(source));
+            let sections: [(&str, Vec<usize>); 4] = [
+                ("KEPT", kept.copied().collect()),
+                ("FROM THE COLLECTIONS", from(Source::Collections).copied().collect()),
+                ("FROM MORITA'S BOOK", from(Source::Morita).copied().collect()),
+                ("FOUND BY SEARCH", from(Source::Search).copied().collect()),
+            ];
+            for (title, listed) in sections {
+                if !listed.is_empty() {
+                    rows.push(commands.spawn_scene(section(title)).id());
+                }
+                for index in listed {
+                    let entry = &entries[index];
+                    let pin = Some((index, entry.pinned));
+                    let place = rules.len();
+                    let row = rule_row(
+                        place,
+                        entry.name.clone(),
+                        about(entry),
+                        pin,
+                        entry.rule == *current,
+                        lit == Some(place),
+                    );
+                    rows.push(commands.spawn_scene(row).id());
+                    rules.push(entry.rule.clone());
+                }
+            }
+            if rules.is_empty() {
+                rows.push(commands.spawn_scene(caption("No rule of the library has all of that.")).id());
+            }
         }
-    }
-    if rules.is_empty() {
-        rows.push(commands.spawn_scene(caption("No rule of the library has all of that.")).id());
     }
     commands.entity(*list).despawn_related::<Children>();
     commands.entity(*list).add_children(&rows);
@@ -959,7 +985,7 @@ fn list_rules(
 }
 
 /// The name of a group of rows.
-fn section(title: &'static str) -> impl Scene {
+fn section(title: impl Into<String>) -> impl Scene {
     bsn! {
         Node { padding: UiRect { left: px(8), top: px(4) }, flex_shrink: 0.0 }
         Children [ heading(title) ]

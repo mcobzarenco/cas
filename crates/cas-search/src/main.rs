@@ -93,6 +93,11 @@ struct Args {
     /// so nothing of it is kept either. Without this nothing is kept.
     #[arg(long, value_name = "DIR", num_args = 0..=1)]
     patterns: Option<Option<PathBuf>>,
+    /// With --patterns, keep only these sorts of pattern: spaceships, oscillators and
+    /// still-lifes, with commas between; all three unless said. Under some rules there are
+    /// thousands of oscillators and little in them.
+    #[arg(long, value_delimiter = ',', value_name = "SORT")]
+    sorts: Vec<Sort>,
     /// Threads to search on.
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
@@ -371,7 +376,7 @@ fn main() {
         if let Some(folder) = &folder
             && (named || merit(&line).0 > 0)
         {
-            let new = keep_patterns(folder, rule, &report).unwrap_or_else(|error| fail(&error));
+            let new = keep_patterns(folder, rule, &report, &args.sorts).unwrap_or_else(|error| fail(&error));
             kept.0 += new;
             kept.1 += usize::from(new > 0);
         }
@@ -456,13 +461,14 @@ fn main() {
 }
 
 /// Keeps what a rule's report found in the rule's file of patterns, in the folder, among
-/// what was kept there already: how many were new. A pattern that cannot be kept ends the
-/// search, as a line that cannot be written does.
-fn keep_patterns(folder: &Path, rule: &BlockRule, report: &Report) -> Result<usize, String> {
+/// what was kept there already: how many were new. Only the `sorts` asked for, or every sort
+/// given none. A pattern that cannot be kept ends the search, as a line that cannot be
+/// written does.
+fn keep_patterns(folder: &Path, rule: &BlockRule, report: &Report, sorts: &[Sort]) -> Result<usize, String> {
     let file = Collection::file(folder, rule);
     let mut kept = Collection::read_file(&file, rule).map_err(|error| format!("{}: {error}", file.display()))?;
     let mut new = 0;
-    for found in &report.found {
+    for found in report.found.iter().filter(|found| sorts.is_empty() || sorts.contains(&found.sort)) {
         let mut pattern = Kept::new(rule, found.sort, &found.cells, found.period, found.moves);
         pattern.note = "search".to_string();
         new += usize::from(kept.keep(pattern).is_ok());
@@ -850,13 +856,19 @@ mod tests {
         assert_eq!((cell("headings"), cell("oscillators"), cell("still-lifes")), ("orthogonal+diagonal", "1", "1"));
         // Kept in the rule's file, with the note that says where they came from; kept again,
         // nothing is new, and what the file had stays.
-        let folder = folder("patterns");
-        assert_eq!(keep_patterns(&folder, &rule, &report).unwrap(), 7);
-        assert_eq!(keep_patterns(&folder, &rule, &report).unwrap(), 0);
-        let kept = Collection::read(&folder).unwrap();
+        let every = folder("patterns");
+        assert_eq!(keep_patterns(&every, &rule, &report, &[]).unwrap(), 7);
+        assert_eq!(keep_patterns(&every, &rule, &report, &[]).unwrap(), 0);
+        let kept = Collection::read(&every).unwrap();
         assert_eq!(kept.all().len(), 7);
         assert!(kept.all().iter().all(|kept| kept.note == "search" && kept.rule == rule));
-        let _ = std::fs::remove_dir_all(&folder);
+        let _ = std::fs::remove_dir_all(&every);
+        // Only the sorts asked for.
+        let some = folder("some-patterns");
+        assert_eq!(keep_patterns(&some, &rule, &report, &[Sort::Spaceship, Sort::StillLife]).unwrap(), 6);
+        let kept = Collection::read(&some).unwrap();
+        assert!(kept.all().iter().all(|kept| kept.sort != Sort::Oscillator));
+        let _ = std::fs::remove_dir_all(&some);
     }
 
     #[test]

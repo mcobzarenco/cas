@@ -9,13 +9,13 @@
 //! ```text
 //! patterns/0283156749abcdef.tsv
 //!
-//! sort        pattern   period  moves  name  note
+//! class        pattern   period  moves  name  note
 //! spaceship   b2o2$b2o  12      2,0          the lightest
 //! still life  2o$2o     1
 //! ```
 //!
 //! The columns are separated by tabs, one between any two (they are drawn apart here), and
-//! go by the names in the line that begins with `sort`, as the library's do. The rule is the
+//! go by the names in the line that begins with `class`, as the library's do. The rule is the
 //! file's name ([`BlockRule::hex`]), and its table in full is in the comment the file begins
 //! with. A pattern is written as the app writes one: run-length encoded, from a corner of the
 //! blocks the next step rewrites, at the start of the vacuum's cycle. It is the form its kind
@@ -44,66 +44,67 @@ fn heading(rule: &BlockRule) -> String {
          # still life), the pattern (run-length encoded, from a corner of the blocks the next step\n\
          # rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,\n\
          # a name, and a note. The file is named by the rule's table in hex.\n\
-         sort\tpattern\tperiod\tmoves\tname\tnote\n"
+         class\tpattern\tperiod\tmoves\tname\tnote\n"
     )
 }
 
 /// The columns of a file, in the order they are written.
-const COLUMNS: [&str; 6] = ["sort", "pattern", "period", "moves", "name", "note"];
+const COLUMNS: [&str; 6] = ["class", "pattern", "period", "moves", "name", "note"];
 
-/// The sorts of pattern that are kept: what comes back to its shape.
+/// The classes of pattern that are kept: what comes back to its shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Sort {
+pub enum PatternClass {
     Spaceship,
     Oscillator,
     StillLife,
 }
 
-impl Sort {
-    pub const ALL: [Sort; 3] = [Sort::Spaceship, Sort::Oscillator, Sort::StillLife];
+impl PatternClass {
+    pub const ALL: [PatternClass; 3] = [PatternClass::Spaceship, PatternClass::Oscillator, PatternClass::StillLife];
 
-    /// The sort of a pattern that is back after a period, having moved so far: `still` if it
+    /// The class of a pattern that is back after a period, having moved so far: `still` if it
     /// did not change on the way either.
     pub fn of(moves: (i32, i32), still: bool) -> Self {
         match (moves, still) {
-            ((0, 0), true) => Sort::StillLife,
-            ((0, 0), false) => Sort::Oscillator,
-            _ => Sort::Spaceship,
+            ((0, 0), true) => PatternClass::StillLife,
+            ((0, 0), false) => PatternClass::Oscillator,
+            _ => PatternClass::Spaceship,
         }
     }
 
     pub fn name(self) -> &'static str {
         match self {
-            Sort::Spaceship => "spaceship",
-            Sort::Oscillator => "oscillator",
-            Sort::StillLife => "still life",
+            PatternClass::Spaceship => "spaceship",
+            PatternClass::Oscillator => "oscillator",
+            PatternClass::StillLife => "still life",
         }
     }
 
     /// Several of them.
     pub fn names(self) -> &'static str {
         match self {
-            Sort::Spaceship => "spaceships",
-            Sort::Oscillator => "oscillators",
-            Sort::StillLife => "still lifes",
+            PatternClass::Spaceship => "spaceships",
+            PatternClass::Oscillator => "oscillators",
+            PatternClass::StillLife => "still lifes",
         }
     }
 }
 
-impl fmt::Display for Sort {
+impl fmt::Display for PatternClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
 }
 
-impl FromStr for Sort {
+impl FromStr for PatternClass {
     type Err = String;
 
     /// One or several: `spaceship`, `still lifes`, `still-lifes`.
     fn from_str(text: &str) -> Result<Self, String> {
         let wanted: String = text.chars().filter(|c| c.is_alphabetic()).map(|c| c.to_ascii_lowercase()).collect();
-        let named = |sort: &Sort| [sort.name(), sort.names()].iter().any(|name| name.replace(' ', "") == wanted);
-        Sort::ALL.into_iter().find(named).ok_or_else(|| format!("{text:?} is no sort of pattern"))
+        let named =
+            |class: &PatternClass| [class.name(), class.names()].iter().any(|name| name.replace(' ', "") == wanted);
+        PatternClass::ALL.into_iter().find(named).ok_or_else(|| format!("{text:?} is no class of pattern"))
     }
 }
 
@@ -111,7 +112,7 @@ impl FromStr for Sort {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Kept {
     pub rule: BlockRule,
-    pub sort: Sort,
+    pub class: PatternClass,
     /// The form the kind is filed under, relative to a corner of the blocks the next step
     /// rewrites, at the start of the vacuum's cycle.
     pub cells: Vec<Cell>,
@@ -124,10 +125,10 @@ pub struct Kept {
 
 impl Kept {
     /// A pattern to keep, without a name or a note yet.
-    pub fn new(rule: &BlockRule, sort: Sort, cells: &[Cell], period: u32, moves: (i32, i32)) -> Self {
+    pub fn new(rule: &BlockRule, class: PatternClass, cells: &[Cell], period: u32, moves: (i32, i32)) -> Self {
         Self {
             rule: rule.clone(),
-            sort,
+            class,
             cells: settled(cells),
             period,
             moves,
@@ -175,13 +176,15 @@ impl Collection {
     pub fn parse(text: &str, rule: &BlockRule) -> Result<Self, String> {
         let mut collection = Self::default();
         let mut line = Fields::of(&COLUMNS);
-        for (number, text) in text.lines().enumerate() {
+        // A file from when the column was called the sort: no class is called that.
+        let renamed = format!("\n{text}").replace("\nsort\t", "\nclass\t");
+        for (number, text) in renamed[1..].lines().enumerate() {
             if text.trim().is_empty() || text.starts_with('#') || line.read(text) {
                 continue;
             }
             let (period, moves) = (line.get("period"), line.get("moves"));
             let wrong = |error: String| format!("line {}: {error}", number + 1);
-            let sort: Sort = line.get("sort").parse().map_err(wrong)?;
+            let class: PatternClass = line.get("class").parse().map_err(wrong)?;
             let cells = from_rle(line.get("pattern")).map_err(wrong)?;
             if cells.is_empty() {
                 return Err(wrong("a pattern has cells".to_string()));
@@ -196,7 +199,7 @@ impl Collection {
                 None => return Err(wrong(format!("{moves:?} is no way to move"))),
             };
             let (name, note) = (line.get("name").to_string(), line.get("note").to_string());
-            let kept = Kept { name, note, ..Kept::new(rule, sort, &cells, period, moves) };
+            let kept = Kept { name, note, ..Kept::new(rule, class, &cells, period, moves) };
             // The same pattern twice is the same pattern.
             let _ = collection.keep(kept);
         }
@@ -280,7 +283,7 @@ impl Collection {
             let (name, note) = (line(&kept.name), line(&kept.note));
             text.push_str(&format!(
                 "{}\t{}\t{}\t{moves}\t{name}\t{note}\n",
-                kept.sort,
+                kept.class,
                 to_rle(&kept.cells),
                 kept.period
             ));
@@ -301,9 +304,9 @@ impl Collection {
         self.rules.get(rule).map_or(&[], |shelf| &shelf.kept)
     }
 
-    /// The patterns of one sort kept under a rule, in the order they were kept.
-    pub fn of<'a>(&'a self, rule: &BlockRule, sort: Sort) -> impl Iterator<Item = &'a Kept> + use<'a> {
-        self.under(rule).iter().filter(move |kept| kept.sort == sort)
+    /// The patterns of one class kept under a rule, in the order they were kept.
+    pub fn of<'a>(&'a self, rule: &BlockRule, class: PatternClass) -> impl Iterator<Item = &'a Kept> + use<'a> {
+        self.under(rule).iter().filter(move |kept| kept.class == class)
     }
 
     /// Whether a pattern of a rule is kept. The cells are those of the form its kind is filed
@@ -384,7 +387,7 @@ mod tests {
     fn a_pattern_is_kept_once_under_its_rule() {
         let (rotation, critters) = (rule("single-rotation"), rule("critters"));
         let mut collection = Collection::default();
-        let ship = Kept::new(&rotation, Sort::Spaceship, &cells("b2o2$b2o"), 12, (2, 0));
+        let ship = Kept::new(&rotation, PatternClass::Spaceship, &cells("b2o2$b2o"), 12, (2, 0));
         assert_eq!(collection.keep(ship.clone()), Ok(0));
         assert_eq!(collection.keep(ship.clone()), Err(0));
         // The same cells two blocks over are the same pattern; a cell over, or under another
@@ -394,24 +397,30 @@ mod tests {
         let shifted: Vec<Cell> = ship.cells.iter().map(|&(x, y)| (x + 1, y)).collect();
         assert_eq!((collection.find(&rotation, &shifted), collection.find(&critters, &ship.cells)), (None, None));
         // Each rule's are in a place of their own.
-        assert_eq!(collection.keep(Kept::new(&critters, Sort::Oscillator, &ship.cells, 4, (0, 0))), Ok(0));
-        assert_eq!(collection.keep(Kept::new(&rotation, Sort::StillLife, &cells("2o$2o"), 1, (0, 0))), Ok(1));
-        // Each rule has its own, sort by sort.
-        let of = |collection: &Collection, rule: &BlockRule, sort| collection.of(rule, sort).count();
-        assert_eq!(of(&collection, &rotation, Sort::Spaceship), 1);
-        assert_eq!((of(&collection, &rotation, Sort::StillLife), of(&collection, &rotation, Sort::Oscillator)), (1, 0));
-        assert_eq!((of(&collection, &critters, Sort::Oscillator), of(&collection, &critters, Sort::Spaceship)), (1, 0));
+        assert_eq!(collection.keep(Kept::new(&critters, PatternClass::Oscillator, &ship.cells, 4, (0, 0))), Ok(0));
+        assert_eq!(collection.keep(Kept::new(&rotation, PatternClass::StillLife, &cells("2o$2o"), 1, (0, 0))), Ok(1));
+        // Each rule has its own, class by class.
+        let of = |collection: &Collection, rule: &BlockRule, class| collection.of(rule, class).count();
+        assert_eq!(of(&collection, &rotation, PatternClass::Spaceship), 1);
+        assert_eq!(
+            (of(&collection, &rotation, PatternClass::StillLife), of(&collection, &rotation, PatternClass::Oscillator)),
+            (1, 0)
+        );
+        assert_eq!(
+            (of(&collection, &critters, PatternClass::Oscillator), of(&collection, &critters, PatternClass::Spaceship)),
+            (1, 0)
+        );
         // What was kept can be let go of.
         assert!(collection.is_kept(&rotation, &moved) && !collection.is_kept(&rotation, &shifted));
         assert!(collection.forget(&rotation, &moved) && !collection.forget(&rotation, &moved));
-        assert_eq!((collection.all().len(), of(&collection, &rotation, Sort::Spaceship)), (2, 0));
+        assert_eq!((collection.all().len(), of(&collection, &rotation, PatternClass::Spaceship)), (2, 0));
         assert!(!collection.is_kept(&rotation, &moved));
         // A rule's patterns taken from another collection are in place of what was held.
         let mut other = Collection::default();
-        other.keep(Kept::new(&rotation, Sort::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
+        other.keep(Kept::new(&rotation, PatternClass::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
         collection.take(&rotation, other);
         assert_eq!(collection.under(&rotation).len(), 1);
-        assert_eq!(of(&collection, &critters, Sort::Oscillator), 1);
+        assert_eq!(of(&collection, &critters, PatternClass::Oscillator), 1);
         collection.take(&critters, Collection::default());
         assert_eq!((collection.all().len(), collection.under(&critters).len()), (1, 0));
     }
@@ -420,11 +429,13 @@ mod tests {
     fn the_file_says_what_was_kept() {
         let slow = rule("15,7,6,10,13,12,2,8,14,11,5,4,3,9,1,0");
         let mut collection = Collection::default();
-        let mut ship = Kept::new(&slow, Sort::Spaceship, &cells("bobo$obo"), 7_328_092, (0, -8));
+        let mut ship = Kept::new(&slow, PatternClass::Spaceship, &cells("bobo$obo"), 7_328_092, (0, -8));
         ship.name = "The\tslowest".to_string();
         ship.note = "eight cells up\nin a period".to_string();
         collection.keep(ship).unwrap();
-        collection.keep(Kept::new(&rule("single-rotation"), Sort::StillLife, &cells("2o$2o"), 1, (0, 0))).unwrap();
+        collection
+            .keep(Kept::new(&rule("single-rotation"), PatternClass::StillLife, &cells("2o$2o"), 1, (0, 0)))
+            .unwrap();
         // A file to a rule, which says whose it is.
         let file = collection.text_of(&slow).unwrap();
         assert!(
@@ -434,13 +445,13 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "sort\tpattern\tperiod\tmoves\tname\tnote",
+                "class\tpattern\tperiod\tmoves\tname\tnote",
                 "spaceship\tbobo$obo\t7328092\t0,-8\tThe slowest\teight cells up in a period",
             ]
         );
         let other = collection.text_of(&rule("single-rotation")).unwrap();
         assert!(other.contains("0,2,8,3,1,5,6,7,4,9,10,11,12,13,14,15 (Single rotation):\n"));
-        assert!(other.ends_with("sort\tpattern\tperiod\tmoves\tname\tnote\nstill life\t2o$2o\t1\t\t\t\n"));
+        assert!(other.ends_with("class\tpattern\tperiod\tmoves\tname\tnote\nstill life\t2o$2o\t1\t\t\t\n"));
         assert_eq!(collection.text_of(&rule("critters")), None);
         // Read again, it is the same collection, but for the tab and the line break that a
         // line cannot hold.
@@ -458,10 +469,13 @@ mod tests {
         let file = "# kept\n\noscillator\to\t4\nStill Life\t2o$2o\t2\t\tA block\noscillator\to\t4\t\tagain";
         let collection = Collection::parse(file, &critters).unwrap();
         assert_eq!(collection.all().len(), 2);
-        assert_eq!((collection.all()[1].sort, collection.all()[1].name.as_str()), (Sort::StillLife, "A block"));
+        assert_eq!(
+            (collection.all()[1].class, collection.all()[1].name.as_str()),
+            (PatternClass::StillLife, "A block")
+        );
         assert!(collection.all().iter().all(|kept| kept.rule == critters));
-        // A file from when the day a pattern was kept had a column: read by the names of its
-        // columns, and written again without the day.
+        // A file from when the day a pattern was kept had a column, and the class was called
+        // the sort: read by the names of its columns, and written again without the day.
         let older = "sort\tpattern\tperiod\tmoves\tname\tadded\tnote\n\
                      spaceship\tb2o2$b2o\t12\t2,0\tLightest\t2026-10-04\ta note";
         let read = Collection::parse(older, &rule("single-rotation")).unwrap();
@@ -474,18 +488,18 @@ mod tests {
         assert!(!written.contains("2026") && !written.contains("added"));
         // What is wrong is said, with its line.
         let wrong = |line: &str| Collection::parse(&format!("oscillator\to\t4\n{line}"), &critters).unwrap_err();
-        assert_eq!(wrong("gun\to\t4"), "line 2: \"gun\" is no sort of pattern");
+        assert_eq!(wrong("gun\to\t4"), "line 2: \"gun\" is no class of pattern");
         assert_eq!(wrong("spaceship\to\tsoon"), "line 2: \"soon\" is no period");
         assert_eq!(wrong("spaceship\to\t4\tup"), "line 2: \"up\" is no way to move");
         assert_eq!(wrong("spaceship\t\t4"), "line 2: a pattern has cells");
         assert!(wrong("spaceship\t2x\t4").starts_with("line 2: "));
-        // The sorts by what a pattern does, and by name, one or several.
-        assert_eq!("still-lifes".parse::<Sort>(), Ok(Sort::StillLife));
-        assert_eq!("Spaceships".parse::<Sort>(), Ok(Sort::Spaceship));
-        assert!("ships".parse::<Sort>().is_err());
-        assert_eq!(Sort::of((0, 0), true), Sort::StillLife);
-        assert_eq!(Sort::of((0, 0), false), Sort::Oscillator);
-        assert_eq!(Sort::of((2, 0), false), Sort::Spaceship);
+        // The classes by what a pattern does, and by name, one or several.
+        assert_eq!("still-lifes".parse::<PatternClass>(), Ok(PatternClass::StillLife));
+        assert_eq!("Spaceships".parse::<PatternClass>(), Ok(PatternClass::Spaceship));
+        assert!("ships".parse::<PatternClass>().is_err());
+        assert_eq!(PatternClass::of((0, 0), true), PatternClass::StillLife);
+        assert_eq!(PatternClass::of((0, 0), false), PatternClass::Oscillator);
+        assert_eq!(PatternClass::of((2, 0), false), PatternClass::Spaceship);
         assert!(usual_folder().ends_with("patterns") && usual_folder().with_file_name("Cargo.toml").exists());
     }
 
@@ -497,8 +511,8 @@ mod tests {
         assert_eq!(Collection::read(&folder).unwrap(), Collection::default());
         let (rotation, critters) = (rule("single-rotation"), rule("critters"));
         let mut collection = Collection::default();
-        collection.keep(Kept::new(&rotation, Sort::Spaceship, &cells("b2o2$b2o"), 12, (2, 0))).unwrap();
-        collection.keep(Kept::new(&critters, Sort::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
+        collection.keep(Kept::new(&rotation, PatternClass::Spaceship, &cells("b2o2$b2o"), 12, (2, 0))).unwrap();
+        collection.keep(Kept::new(&critters, PatternClass::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
         collection.write(&folder).unwrap();
         assert_eq!(Collection::read(&folder).unwrap(), collection);
         let names = |folder: &Path| {
@@ -514,7 +528,7 @@ mod tests {
         // not a rule's is left alone and not read.
         fs::write(folder.join("notes.txt"), "mine").unwrap();
         let written = fs::metadata(folder.join("fed3b56179a2c480.tsv")).unwrap().modified().unwrap();
-        collection.keep(Kept::new(&rotation, Sort::StillLife, &cells("2o$2o"), 1, (0, 0))).unwrap();
+        collection.keep(Kept::new(&rotation, PatternClass::StillLife, &cells("2o$2o"), 1, (0, 0))).unwrap();
         collection.write(&folder).unwrap();
         assert_eq!(fs::metadata(folder.join("fed3b56179a2c480.tsv")).unwrap().modified().unwrap(), written);
         let read = Collection::read(&folder).unwrap();

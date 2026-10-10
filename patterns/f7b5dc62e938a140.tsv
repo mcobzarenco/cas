@@ -3,7 +3,7 @@
 # still life), the pattern (run-length encoded, from a corner of the blocks the next step
 # rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
 # a name, and a note. The file is named by the rule's table in hex.
-sort	pattern	period	moves	name	note
+class	pattern	period	moves	name	note
 spaceship	o$o$2bo$2bo$o	2728	4,4		search
 spaceship	o2$2o2$o2$bo	2608	4,4		search
 spaceship	2o$o$o2$bo	2228	4,0		search

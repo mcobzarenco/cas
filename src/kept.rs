@@ -1,5 +1,5 @@
 //! The patterns kept under a rule: the spaceships, the oscillators and the still lifes, each
-//! sort in a panel of its own.
+//! class in a panel of its own.
 //!
 //! What is kept lies in a folder next to the library's file, a file to a rule
 //! ([`cas_core::collection`]). A rule's file is read on another thread when the rule comes on
@@ -27,7 +27,7 @@ use std::{
 use bevy::{feathers::palette, picking::hover::Hovered, prelude::*, text::LineBreak, ui_widgets::Activate};
 
 use cas_core::{
-    collection::{Collection, Kept, Sort},
+    collection::{Collection, Kept, PatternClass},
     pattern::{Analyser, Cell, Heading, Motion},
     rules::BlockRule,
     universe::Universe,
@@ -47,12 +47,12 @@ use crate::{
 
 pub const KEPT_WIDTH: f32 = 396.0;
 
-/// The sorts, in the order of their panels.
-const SHELVES: [Sort; 3] = Sort::ALL;
+/// The classes, in the order of their panels.
+const SHELVES: [PatternClass; 3] = PatternClass::ALL;
 
-/// Which of the panels a sort has, if it has one.
-fn shelf(sort: Sort) -> Option<usize> {
-    SHELVES.iter().position(|shelved| *shelved == sort)
+/// Which of the panels a class has, if it has one.
+fn shelf(class: PatternClass) -> Option<usize> {
+    SHELVES.iter().position(|shelved| *shelved == class)
 }
 
 /// A file as it was when last read or written here: when it was written, and how long it is.
@@ -130,19 +130,19 @@ impl Collected {
         }
     }
 
-    pub fn toggle(&mut self, sort: Sort) {
-        if let Some(shelf) = shelf(sort) {
+    pub fn toggle(&mut self, class: PatternClass) {
+        if let Some(shelf) = shelf(class) {
             self.open[shelf] = !self.open[shelf];
         }
     }
 
-    pub fn is_open(&self, sort: Sort) -> bool {
-        shelf(sort).is_some_and(|shelf| self.open[shelf])
+    pub fn is_open(&self, class: PatternClass) -> bool {
+        shelf(class).is_some_and(|shelf| self.open[shelf])
     }
 
-    pub fn close(&mut self, sort: Sort) {
-        if self.is_open(sort) {
-            self.toggle(sort);
+    pub fn close(&mut self, class: PatternClass) {
+        if self.is_open(class) {
+            self.toggle(class);
         }
     }
 
@@ -157,15 +157,22 @@ impl Collected {
         self.collection.is_kept(rule, cells)
     }
 
-    /// The patterns of a sort kept under a rule.
-    pub fn of<'a>(&'a self, rule: &'a BlockRule, sort: Sort) -> Vec<&'a Kept> {
-        self.collection.of(rule, sort).collect()
+    /// The patterns of a class kept under a rule.
+    pub fn of<'a>(&'a self, rule: &'a BlockRule, class: PatternClass) -> Vec<&'a Kept> {
+        self.collection.of(rule, class).collect()
     }
 
     /// Keeps a pattern of a rule, by the form its kind is filed under. True if it was not
     /// kept before.
-    pub fn keep(&mut self, rule: &BlockRule, sort: Sort, cells: &[Cell], period: u32, moves: (i32, i32)) -> bool {
-        let kept = Kept::new(rule, sort, cells, period, moves);
+    pub fn keep(
+        &mut self,
+        rule: &BlockRule,
+        class: PatternClass,
+        cells: &[Cell],
+        period: u32,
+        moves: (i32, i32),
+    ) -> bool {
+        let kept = Kept::new(rule, class, cells, period, moves);
         self.edit(rule, |collection| collection.keep(kept).is_ok())
     }
 
@@ -178,7 +185,7 @@ impl Collected {
     pub fn keep_or_forget(
         &mut self,
         rule: &BlockRule,
-        sort: Sort,
+        class: PatternClass,
         cells: &[Cell],
         period: u32,
         moves: (i32, i32),
@@ -186,7 +193,7 @@ impl Collected {
         if self.is_kept(rule, cells) {
             self.forget(rule, cells);
         } else {
-            self.keep(rule, sort, cells, period, moves);
+            self.keep(rule, class, cells, period, moves);
         }
         self.is_kept(rule, cells)
     }
@@ -384,12 +391,12 @@ fn kept_panel(shelf: usize, title: &'static str, about: &'static str) -> impl Sc
     let list = Name::new(["KeptSpaceshipList", "KeptOscillatorList", "KeptStillLifeList"][shelf]);
     let (this, closes, noted, listed) = (KeptPanel(shelf), KeptClose(shelf), KeptNote(shelf), KeptList(shelf));
     let (how, period) = match SHELVES[shelf] {
-        Sort::Spaceship => ("SPEED", "PERIOD"),
-        Sort::Oscillator => ("SIZE", "PERIOD"),
-        Sort::StillLife => ("SIZE", ""),
+        PatternClass::Spaceship => ("SPEED", "PERIOD"),
+        PatternClass::Oscillator => ("SIZE", "PERIOD"),
+        PatternClass::StillLife => ("SIZE", ""),
     };
     // Only what flies goes any way.
-    let ways: Vec<_> = (SHELVES[shelf] == Sort::Spaceship).then(ways_tile).into_iter().collect();
+    let ways: Vec<_> = (SHELVES[shelf] == PatternClass::Spaceship).then(ways_tile).into_iter().collect();
     bsn! {
         side_panel(KEPT_WIDTH, bsn_list![
             panel_header(panel_title(Aspect::Pattern, title), bsn! {
@@ -489,15 +496,15 @@ fn kept_row(shelf: usize, index: usize, kept: &Kept, possible: &[bool; 8], lit: 
     // as the other. The list is of what is known, and nothing in it was counted.
     let ways = possible.map(u64::from);
     let period = period_of(kept).map_or(String::new(), |period| period.to_string());
-    let (title, word) = match kept.sort {
-        Sort::Spaceship => {
+    let (title, word) = match kept.class {
+        PatternClass::Spaceship => {
             // Straight, along a diagonal or neither is said of every ship: the dial has only
             // eight ways, and a ship that flies between two of them is on the diagonal.
             let heading = analysis::heading(&motion);
             let word = if written.is_empty() { heading.to_string() } else { format!("{heading} · {written}") };
             (analysis::speed(&motion), word)
         }
-        Sort::Oscillator | Sort::StillLife => (size, written),
+        PatternClass::Oscillator | PatternClass::StillLife => (size, written),
     };
     bsn! {
         list_row()
@@ -649,7 +656,7 @@ fn show_panels(collected: Res<Collected>, mut panels: Query<(&KeptPanel, &mut No
 /// The period of a kept pattern, if it has one to speak of. What stands still has none: the
 /// one it was kept with is the length of its vacuum's cycle, or simply 1.
 fn period_of(kept: &Kept) -> Option<u32> {
-    (kept.sort != Sort::StillLife).then_some(kept.period)
+    (kept.class != PatternClass::StillLife).then_some(kept.period)
 }
 
 /// The order of a list: the faster ship first; of two as fast, the one of the shorter period;
@@ -664,7 +671,7 @@ fn in_order(a: &Kept, b: &Kept) -> Ordering {
     faster.then(period_of(a).cmp(&period_of(b))).then(a.cells.len().cmp(&b.cells.len()))
 }
 
-/// Lists what is kept under the rule on the grid, sort by sort and in order ([`in_order`]):
+/// Lists what is kept under the rule on the grid, class by class and in order ([`in_order`]):
 /// of two that are alike in all it goes by, the one kept last comes first. The rows are
 /// made as the lists are looked at ([`scroll_kept`]); the lists of another rule begin at
 /// their top.
@@ -685,8 +692,8 @@ fn list_kept(
     let other_rule = shown.as_ref().is_none_or(|(_, rule)| *rule != now.1);
     *shown = Some(now);
     let rule = universe.rule();
-    let listed: [Vec<Kept>; 3] = SHELVES.map(|sort| {
-        let mut kept: Vec<Kept> = collected.of(rule, sort).into_iter().rev().cloned().collect();
+    let listed: [Vec<Kept>; 3] = SHELVES.map(|class| {
+        let mut kept: Vec<Kept> = collected.of(rule, class).into_iter().rev().cloned().collect();
         kept.sort_by(in_order);
         kept
     });
@@ -700,7 +707,7 @@ fn list_kept(
     let analyser = Analyser::new(rule);
     // Over the spaceships, the ways they go between them: a way is lit if one kind of them
     // can go it, and as much as any other, however many kinds can.
-    let ships = shelf(Sort::Spaceship).map_or(&[][..], |shelf| &listed[shelf][..]);
+    let ships = shelf(PatternClass::Spaceship).map_or(&[][..], |shelf| &listed[shelf][..]);
     let mut ways = [false; 8];
     for kept in ships {
         for (way, possible) in analyser.ways(kept.moves).into_iter().enumerate() {
@@ -829,28 +836,31 @@ mod tests {
         assert!(!path.exists() && !collected.is_kept(&rule, &ship));
         // Kept once, however often it is asked for; the same cells two blocks over are the
         // same pattern.
-        assert!(collected.keep(&rule, Sort::Spaceship, &ship, 12, (2, 0)));
-        assert!(!collected.keep(&rule, Sort::Spaceship, &ship, 12, (2, 0)));
+        assert!(collected.keep(&rule, PatternClass::Spaceship, &ship, 12, (2, 0)));
+        assert!(!collected.keep(&rule, PatternClass::Spaceship, &ship, 12, (2, 0)));
         let moved: Vec<Cell> = ship.iter().map(|&(x, y)| (x + 2, y + 4)).collect();
         assert!(collected.is_kept(&rule, &moved));
-        assert!(collected.keep_or_forget(&rule, Sort::StillLife, &block, 1, (0, 0)));
+        assert!(collected.keep_or_forget(&rule, PatternClass::StillLife, &block, 1, (0, 0)));
         let on_disk = Collection::read(&path).unwrap();
         assert_eq!(on_disk.all().len(), 2);
-        assert_eq!((collected.of(&rule, Sort::StillLife).len(), collected.of(&rule, Sort::Oscillator).len()), (1, 0));
+        assert_eq!(
+            (collected.of(&rule, PatternClass::StillLife).len(), collected.of(&rule, PatternClass::Oscillator).len()),
+            (1, 0)
+        );
         // What something else puts in the files is not written over by the next change here.
         let mut outside = on_disk.clone();
-        outside.keep(Kept::new(&rule, Sort::Oscillator, &[(0, 0)], 4, (0, 0))).unwrap();
+        outside.keep(Kept::new(&rule, PatternClass::Oscillator, &[(0, 0)], 4, (0, 0))).unwrap();
         outside.write(&path).unwrap();
-        assert!(!collected.keep_or_forget(&rule, Sort::StillLife, &block, 1, (0, 0)));
+        assert!(!collected.keep_or_forget(&rule, PatternClass::StillLife, &block, 1, (0, 0)));
         let on_disk = Collection::read(&path).unwrap();
         assert_eq!(on_disk.all().len(), 2);
         assert!(collected.is_kept(&rule, &[(0, 0)]) && !collected.is_kept(&rule, &block));
-        // Each sort has a panel of its own.
-        collected.toggle(Sort::Oscillator);
+        // Each class has a panel of its own.
+        collected.toggle(PatternClass::Oscillator);
         assert!(
-            collected.is_open(Sort::Oscillator)
-                && !collected.is_open(Sort::StillLife)
-                && !collected.is_open(Sort::Spaceship)
+            collected.is_open(PatternClass::Oscillator)
+                && !collected.is_open(PatternClass::StillLife)
+                && !collected.is_open(PatternClass::Spaceship)
         );
         let _ = std::fs::remove_dir_all(&folder);
     }
@@ -864,7 +874,7 @@ mod tests {
         let rule: BlockRule = "single-rotation".parse().unwrap();
         let (ship, block) = (vec![(1, 0), (2, 0), (1, 2), (2, 2)], vec![(0, 0), (1, 0), (0, 1), (1, 1)]);
         let mut outside = Collection::default();
-        outside.keep(Kept::new(&rule, Sort::Spaceship, &ship, 12, (2, 0))).unwrap();
+        outside.keep(Kept::new(&rule, PatternClass::Spaceship, &ship, 12, (2, 0))).unwrap();
         outside.write(&path).unwrap();
         // Nothing is known of a rule until its file was read, which is asked for and comes
         // back from another thread.
@@ -879,10 +889,10 @@ mod tests {
         assert!(collected.loaded(&rule) && collected.is_kept(&rule, &ship) && collected.trouble(&rule).is_none());
         // Written from outside since, the file is another, and is read before anything is
         // kept under the rule: nothing it has is lost.
-        outside.keep(Kept::new(&rule, Sort::Oscillator, &[(0, 0)], 4, (0, 0))).unwrap();
+        outside.keep(Kept::new(&rule, PatternClass::Oscillator, &[(0, 0)], 4, (0, 0))).unwrap();
         outside.write(&path).unwrap();
         assert_ne!(collected.seen[&rule], seen(&Collection::file(&path, &rule)));
-        assert!(collected.keep(&rule, Sort::StillLife, &block, 1, (0, 0)));
+        assert!(collected.keep(&rule, PatternClass::StillLife, &block, 1, (0, 0)));
         assert!(collected.is_kept(&rule, &[(0, 0)]) && collected.is_kept(&rule, &block));
         assert_eq!(Collection::read(&path).unwrap().all().len(), 3);
         assert_eq!(collected.seen[&rule], seen(&Collection::file(&path, &rule)));
@@ -895,11 +905,12 @@ mod tests {
             collected.hear();
         }
         assert!(collected.trouble(&rule).is_some_and(|said| said.contains("line 1")));
-        assert!(!collected.keep(&rule, Sort::Oscillator, &[(0, 0), (1, 1)], 2, (0, 0)));
+        assert!(!collected.keep(&rule, PatternClass::Oscillator, &[(0, 0), (1, 1)], 2, (0, 0)));
         assert!(collected.is_kept(&rule, &block));
         let critters: BlockRule = "critters".parse().unwrap();
         assert!(
-            collected.keep(&critters, Sort::StillLife, &block, 1, (0, 0)) && collected.trouble(&critters).is_none()
+            collected.keep(&critters, PatternClass::StillLife, &block, 1, (0, 0))
+                && collected.trouble(&critters).is_none()
         );
         let _ = std::fs::remove_dir_all(&folder);
     }
@@ -908,7 +919,7 @@ mod tests {
     fn the_lists_are_in_order() {
         let rule: BlockRule = "single-rotation".parse().unwrap();
         let cells = |count: i32| (0..count).map(|x| (x, 0)).collect::<Vec<Cell>>();
-        let ship = |count, period, moves| Kept::new(&rule, Sort::Spaceship, &cells(count), period, moves);
+        let ship = |count, period, moves| Kept::new(&rule, PatternClass::Spaceship, &cells(count), period, moves);
         // By speed, which is along the faster axis: 2c/5, c/3, c/6 three times and 2c/15.
         let (fast, slow) = (ship(9, 3, (-1, 0)), ship(2, 30, (4, 2)));
         let (short, long, light) = (ship(7, 12, (0, 2)), ship(3, 24, (4, 4)), ship(5, 12, (-2, 0)));
@@ -917,12 +928,12 @@ mod tests {
         ships.sort_by(in_order);
         assert_eq!(ships, [fastest, fast, light, short, long, slow]);
         // What stays where it is: by period, then by cells.
-        let stays = |count, period| Kept::new(&rule, Sort::Oscillator, &cells(count), period, (0, 0));
+        let stays = |count, period| Kept::new(&rule, PatternClass::Oscillator, &cells(count), period, (0, 0));
         let mut oscillators = vec![stays(4, 8), stays(6, 2), stays(1, 4), stays(3, 2), stays(2, 4)];
         oscillators.sort_by(in_order);
         assert_eq!(oscillators, [stays(3, 2), stays(6, 2), stays(1, 4), stays(2, 4), stays(4, 8)]);
         // What stands still: by cells alone, whatever period it was kept with.
-        let stands = |count, period| Kept::new(&rule, Sort::StillLife, &cells(count), period, (0, 0));
+        let stands = |count, period| Kept::new(&rule, PatternClass::StillLife, &cells(count), period, (0, 0));
         let mut still = vec![stands(4, 1), stands(3, 2), stands(6, 1)];
         still.sort_by(in_order);
         assert_eq!(still, [stands(3, 2), stands(4, 1), stands(6, 1)]);

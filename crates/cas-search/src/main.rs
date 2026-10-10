@@ -13,7 +13,7 @@ use std::{
 };
 
 use cas_core::{
-    collection::{self, Collection, Kept, Sort},
+    collection::{self, Collection, Kept, PatternClass},
     families::{self, COUNTABLE, Family, Progress},
     library::{Library, usual_file},
     pattern::{Heading, Motion},
@@ -93,11 +93,11 @@ struct Args {
     /// so nothing of it is kept either. Without this nothing is kept.
     #[arg(long, value_name = "DIR", num_args = 0..=1)]
     patterns: Option<Option<PathBuf>>,
-    /// With --patterns, keep only these sorts of pattern: spaceships, oscillators and
+    /// With --patterns, keep only these classes of pattern: spaceships, oscillators and
     /// still-lifes, with commas between; all three unless said. Under some rules there are
     /// thousands of oscillators and little in them.
     #[arg(long, value_delimiter = ',', value_name = "SORT")]
-    pattern_sorts: Vec<Sort>,
+    pattern_classes: Vec<PatternClass>,
     /// Threads to search on.
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
@@ -172,7 +172,7 @@ fn ships_of(report: &Report) -> Ships {
     let mut ships = Ships::default();
     // Speeds compared as fractions, without dividing.
     let faster = |a: (u32, u32), b: (u32, u32)| (a.0 as u64 * b.1 as u64) > (b.0 as u64 * a.1 as u64);
-    for found in report.found.iter().filter(|found| found.sort == Sort::Spaceship) {
+    for found in report.found.iter().filter(|found| found.class == PatternClass::Spaceship) {
         let motion = Motion { period: found.period, displacement: found.moves, canonical: Vec::new() };
         let speed = motion.speed();
         ships.speeds.insert(speed);
@@ -206,7 +206,7 @@ fn speed_name((cells, period): (u32, u32)) -> String {
 /// tried is left empty.
 fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
     let ships = ships_of(report);
-    let of_sort = |sort: Sort| report.found.iter().filter(|found| found.sort == sort).count();
+    let of_class = |class: PatternClass| report.found.iter().filter(|found| found.class == class).count();
     let percent = |share: f32| format!("{:.1}", 100.0 * share);
     let cells = match rule.population() {
         Population::Conserved => "conserved".to_string(),
@@ -235,8 +235,8 @@ fn line(rule: &BlockRule, report: &Report) -> Vec<String> {
         ships.headings.join("+"),
         report.periods.to_string(),
         report.longest_period.to_string(),
-        of_sort(Sort::Oscillator).to_string(),
-        of_sort(Sort::StillLife).to_string(),
+        of_class(PatternClass::Oscillator).to_string(),
+        of_class(PatternClass::StillLife).to_string(),
         format!("{:.2}", 100.0 * report.damage),
         multiple(report.blob),
         multiple(report.remaining),
@@ -376,7 +376,7 @@ fn main() {
         if let Some(folder) = &folder
             && (named || merit(&line).0 > 0)
         {
-            let new = keep_patterns(folder, rule, &report, &args.pattern_sorts).unwrap_or_else(|error| fail(&error));
+            let new = keep_patterns(folder, rule, &report, &args.pattern_classes).unwrap_or_else(|error| fail(&error));
             kept.0 += new;
             kept.1 += usize::from(new > 0);
         }
@@ -461,15 +461,15 @@ fn main() {
 }
 
 /// Keeps what a rule's report found in the rule's file of patterns, in the folder, among
-/// what was kept there already: how many were new. Only the `sorts` asked for, or every sort
+/// what was kept there already: how many were new. Only the `classes` asked for, or every class
 /// given none. A pattern that cannot be kept ends the search, as a line that cannot be
 /// written does.
-fn keep_patterns(folder: &Path, rule: &BlockRule, report: &Report, sorts: &[Sort]) -> Result<usize, String> {
+fn keep_patterns(folder: &Path, rule: &BlockRule, report: &Report, classes: &[PatternClass]) -> Result<usize, String> {
     let file = Collection::file(folder, rule);
     let mut kept = Collection::read_file(&file, rule).map_err(|error| format!("{}: {error}", file.display()))?;
     let mut new = 0;
-    for found in report.found.iter().filter(|found| sorts.is_empty() || sorts.contains(&found.sort)) {
-        let mut pattern = Kept::new(rule, found.sort, &found.cells, found.period, found.moves);
+    for found in report.found.iter().filter(|found| classes.is_empty() || classes.contains(&found.class)) {
+        let mut pattern = Kept::new(rule, found.class, &found.cells, found.period, found.moves);
         pattern.note = "search".to_string();
         new += usize::from(kept.keep(pattern).is_ok());
     }
@@ -828,17 +828,17 @@ mod tests {
     #[test]
     fn a_report_is_summed_up_and_its_patterns_kept() {
         use cas_core::{pattern::from_rle, search::Found};
-        let found = |sort, rle: &str, period, moves| Found { sort, cells: from_rle(rle).unwrap(), period, moves };
+        let found = |class, rle: &str, period, moves| Found { class, cells: from_rle(rle).unwrap(), period, moves };
         let rule: BlockRule = "single-rotation".parse().unwrap();
         let report = Report {
             found: vec![
-                found(Sort::Spaceship, "b2o2$b2o", 12, (2, 0)),
-                found(Sort::Spaceship, "3o$o$bo", 15, (1, 1)),
-                found(Sort::Spaceship, "2o$o", 8, (2, 2)),
-                found(Sort::Spaceship, "o$2o", 24, (4, 0)),
-                found(Sort::Spaceship, "3o", 16, (2, 0)),
-                found(Sort::Oscillator, "o", 4, (0, 0)),
-                found(Sort::StillLife, "$2o$2o", 1, (0, 0)),
+                found(PatternClass::Spaceship, "b2o2$b2o", 12, (2, 0)),
+                found(PatternClass::Spaceship, "3o$o$bo", 15, (1, 1)),
+                found(PatternClass::Spaceship, "2o$o", 8, (2, 2)),
+                found(PatternClass::Spaceship, "o$2o", 24, (4, 0)),
+                found(PatternClass::Spaceship, "3o", 16, (2, 0)),
+                found(PatternClass::Oscillator, "o", 4, (0, 0)),
+                found(PatternClass::StillLife, "$2o$2o", 1, (0, 0)),
             ],
             ..search::measure(&rule, &Effort { seeds: 0, generations: 10, blob: 0 })
         };
@@ -863,11 +863,14 @@ mod tests {
         assert_eq!(kept.all().len(), 7);
         assert!(kept.all().iter().all(|kept| kept.note == "search" && kept.rule == rule));
         let _ = std::fs::remove_dir_all(&every);
-        // Only the sorts asked for.
+        // Only the classes asked for.
         let some = folder("some-patterns");
-        assert_eq!(keep_patterns(&some, &rule, &report, &[Sort::Spaceship, Sort::StillLife]).unwrap(), 6);
+        assert_eq!(
+            keep_patterns(&some, &rule, &report, &[PatternClass::Spaceship, PatternClass::StillLife]).unwrap(),
+            6
+        );
         let kept = Collection::read(&some).unwrap();
-        assert!(kept.all().iter().all(|kept| kept.sort != Sort::Oscillator));
+        assert!(kept.all().iter().all(|kept| kept.class != PatternClass::Oscillator));
         let _ = std::fs::remove_dir_all(&some);
     }
 

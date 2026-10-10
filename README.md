@@ -514,7 +514,7 @@ each finding, as the rule editor shows the properties of a rule.
   rule's, a point with its images and the axes of the mirrors; and its run-length encoded text.
   The sign of a spaceship points the way it flies.
 * What its **pieces** are, for a pattern that came apart or is several that never meet. They
-  come last, under the buttons: a tile to each sort, with how many spaceships there are and of
+  come last, under the buttons: a tile to each class, with how many spaceships there are and of
   which speeds, how many oscillators and of which periods, how many still lifes, and what else
   became of pieces. A click on their line lists them kind by kind instead, under a heading for
   the spaceships, one for the oscillators and one for the still lifes. A kind is shown as the
@@ -590,7 +590,7 @@ Oscillators go by their period and then their cells, still lifes by their cells.
 
 They are in the folder `patterns`, next to the library's `rules.tsv`: a file to a rule, named by
 the rule's table in hex (`0283156749abcdef.tsv` for Single rotation), and in it a pattern to a
-line, with tabs in between (the sort, the pattern as text, its period, how far it moves, a name
+line, with tabs in between (the class, the pattern as text, its period, how far it moves, a name
 and a note), to be read, edited by hand, and added to by whatever else looks at rules: the search
 does, when asked to. A rule's file is read when the rule comes on the grid, on another thread,
 and again whenever something else wrote it; like the library's file, it is written whole at every
@@ -632,7 +632,7 @@ the folder named after it: every kind of spaceship, oscillator and still life of
 find, or that was named with `--rule`, goes into the file of its rule, each with the note
 `search`, and what is there already stays. Only the rules measured in the run count: one that
 the table has already is not measured again. Nothing is kept without the flag, and with
-`--pattern-sorts spaceships,still-lifes` only those sorts are: under some rules there are
+`--pattern-classes spaceships,still-lifes` only those classes are: under some rules there are
 thousands of oscillators and little in them.
 
 A run ends by saying how many rules of each character are in the table, and by listing the best:

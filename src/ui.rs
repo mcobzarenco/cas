@@ -24,7 +24,7 @@ use bevy::{
 };
 
 use cas_core::{
-    collection::Sort,
+    collection::PatternClass,
     rules::{BlockRule, PRESETS},
     universe::Universe,
 };
@@ -287,7 +287,7 @@ enum Side {
     Library,
     Editor,
     Caught,
-    Kept(Sort),
+    Kept(PatternClass),
     Analysis,
 }
 
@@ -308,9 +308,9 @@ fn make_room(
         (Side::Library, library.is_open()),
         (Side::Editor, editor.is_open()),
         (Side::Caught, catcher.is_open()),
-        (Side::Kept(Sort::Spaceship), collected.is_open(Sort::Spaceship)),
-        (Side::Kept(Sort::Oscillator), collected.is_open(Sort::Oscillator)),
-        (Side::Kept(Sort::StillLife), collected.is_open(Sort::StillLife)),
+        (Side::Kept(PatternClass::Spaceship), collected.is_open(PatternClass::Spaceship)),
+        (Side::Kept(PatternClass::Oscillator), collected.is_open(PatternClass::Oscillator)),
+        (Side::Kept(PatternClass::StillLife), collected.is_open(PatternClass::StillLife)),
         (Side::Analysis, analysis.is_open()),
     ] {
         match (is_open, open.contains(&side)) {
@@ -332,7 +332,7 @@ fn make_room(
             Side::Library => library.close(),
             Side::Editor => editor.close(),
             Side::Caught => catcher.close(),
-            Side::Kept(sort) => collected.close(sort),
+            Side::Kept(class) => collected.close(class),
             Side::Analysis => analysis.close(),
         }
     }
@@ -794,16 +794,16 @@ fn pattern_card() -> impl Scene {
                 ]
             ),
             (
-                // What is kept under the rule, sort by sort. Three in a row: with less room
+                // What is kept under the rule, class by class. Three in a row: with less room
                 // around their words.
                 Node {
                     flex_direction: FlexDirection::Row,
                     column_gap: px(4),
                 }
                 Children [
-                    (action_button("Spaceships", "Spaceships", Action::Kept(Sort::Spaceship)) Node { padding: UiRect::horizontal(px(4)) }),
-                    (action_button("Oscillators", "Oscillators", Action::Kept(Sort::Oscillator)) Node { padding: UiRect::horizontal(px(4)) }),
-                    (action_button("Still lifes", "StillLifes", Action::Kept(Sort::StillLife)) Node { padding: UiRect::horizontal(px(4)) }),
+                    (action_button("Spaceships", "Spaceships", Action::Kept(PatternClass::Spaceship)) Node { padding: UiRect::horizontal(px(4)) }),
+                    (action_button("Oscillators", "Oscillators", Action::Kept(PatternClass::Oscillator)) Node { padding: UiRect::horizontal(px(4)) }),
+                    (action_button("Still lifes", "StillLifes", Action::Kept(PatternClass::StillLife)) Node { padding: UiRect::horizontal(px(4)) }),
                 ]
             ),
         ],

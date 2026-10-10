@@ -120,11 +120,11 @@ click Analyse; wait 3; drag Grid -100 -100; wait 20
 until expect_text StudyWhat WHAT Flies apart 513 cells across after 2 882 generations
 expect_shown StudyPeriod off; expect_shown StudyChanges off
 expect_text StudySize SIZE 32×5 up to 513×196
-# The pieces come last, under the buttons. Under their line there is a line to each sort of
+# The pieces come last, under the buttons. Under their line there is a line to each class of
 # them: how many, what, and the kinds among them.
 expect_text StudyPieces 4 pieces
-expect_text PieceSort0 3 SPACESHIPS c/15, c/6, c/184
-expect_text PieceSort1 1 STILL LIFE
+expect_text PieceClass0 3 SPACESHIPS c/15, c/6, c/184
+expect_text PieceClass1 1 STILL LIFE
 click AnalysisPause; wait 3; click AnalysisRestart; wait 10
 expect_text SmallStatus generation 0, no spaceship has left it, 17 cells in it now
 click AnalysisPause; wait 3
@@ -142,7 +142,7 @@ expect_text Piece2 368 4 1 c/184 diagonal
 expect_text Piece3 4 1 2×2
 shot analysis-7-pieces-listed
 click PiecesToggle; wait 3
-expect_text PieceSort1 1 STILL LIFE
+expect_text PieceClass1 1 STILL LIFE
 click AnalysisCopy; wait 3; expect_clipboard 10b3o7bo$2o8bo9bo9b2o$2o9bo$20bo9b2o$20bo
 
 # A lone cell under the Four-way gun grows into a gun: along lines, and into spaceships.
@@ -152,8 +152,8 @@ drag Grid 20 20; wait 20
 until expect_text StudyWhat WHAT Grows along lines, as a gun does 575 cells after 766 generations
 # The ships of the four streams are one kind, flying four ways.
 expect_text StudyPieces 190 pieces
-expect_text PieceSort0 189 SPACESHIPS c/3
-expect_text PieceSort1 1 THAT GROWS
+expect_text PieceClass0 189 SPACESHIPS c/3
+expect_text PieceClass1 1 THAT GROWS
 click PiecesToggle; wait 3
 expect_text Piece0 6 3 189 c/3 diagonal
 shot analysis-8-gun
@@ -167,7 +167,7 @@ drag Grid -130 -90; wait 20
 until expect_text StudyWhat WHAT Oscillator of 3 pieces that never meet
 expect_text StudyPeriod PERIOD 144 generations until all its pieces are back at once
 expect_text StudyPieces 3 that never meet
-expect_text PieceSort0 3 OSCILLATORS periods 4, 16, 36
+expect_text PieceClass0 3 OSCILLATORS periods 4, 16, 36
 expect_text StudyText o9b2o9b2o$20bo
 shot analysis-8-many
 
@@ -188,8 +188,8 @@ expect_text StudyPeriod PERIOD 69 481 732 320 generations until all its pieces a
 expect_text StudyCells CELLS 415
 expect_text StudyChanges CHANGES 592.2 cells a generation 92 never change
 expect_text StudyPieces 271 that never meet
-expect_text PieceSort0 261 OSCILLATORS periods 4 ×215, 16 ×22, 8 ×8 and 11 more
-expect_text PieceSort1 10 STILL LIFES
+expect_text PieceClass0 261 OSCILLATORS periods 4 ×215, 16 ×22, 8 ×8 and 11 more
+expect_text PieceClass1 10 STILL LIFES
 shot analysis-8-pasted
 # Typed, a text is studied as soon as it spells a pattern. What does not spell one is said,
 # and Escape leaves the field with the text of the pattern on display, and the choosing on.
@@ -234,7 +234,7 @@ clear; paint 150 512; paint 850 512
 move Grid -130 -20; press left; move Grid 130 20; wait 2; release left
 until expect_text StudyWhat WHAT Oscillator of 2 pieces that never meet
 expect_text StudyPieces 2 that never meet
-expect_text PieceSort0 2 OSCILLATORS period 4
+expect_text PieceClass0 2 OSCILLATORS period 4
 expect_text StudySize SIZE 701×1
 
 # A study that takes long shows how far it has got, and does not hold up the frames: a

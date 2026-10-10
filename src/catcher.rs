@@ -25,7 +25,7 @@ use bevy::{
 
 use cas_core::{
     census::{self, Census, Found, Kind},
-    collection::Sort,
+    collection::PatternClass,
     pattern::{Analyser, Heading, Watch, to_rle},
     rules::BlockRule,
     universe::{Departure, Universe},
@@ -555,7 +555,7 @@ fn keep_kind(
     let rule = universe.rule();
     if let Some(kind) = catcher.hauls.get(rule).and_then(|haul| haul.census.kinds().get(index)) {
         let motion = &kind.motion;
-        collected.keep_or_forget(rule, Sort::Spaceship, &motion.canonical, motion.period, motion.displacement);
+        collected.keep_or_forget(rule, PatternClass::Spaceship, &motion.canonical, motion.period, motion.displacement);
     }
 }
 
@@ -570,7 +570,7 @@ fn keep_all_kinds(
     let kinds = catcher.hauls.get(rule).map_or(&[][..], |haul| haul.census.kinds());
     let (mut new, mut known) = (0, 0);
     for Kind { motion, .. } in kinds {
-        match collected.keep(rule, Sort::Spaceship, &motion.canonical, motion.period, motion.displacement) {
+        match collected.keep(rule, PatternClass::Spaceship, &motion.canonical, motion.period, motion.displacement) {
             true => new += 1,
             false => known += 1,
         }

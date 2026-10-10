@@ -3,7 +3,7 @@
 # still life), the pattern (run-length encoded, from a corner of the blocks the next step
 # rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
 # a name, and a note. The file is named by the rule's table in hex.
-sort	pattern	period	moves	name	note
+class	pattern	period	moves	name	note
 spaceship	o$o$2o$2o	4390	10,0		search
 spaceship	o$o$bo$obo$bo	13256	2,0		search
 spaceship	2o$bo2$2o$o	1470	6,0		search
@@ -588,3 +588,42 @@ oscillator	4bo$3bo$bo$3bo$4bo	64			search
 oscillator	4bo$3b2o$bo$4bo$2bo	784			search
 oscillator	4bo$3bo$4bo$bo$2bo	32			search
 still life	2o$o	2			search
+spaceship	o2$2o$2o$2bo	9870	4,0		search
+spaceship	2o2$o$2o$o	18008	12,0		search
+spaceship	3o$obo$bo	1408	4,0		search
+spaceship	obo$obo$obo	4708	6,0		search
+spaceship	obo$b2o$2bo$2bo	414	4,0		search
+spaceship	obo$2b2o$3b2o	4154	2,2		search
+spaceship	o$2bo$bo$3bo$o2bo	4868	8,0		search
+spaceship	o2bo2$b2o$3bo$3bo	7856	4,0		search
+spaceship	o2b2o$b2o$bo	570	2,0		search
+spaceship	o2b2o$2bo2b2o	992	4,4		search
+spaceship	o3bo$2bo2bo$2bo2bo	24842	6,0		search
+spaceship	o3b2o$3b2obo	3672	4,0		search
+spaceship	$o$o$bo$bo$bo$bo	2534	6,0		search
+spaceship	$o4$o$o$bo2$o$o	5218	6,0		search
+spaceship	$2o$2o$bo$bo	942	2,0		search
+spaceship	$o2b2o2bo$3bo4bo	4680	8,0		search
+spaceship	bo$o$o$2o$o	22	2,0		search
+spaceship	bo$2o$o$o$o	12768	4,0		search
+spaceship	bo$3o$2o	254	2,0		search
+spaceship	bo$o2$b2o$bo	1070	2,0		search
+spaceship	bo$bo$bo$bo$o$bo	352	4,0		search
+spaceship	bo$bo$bo$b2o$2bo	17578	4,0		search
+spaceship	b2o$o$3b2o$2bo	24446	6,0		search
+spaceship	b2o$bobo$bo2$bo	334	2,0		search
+spaceship	b2o$bo2bo$b2o	1614	2,0		search
+spaceship	b3o2$bob2o	1702	6,0		search
+spaceship	b3o$2bo$2b2o	11022	2,0		search
+spaceship	b2o2$3bo$b2o$bo	1246	2,0		search
+spaceship	$bo$b2o$o$o2bo	980	4,0		search
+spaceship	$b2o$bo$3bo$o2bo	5156	4,0		search
+spaceship	$b2o$2bo$3bo2$2bo$2bo	700	4,0		search
+spaceship	$bo2b2o$bo2b2o	568	2,0		search
+spaceship	2bo$3o$2bo$2bo	458	2,2		search
+spaceship	2bo$3b2o$o2bo	230	2,0		search
+spaceship	$2bo$bo$o$o$bo$bo	4434	2,0		search
+spaceship	$2bo$b2o2$o$2bo$2bo	25654	10,0		search
+spaceship	3bo$o2bo$b3o	7130	2,0		search
+spaceship	7b2o$bo3bo$b2o	8528	2,2		search
+still life	2o$2o	2			search

@@ -28,7 +28,7 @@ use rayon::prelude::*;
 
 use crate::{
     census::Census,
-    collection::Sort,
+    collection::PatternClass,
     pattern::{Analyser, Cell, Fate, Motion},
     rules::{BlockRule, Population},
     universe::{Rng, Universe},
@@ -107,15 +107,15 @@ pub struct Report {
     pub others: u64,
     /// What came back to its shape, by the form its kind is filed under: every kind of
     /// spaceship counted above, and the oscillators and still lifes among the seeds. In the
-    /// order of their sorts and forms.
+    /// order of their classes and forms.
     pub found: Vec<Found>,
 }
 
-/// A pattern that came back to its shape, as it is kept: its sort, the form its kind is filed
+/// A pattern that came back to its shape, as it is kept: its class, the form its kind is filed
 /// under, its period, and how far that form moves in a period.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Found {
-    pub sort: Sort,
+    pub class: PatternClass,
     pub cells: Vec<Cell>,
     pub period: u32,
     pub moves: (i32, i32),
@@ -220,7 +220,7 @@ pub fn measure(rule: &BlockRule, effort: &Effort) -> Report {
         growing: seeds.share(seeds.growing),
         undecided: seeds.share(seeds.undecided),
         growth: seeds.slowest(rule).map_or(0.0, |(_, growth)| growth),
-        spaceships: found.iter().filter(|found| found.sort == Sort::Spaceship).count(),
+        spaceships: found.iter().filter(|found| found.class == PatternClass::Spaceship).count(),
         periods: seeds.periods.len(),
         longest_period: seeds.periods.last().copied().unwrap_or(0),
         damage: damage(rule),
@@ -302,9 +302,9 @@ impl Seeds {
                     && let Some(motion) = study.motion
                     && (displacement == (0, 0) || slower_than_light(&motion))
                 {
-                    let sort = Sort::of(motion.displacement, study.still);
+                    let class = PatternClass::of(motion.displacement, study.still);
                     let found =
-                        Found { sort, period: motion.period, moves: motion.displacement, cells: motion.canonical };
+                        Found { class, period: motion.period, moves: motion.displacement, cells: motion.canonical };
                     self.found.entry(found.cells.clone()).or_insert(found);
                 }
             }
@@ -430,7 +430,7 @@ fn catch(
     for kind in census.kinds().iter().filter(|kind| slower_than_light(&kind.motion)) {
         let motion = &kind.motion;
         let ship = Found {
-            sort: Sort::Spaceship,
+            class: PatternClass::Spaceship,
             cells: motion.canonical.clone(),
             period: motion.period,
             moves: motion.displacement,

@@ -1,4 +1,4 @@
-# Keeping patterns: the spaceships, the oscillators and the still lifes of a rule, each sort
+# Keeping patterns: the spaceships, the oscillators and the still lifes of a rule, each class
 # in a panel of its own. Expects the default start-up (single rotation, 256×256). A scripted
 # run has no file for what it keeps, which is gone when it ends.
 wait 25; clear
@@ -50,11 +50,11 @@ place 2o$2o 96 105; place 3o$o$bo 100 100; place o$o2$o$o 110 100; place $2o2$2o
 click Analyse; wait 3; drag Grid -110 -110; wait 20
 until expect_text StudyPieces 4 pieces
 expect_shown AnalysisKeep off
-expect_text PieceSort0 3 SPACESHIPS c/15, c/6, c/184
-expect_text PieceSort1 1 STILL LIFE
+expect_text PieceClass0 3 SPACESHIPS c/15, c/6, c/184
+expect_text PieceClass1 1 STILL LIFE
 click PiecesKeep; wait 6
 expect_text AnalysisNote Kept 2 kinds of piece, and 2 were kept already.
-expect_shown PiecesList on; expect_shown PieceSort0 on
+expect_shown PiecesList on; expect_shown PieceClass0 on
 shot kept-3-pieces
 # In the list every kind has its mark, which lets go of it and keeps it again.
 click PiecesToggle; wait 6

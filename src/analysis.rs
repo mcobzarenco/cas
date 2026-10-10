@@ -25,7 +25,7 @@ use bevy::{
 
 use cas_core::{
     census::Census,
-    collection::Sort,
+    collection::PatternClass,
     pattern::{
         Analyser, Cell, Fate, GROWING, Heading, Motion, Piece, PieceKind, SPREADING, Study, Symmetry, Turn, Watch,
         from_rle, to_rle, way,
@@ -89,9 +89,9 @@ const NAME_COLUMN: f32 = 66.0;
 const NAME_GAP: f32 = 10.0;
 /// So many kinds of spaceship, and of oscillator, are listed among the pieces.
 const KINDS_LISTED: usize = 8;
-/// The side of the box a sort of piece has its sign in, and the width of the column that
+/// The side of the box a class of piece has its sign in, and the width of the column that
 /// says how many pieces are of a kind.
-const SORT_GLYPH: f32 = 36.0;
+const CLASS_GLYPH: f32 = 36.0;
 const COUNT_COLUMN: f32 = 40.0;
 /// The findings are in tiles, two to a row: a tile is so wide at least, and takes a row to
 /// itself when it has much to say.
@@ -111,7 +111,7 @@ pub struct Analysis {
     /// one before.
     studied: u64,
     /// The pieces are listed under their line, kind by kind and with their pictures. Folded
-    /// away, a line to each sort of piece says what there is.
+    /// away, a line to each class of piece says what there is.
     listing: bool,
     /// The text of the pattern's field as it was last acted on, and what is wrong with it if
     /// it does not spell a pattern.
@@ -795,14 +795,14 @@ fn pieces_line() -> impl Scene {
     }
 }
 
-/// A sort of piece in a tile, as the findings are: its sign, its name, how many pieces are of
-/// it, and in dimmer letters the kinds among them. A sort with kinds to name has a row of the
+/// A class of piece in a tile, as the findings are: its sign, its name, how many pieces are of
+/// it, and in dimmer letters the kinds among them. A class with kinds to name has a row of the
 /// panel to itself.
-fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
-    let name = Name::new(format!("PieceSort{index}"));
-    let basis = if sort.kinds.is_empty() { px(TILE) } else { percent(100) };
+fn class_tile(index: usize, class: &Summary) -> impl Scene {
+    let name = Name::new(format!("PieceClass{index}"));
+    let basis = if class.kinds.is_empty() { px(TILE) } else { percent(100) };
     // The arrows among the kinds are set in the face that has them all.
-    let kinds: Vec<_> = runs(&sort.kinds)
+    let kinds: Vec<_> = runs(&class.kinds)
         .into_iter()
         .map(|(run, arrows)| {
             let font = if arrows { fonts::MONO } else { fonts::REGULAR };
@@ -817,7 +817,7 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
             }
         })
         .collect();
-    let named = if sort.kinds.is_empty() { Display::None } else { Display::Flex };
+    let named = if class.kinds.is_empty() { Display::None } else { Display::Flex };
     bsn! {
         tile()
         Node {
@@ -827,7 +827,7 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
         }
         template_value(name)
         Children [
-            (tile_picture(SORT_GLYPH) Children [ icons::icon(sort.icon, 18.0, sort.ink) ]),
+            (tile_picture(CLASS_GLYPH) Children [ icons::icon(class.icon, 18.0, class.ink) ]),
             (
                 Node {
                     flex_grow: 1.0,
@@ -844,8 +844,8 @@ fn sort_tile(index: usize, sort: &Summary) -> impl Scene {
                             column_gap: px(6),
                         }
                         Children [
-                            sans(count(sort.count), VALUE_SIZE, palette::WHITE),
-                            tile_label(sort.label),
+                            sans(count(class.count), VALUE_SIZE, palette::WHITE),
+                            tile_label(class.label),
                         ]
                     ),
                     (
@@ -948,10 +948,10 @@ fn piece_row(index: usize, kind: &Listed, possible: &[bool; 8], of: usize, kept:
 /// What of the pattern on display there is to keep: what it is, and the motion it is filed
 /// under. Only what comes back to its shape as one thing: of a pattern of many pieces the
 /// pieces are kept.
-fn keepable(subject: &Subject) -> Option<(Sort, &Motion)> {
+fn keepable(subject: &Subject) -> Option<(PatternClass, &Motion)> {
     let study = &subject.study;
     let motion = study.motion.as_ref().filter(|_| study.parts <= 1)?;
-    Some((Sort::of(motion.displacement, study.still), motion))
+    Some((PatternClass::of(motion.displacement, study.still), motion))
 }
 
 /// Keeps the pattern on display among the patterns of its rule, or lets go of it if it is
@@ -960,22 +960,22 @@ fn keep_subject(_: On<Activate>, mut analysis: ResMut<Analysis>, mut collected: 
     let Some(subject) = analysis.shown() else {
         return;
     };
-    let Some((sort, motion)) = keepable(subject) else {
+    let Some((class, motion)) = keepable(subject) else {
         return;
     };
-    let kept = collected.keep_or_forget(&subject.rule, sort, &motion.canonical, motion.period, motion.displacement);
-    let sorts = sort.names();
+    let kept = collected.keep_or_forget(&subject.rule, class, &motion.canonical, motion.period, motion.displacement);
+    let classes = class.names();
     analysis.note = Some(match kept {
-        true => format!("Kept among the {sorts} of its rule."),
-        false => format!("Let go of: it is no longer among the {sorts} kept."),
+        true => format!("Kept among the {classes} of its rule."),
+        false => format!("Let go of: it is no longer among the {classes} kept."),
     });
 }
 
-/// The kinds of piece that the list has a row for, in the order of the rows: of each sort so
+/// The kinds of piece that the list has a row for, in the order of the rows: of each class so
 /// many at most.
-fn rows_of(kinds: &[Vec<Listed>; 3]) -> Vec<(Sort, &Listed)> {
-    let sorted = Sort::ALL.into_iter().zip(kinds);
-    sorted.flat_map(|(sort, kinds)| kinds.iter().take(KINDS_LISTED).map(move |kind| (sort, kind))).collect()
+fn rows_of(kinds: &[Vec<Listed>; 3]) -> Vec<(PatternClass, &Listed)> {
+    let sorted = PatternClass::ALL.into_iter().zip(kinds);
+    sorted.flat_map(|(class, kinds)| kinds.iter().take(KINDS_LISTED).map(move |kind| (class, kind))).collect()
 }
 
 /// Keeps every kind of piece of the pattern on display that comes back to its shape: the
@@ -991,9 +991,9 @@ fn keep_pieces(mut click: On<Pointer<Click>>, mut analysis: ResMut<Analysis>, mu
     };
     let kinds = listed(&subject.study.pieces);
     let (mut new, mut known) = (0, 0);
-    for (sort, kinds) in Sort::ALL.into_iter().zip(&kinds) {
+    for (class, kinds) in PatternClass::ALL.into_iter().zip(&kinds) {
         for kind in kinds {
-            match collected.keep(&subject.rule, sort, &kind.form, kind.period.unwrap_or(1), kind.moves) {
+            match collected.keep(&subject.rule, class, &kind.form, kind.period.unwrap_or(1), kind.moves) {
                 true => new += 1,
                 false => known += 1,
             }
@@ -1029,8 +1029,8 @@ fn keep_piece(
         return;
     };
     let kinds = listed(&subject.study.pieces);
-    if let Some(&(sort, kind)) = rows_of(&kinds).get(index) {
-        collected.keep_or_forget(&subject.rule, sort, &kind.form, kind.period.unwrap_or(1), kind.moves);
+    if let Some(&(class, kind)) = rows_of(&kinds).get(index) {
+        collected.keep_or_forget(&subject.rule, class, &kind.form, kind.period.unwrap_or(1), kind.moves);
     }
 }
 
@@ -1550,8 +1550,8 @@ fn fact(finding: Finding, subject: &Subject) -> Option<Fact> {
             };
             said(which.to_string(), so.to_string())
         }
-        // How many there are, where there are several; what they are is said underneath, sort
-        // by sort or kind by kind.
+        // How many there are, where there are several; what they are is said underneath, class
+        // by class or kind by kind.
         Finding::Pieces => match (study.period, study.parts, study.pieces.len() + study.more_pieces) {
             (Some(_), parts, _) if parts > 1 => said(format!("{} that never meet", count(parts)), String::new()),
             (None, _, total) if total > 1 => said(format!("{} pieces", count(total)), String::new()),
@@ -1705,7 +1705,7 @@ pub(crate) fn heading(motion: &Motion) -> &'static str {
     }
 }
 
-/// A sort of piece, as a tile of the summary has it: how many pieces are of it, what they are
+/// A class of piece, as a tile of the summary has it: how many pieces are of it, what they are
 /// called, their sign, and a word on the kinds among them.
 #[derive(Debug, PartialEq)]
 struct Summary {
@@ -1716,9 +1716,9 @@ struct Summary {
     kinds: String,
 }
 
-/// What the pieces of a pattern are, sort by sort: the spaceships with their speeds, the
+/// What the pieces of a pattern are, class by class: the spaceships with their speeds, the
 /// oscillators with their periods, the still lifes, and whatever else became of pieces.
-fn sorts(pieces: &[Piece], more: usize) -> Vec<Summary> {
+fn classes(pieces: &[Piece], more: usize) -> Vec<Summary> {
     let [ships, ..] = listed(pieces);
     let mut flying: Vec<(String, usize)> = Vec::new();
     for kind in &ships {
@@ -1750,10 +1750,10 @@ fn sorts(pieces: &[Piece], more: usize) -> Vec<Summary> {
         ),
         (still, "STILL LIFE", "STILL LIFES", icons::STILL, String::new()),
     ];
-    let mut sorts = Vec::new();
+    let mut classes = Vec::new();
     for (count, one, many, icon, kinds) in came_back {
         if count > 0 {
-            sorts.push(Summary { count, label: if count == 1 { one } else { many }, icon, ink, kinds });
+            classes.push(Summary { count, label: if count == 1 { one } else { many }, icon, ink, kinds });
         }
     }
     let dim = palette::LIGHT_GRAY_2;
@@ -1767,11 +1767,11 @@ fn sorts(pieces: &[Piece], more: usize) -> Vec<Summary> {
         let count = pieces.iter().filter(|piece| piece.kind == kind).count();
         if count > 0 {
             let label = if count == 1 { one } else { many };
-            sorts.push(Summary { count, label, icon, ink: dim, kinds: String::new() });
+            classes.push(Summary { count, label, icon, ink: dim, kinds: String::new() });
         }
     }
     if more > 0 {
-        sorts.push(Summary {
+        classes.push(Summary {
             count: more,
             label: "MORE, NOT FOLLOWED",
             icon: icons::UNDECIDED,
@@ -1779,7 +1779,7 @@ fn sorts(pieces: &[Piece], more: usize) -> Vec<Summary> {
             kinds: String::new(),
         });
     }
-    sorts
+    classes
 }
 
 /// The commonest of some kinds by name, with how many there are of each where it is more than
@@ -1834,7 +1834,7 @@ struct Listed {
 }
 
 /// The pieces that came back to their shape, kind by kind, the commonest first: the
-/// spaceships, the oscillators and the still lifes, in the order of [`Sort::ALL`].
+/// spaceships, the oscillators and the still lifes, in the order of [`PatternClass::ALL`].
 fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
     let mut sorted: [Vec<Listed>; 3] = Default::default();
     for piece in pieces.iter().filter(|piece| !piece.form.is_empty()) {
@@ -1842,7 +1842,7 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
             let (width, height) = bounding_box(&piece.form);
             format!("{width}×{height}")
         };
-        let (sort, title, note, period, way) = match piece.kind {
+        let (class, title, note, period, way) = match piece.kind {
             PieceKind::Spaceship { period, displacement: (dx, dy) } => {
                 let motion = Motion { period, displacement: (dx, dy), canonical: Vec::new() };
                 (0, speed(&motion), heading(&motion), Some(period), way(dx, dy))
@@ -1851,7 +1851,7 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
             PieceKind::StillLife => (2, size(), "", None, None),
             _ => continue,
         };
-        let kinds = &mut sorted[sort];
+        let kinds = &mut sorted[class];
         let known = match kinds.iter().position(|known| known.form == piece.form) {
             Some(known) => known,
             None => {
@@ -1872,7 +1872,7 @@ fn listed(pieces: &[Piece]) -> [Vec<Listed>; 3] {
     sorted
 }
 
-/// Says what the pieces of the pattern on display are, under their line: sort by sort in a
+/// Says what the pieces of the pattern on display are, under their line: class by class in a
 /// tile each, or, with the list open, kind by kind with their pictures: the spaceships, the
 /// oscillators, the still lifes, and a word on the rest.
 fn list_pieces(
@@ -1896,7 +1896,7 @@ fn list_pieces(
         _ => (&[][..], 0),
     };
     let kinds = listed(pieces);
-    let sorts = sorts(pieces, more);
+    let classes = classes(pieces, more);
     // The list has the pieces that came back to their shape: without any, there is none, and
     // nothing to keep.
     let any = kinds.iter().any(|kinds| !kinds.is_empty());
@@ -1914,12 +1914,12 @@ fn list_pieces(
     show(*mark, any);
     show(*keep_all, any);
     turned.rotation = if listing { Rot2::FRAC_PI_2 } else { Rot2::IDENTITY };
-    show(*list, !sorts.is_empty());
+    show(*list, !classes.is_empty());
     commands.entity(*list).despawn_related::<Children>();
     let mut rows = Vec::new();
     if !listing {
-        // The sorts in tiles, two to a row where they have little to say.
-        let tiles: Vec<_> = sorts.iter().enumerate().map(|(index, sort)| sort_tile(index, sort)).collect();
+        // The classes in tiles, two to a row where they have little to say.
+        let tiles: Vec<_> = classes.iter().enumerate().map(|(index, class)| class_tile(index, class)).collect();
         let summary = bsn! {
             Node {
                 flex_direction: FlexDirection::Row,
@@ -2074,10 +2074,10 @@ mod tests {
             others(&apart, 2),
             [(1, "one that grows", "that grow"), (2, "one more not followed", "more not followed")]
         );
-        // And summed up, a tile to each sort, with its sign.
-        let said = |sort: &Summary| (sort.count, sort.label, sort.icon, sort.kinds.clone());
+        // And summed up, a tile to each class, with its sign.
+        let said = |class: &Summary| (class.count, class.label, class.icon, class.kinds.clone());
         assert_eq!(
-            sorts(&apart, 2).iter().map(said).collect::<Vec<_>>(),
+            classes(&apart, 2).iter().map(said).collect::<Vec<_>>(),
             [
                 (3, "SPACESHIPS", icons::SHIP, "c/6".to_string()),
                 (2, "OSCILLATORS", icons::OSCILLATES, "period 4".to_string()),
@@ -2088,9 +2088,16 @@ mod tests {
         );
         // The rows of the list, in their order: what a mark on a row keeps.
         let kinds = listed(&apart);
-        let rows: Vec<(Sort, usize, (i32, i32))> =
-            rows_of(&kinds).iter().map(|(sort, kind)| (*sort, kind.cells, kind.moves)).collect();
-        assert_eq!(rows, [(Sort::Spaceship, 4, (2, 0)), (Sort::Oscillator, 1, (0, 0)), (Sort::StillLife, 4, (0, 0))]);
+        let rows: Vec<(PatternClass, usize, (i32, i32))> =
+            rows_of(&kinds).iter().map(|(class, kind)| (*class, kind.cells, kind.moves)).collect();
+        assert_eq!(
+            rows,
+            [
+                (PatternClass::Spaceship, 4, (2, 0)),
+                (PatternClass::Oscillator, 1, (0, 0)),
+                (PatternClass::StillLife, 4, (0, 0))
+            ]
+        );
     }
 
     #[test]

@@ -15,7 +15,7 @@ use bevy::{
 };
 
 use cas_core::{
-    collection::Sort,
+    collection::PatternClass,
     universe::{Rng, Universe},
 };
 use cas_ui::Aspect;
@@ -63,8 +63,8 @@ pub enum Action {
     NextRule,
     /// Show or hide the list of what was caught at the edge.
     Caught,
-    /// Show or hide the patterns of a sort that are kept under the rule.
-    Kept(Sort),
+    /// Show or hide the patterns of a class that are kept under the rule.
+    Kept(PatternClass),
     /// Show or hide the analysis panel; it opens choosing a pattern on the grid.
     Analysis,
     /// Choose a pattern on the grid to analyse, or stop choosing.
@@ -291,7 +291,7 @@ fn perform(
             }
         }
         Action::Caught => catcher.toggle(),
-        Action::Kept(sort) => collected.toggle(sort),
+        Action::Kept(class) => collected.toggle(class),
         Action::Analysis => {
             analysis.toggle();
             if analysis.is_open() {

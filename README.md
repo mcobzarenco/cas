@@ -632,8 +632,8 @@ the folder named after it: every kind of spaceship, oscillator and still life of
 find, or that was named with `--rule`, goes into the file of its rule, each with the note
 `search`, and what is there already stays. Only the rules measured in the run count: one that
 the table has already is not measured again. Nothing is kept without the flag, and with
-`--sorts spaceships,still-lifes` only those sorts are: under some rules there are thousands of
-oscillators and little in them.
+`--pattern-sorts spaceships,still-lifes` only those sorts are: under some rules there are
+thousands of oscillators and little in them.
 
 A run ends by saying how many rules of each character are in the table, and by listing the best:
 the worlds with things that travel and things that stay, by the speeds of their spaceships, then

@@ -97,7 +97,7 @@ struct Args {
     /// still-lifes, with commas between; all three unless said. Under some rules there are
     /// thousands of oscillators and little in them.
     #[arg(long, value_delimiter = ',', value_name = "SORT")]
-    sorts: Vec<Sort>,
+    pattern_sorts: Vec<Sort>,
     /// Threads to search on.
     #[arg(long, default_value_t = default_threads())]
     threads: usize,
@@ -376,7 +376,7 @@ fn main() {
         if let Some(folder) = &folder
             && (named || merit(&line).0 > 0)
         {
-            let new = keep_patterns(folder, rule, &report, &args.sorts).unwrap_or_else(|error| fail(&error));
+            let new = keep_patterns(folder, rule, &report, &args.pattern_sorts).unwrap_or_else(|error| fail(&error));
             kept.0 += new;
             kept.1 += usize::from(new > 0);
         }

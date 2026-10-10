@@ -592,8 +592,10 @@ They are in the folder `patterns`, next to the library's `rules.tsv`: a file to 
 the rule's table in hex (`0283156749abcdef.tsv` for Single rotation), and in it a pattern to a
 line, with tabs in between (the sort, the pattern as text, its period, how far it moves, a name
 and a note), to be read, edited by hand, and added to by whatever else looks at rules: the search
-does, when asked to. Like the library's file, the file of a rule is written whole at every change
-and read again whenever something else wrote it, and a scripted run has no folder.
+does, when asked to. A rule's file is read when the rule comes on the grid, on another thread,
+and again whenever something else wrote it; like the library's file, it is written whole at every
+change. A scripted run has no folder. Thousands of patterns may be kept under a rule: a list has
+rows only for the ones in sight, and scrolls as if they were all there.
 
 ## Searching for rules
 
@@ -629,7 +631,9 @@ unless `--library` names another.
 the folder named after it: every kind of spaceship, oscillator and still life of a rule that is a
 find, or that was named with `--rule`, goes into the file of its rule, each with the note
 `search`, and what is there already stays. Only the rules measured in the run count: one that
-the table has already is not measured again. Nothing is kept without the flag.
+the table has already is not measured again. Nothing is kept without the flag, and with
+`--sorts spaceships,still-lifes` only those sorts are: under some rules there are thousands of
+oscillators and little in them.
 
 A run ends by saying how many rules of each character are in the table, and by listing the best:
 the worlds with things that travel and things that stay, by the speeds of their spaceships, then

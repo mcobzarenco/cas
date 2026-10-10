@@ -33,3 +33,10 @@ diagonal-traffic		*
 15,11,14,3,7,5,6,8,13,9,10,4,12,2,1,0	Fleet 7		search	Found 2026-10-06 among the 584 quarter-turn worlds, ranked by ship speeds; its patterns are kept. Quarter-turn, vacuum flickers, cells conserved relative to it (ESPCA-feca20). 26 ship speeds c/7 to c/6628 every way, 556 oscillators, a still life.
 15,11,14,3,7,5,9,8,13,6,10,4,12,2,1,0	Fleet 8		search	Found 2026-10-06 among the 584 quarter-turn worlds, ranked by ship speeds; its patterns are kept. Quarter-turn, vacuum flickers, cells conserved relative to it (ESPCA-fec520). 11 ship speeds c/13 to c/3150 every way, 563 oscillators, still lifes of two cells.
 15,11,14,10,7,3,6,8,13,9,12,4,5,2,1,0	Fleet 9		search	Found 2026-10-06 among the 584 quarter-turn worlds, ranked by ship speeds; its patterns are kept. Quarter-turn, vacuum flickers, cells conserved relative to it (ESPCA-fe6a20). 9 ship speeds c/12 to c/184, the fastest kind of the ten, every way; 487 oscillators, a still life; a blob sheds ships.
+15,1,2,12,4,10,9,7,8,6,5,11,3,13,14,0	Fractal 1			
+15,8,4,3,2,5,6,7,1,9,10,11,12,13,14,0	Patternie 0			
+0,1,2,3,7,6,5,4,13,12,15,14,10,11,8,9	Cyclic Growth 0			
+15,7,6,5,11,3,9,8,14,13,12,2,10,4,1,0	Complement Weighted 0			
+15,7,6,5,11,12,4,8,14,13,3,2,10,9,1,0	Weighted Spaceships 2			
+15,7,5,10,14,11,4,1,13,12,3,8,6,9,2,0	Weighted Spaceships 3			
+15,7,6,3,11,5,9,8,14,13,12,4,10,2,1,0	Weighted Spaceships 4			

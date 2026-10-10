@@ -1,0 +1,35 @@
+# The patterns kept for cas under the rule 15,7,5,10,14,11,4,1,13,12,3,8,6,9,2,0:
+# a pattern to a line, with tabs in between: what it is (a spaceship, an oscillator or a
+# still life), the pattern (run-length encoded, from a corner of the blocks the next step
+# rewrites, at the start of the vacuum's cycle), its period, how far it moves in a period,
+# a name, and a note. The file is named by the rule's table in hex.
+class	pattern	period	moves	name	note
+spaceship	o	6	2,-2		search
+spaceship	o$o$bo	12	2,4		search
+spaceship	o$bo$4bo	14	2,-6		search
+spaceship	$o$o	8	2,-4		search
+spaceship	$o$o$b2o	12	2,-6		search
+spaceship	$2o	10	2,-4		search
+spaceship	$2o$o$bo	26	6,-12		search
+spaceship	$3o$o	68	16,-30		search
+spaceship	$2o2$4b2o	18	2,-8		search
+spaceship	bo	8	2,2		search
+spaceship	bo2$bo	18	4,2		search
+spaceship	b2o$2bo	4	0,2		search
+spaceship	bo2bo$4bo	8	2,2		search
+spaceship	$b4o	22	4,-6		search
+spaceship	$b2obo$4bo	12	2,-6		search
+spaceship	$bob3o	60	14,-26		search
+spaceship	2b3o$2bobo$bo	4	0,2		search
+spaceship	obo$3o$obo$o	18	4,2		search
+oscillator	2bo$b2o$bo$2bo	2			search
+spaceship	o$2o$obo$2o$2bo	18	4,2		search
+spaceship	o2bo$o$bo2bo$4bo	12	2,4		search
+spaceship	bo$bo$bo$b2o2$2bo	30	2,4		search
+spaceship	b4o$2bobo	4	0,2		search
+spaceship	$bo$obobo$o3bo$bo	12	2,4		search
+spaceship	3b2o$4bo$b2o$2bo	4	0,2		search
+spaceship	$o$o$b3o2$3bo	16	2,-8		search
+spaceship	$bo$obo$2o$obo$o	18	4,2		search
+spaceship	2bo$2bo$o2bo$o$bo	12	2,4		search
+spaceship	4bo$bob2o$bo2bo$2bo	18	4,2		search

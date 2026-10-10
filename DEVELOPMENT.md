@@ -11,6 +11,12 @@ cargo fmt --all                     # 120 columns, short things on one line: rus
 The last three run on every push (`.github/workflows/ci.yml`), with warnings as errors. The rig
 scripts below need a window and a GPU, and are run by hand.
 
+## Bevy
+
+cas builds with Bevy 0.19.1 from crates.io. A scouting report for the move to Bevy 0.20, with
+what the app uses of Bevy, what 0.20 breaks of it, what of ours the engine does now, and the
+order to do it in, is in [`docs/bevy-0.20-migration.md`](docs/bevy-0.20-migration.md).
+
 ## Test rig
 
 The app can drive itself from a tiny script (`--script`, or `--script-file`; screenshots go to

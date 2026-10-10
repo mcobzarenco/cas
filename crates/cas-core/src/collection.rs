@@ -22,7 +22,12 @@
 //! is filed under ([`Motion::canonical`](crate::pattern::Motion)), so that a kind is kept
 //! once whichever way it was found lying.
 
-use std::{collections::HashSet, fmt, fs, io, path::Path, path::PathBuf, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, fs, io,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use crate::{
     library::{self, Fields},
@@ -94,9 +99,10 @@ impl fmt::Display for Sort {
 impl FromStr for Sort {
     type Err = String;
 
+    /// One or several: `spaceship`, `still lifes`, `still-lifes`.
     fn from_str(text: &str) -> Result<Self, String> {
         let wanted: String = text.chars().filter(|c| c.is_alphabetic()).map(|c| c.to_ascii_lowercase()).collect();
-        let named = |sort: &Sort| sort.name().replace(' ', "") == wanted;
+        let named = |sort: &Sort| [sort.name(), sort.names()].iter().any(|name| name.replace(' ', "") == wanted);
         Sort::ALL.into_iter().find(named).ok_or_else(|| format!("{text:?} is no sort of pattern"))
     }
 }
@@ -131,17 +137,29 @@ impl Kept {
     }
 }
 
-/// The patterns that were kept, in the order they were.
+/// The patterns that were kept, rule by rule, each rule's in the order they were kept.
 #[derive(Clone, Debug, Default)]
 pub struct Collection {
-    kept: Vec<Kept>,
+    rules: HashMap<BlockRule, Shelf>,
     /// The rules whose patterns changed since their files were last written.
     changed: HashSet<BlockRule>,
 }
 
+/// A rule's patterns, in the order they were kept; and the cells of each, so that one that is
+/// kept already is known at once, however many there are.
+#[derive(Clone, Debug, Default)]
+struct Shelf {
+    kept: Vec<Kept>,
+    cells: HashSet<Vec<Cell>>,
+}
+
 impl PartialEq for Collection {
     fn eq(&self, other: &Self) -> bool {
-        self.kept == other.kept
+        self.rules.len() == other.rules.len()
+            && self
+                .rules
+                .iter()
+                .all(|(rule, shelf)| other.rules.get(rule).is_some_and(|theirs| theirs.kept == shelf.kept))
     }
 }
 
@@ -207,7 +225,7 @@ impl Collection {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
             Err(error) => return Err(error.to_string()),
         };
-        let mut files: Vec<(BlockRule, PathBuf)> = Vec::new();
+        let mut collection = Self::default();
         for entry in entries.flatten() {
             let path = entry.path();
             let (extension, stem) =
@@ -218,22 +236,14 @@ impl Collection {
             if stem.len() != 16 || !stem.chars().all(|c| c.is_ascii_hexdigit()) {
                 continue;
             }
-            match BlockRule::from_hex(stem).filter(|rule| rule.hex() == stem) {
-                Some(rule) => files.push((rule, path)),
-                None => {
-                    return Err(format!(
-                        "{}: not a rule's file: a file is named by its rule's table in hex, in lower case",
-                        path.display()
-                    ));
-                }
-            }
-        }
-        // In one order whatever the folder's: the files are a rule each.
-        files.sort_by(|a, b| a.1.cmp(&b.1));
-        let mut collection = Self::default();
-        for (rule, path) in files {
+            let Some(rule) = BlockRule::from_hex(stem).filter(|rule| rule.hex() == stem) else {
+                return Err(format!(
+                    "{}: not a rule's file: a file is named by its rule's table in hex, in lower case",
+                    path.display()
+                ));
+            };
             let file = Self::read_file(&path, &rule).map_err(|error| format!("{}: {error}", path.display()))?;
-            collection.kept.extend(file.kept);
+            collection.take(&rule, file);
         }
         Ok(collection)
     }
@@ -259,13 +269,10 @@ impl Collection {
 
     /// A rule's file: its patterns in the order they were kept. None for a rule with none.
     pub fn text_of(&self, rule: &BlockRule) -> Option<String> {
-        let kept: Vec<&Kept> = self.kept.iter().filter(|kept| kept.rule == *rule).collect();
-        if kept.is_empty() {
-            return None;
-        }
+        let shelf = self.rules.get(rule)?;
         let mut text = heading(rule);
         let line = |text: &str| text.split(['\t', '\n', '\r']).collect::<Vec<_>>().join(" ").trim().to_string();
-        for kept in kept {
+        for kept in &shelf.kept {
             let moves = match kept.moves {
                 (0, 0) => String::new(),
                 (dx, dy) => format!("{dx},{dy}"),
@@ -281,41 +288,77 @@ impl Collection {
         Some(text)
     }
 
-    pub fn all(&self) -> &[Kept] {
-        &self.kept
+    /// Every pattern kept: rule by rule, in the order of their tables, and each rule's in the
+    /// order they were kept.
+    pub fn all(&self) -> Vec<&Kept> {
+        let mut rules: Vec<&BlockRule> = self.rules.keys().collect();
+        rules.sort_unstable_by(|a, b| a.table().cmp(b.table()));
+        rules.into_iter().flat_map(|rule| self.under(rule)).collect()
+    }
+
+    /// The patterns kept under a rule, in the order they were kept.
+    pub fn under(&self, rule: &BlockRule) -> &[Kept] {
+        self.rules.get(rule).map_or(&[], |shelf| &shelf.kept)
     }
 
     /// The patterns of one sort kept under a rule, in the order they were kept.
-    pub fn of<'a>(&'a self, rule: &'a BlockRule, sort: Sort) -> impl Iterator<Item = &'a Kept> {
-        self.kept.iter().filter(move |kept| kept.sort == sort && kept.rule == *rule)
+    pub fn of<'a>(&'a self, rule: &BlockRule, sort: Sort) -> impl Iterator<Item = &'a Kept> + use<'a> {
+        self.under(rule).iter().filter(move |kept| kept.sort == sort)
     }
 
-    /// Where a pattern of a rule is, if it was kept. The cells are those of the form its
-    /// kind is filed under.
+    /// Whether a pattern of a rule is kept. The cells are those of the form its kind is filed
+    /// under.
+    pub fn is_kept(&self, rule: &BlockRule, cells: &[Cell]) -> bool {
+        self.rules.get(rule).is_some_and(|shelf| shelf.cells.contains(&settled(cells)))
+    }
+
+    /// Where among the rule's patterns a pattern is, if it was kept.
     pub fn find(&self, rule: &BlockRule, cells: &[Cell]) -> Option<usize> {
+        let shelf = self.rules.get(rule)?;
         let cells = settled(cells);
-        self.kept.iter().position(|kept| kept.rule == *rule && kept.cells == cells)
+        if !shelf.cells.contains(&cells) {
+            return None;
+        }
+        shelf.kept.iter().position(|kept| kept.cells == cells)
     }
 
     /// Keeps a pattern. One that is kept already is not kept twice: then the place it has
     /// comes back as the error.
     pub fn keep(&mut self, kept: Kept) -> Result<usize, usize> {
-        if let Some(known) = self.find(&kept.rule, &kept.cells) {
+        let cells = settled(&kept.cells);
+        if let Some(known) = self.find(&kept.rule, &cells) {
             return Err(known);
         }
         self.changed.insert(kept.rule.clone());
-        self.kept.push(Kept { cells: settled(&kept.cells), ..kept });
-        Ok(self.kept.len() - 1)
+        let shelf = self.rules.entry(kept.rule.clone()).or_default();
+        shelf.cells.insert(cells.clone());
+        shelf.kept.push(Kept { cells, ..kept });
+        Ok(shelf.kept.len() - 1)
     }
 
     /// Lets go of a pattern of a rule. True if it was kept.
     pub fn forget(&mut self, rule: &BlockRule, cells: &[Cell]) -> bool {
-        let found = self.find(rule, cells);
-        if let Some(index) = found {
-            self.kept.remove(index);
-            self.changed.insert(rule.clone());
+        let Some(index) = self.find(rule, cells) else {
+            return false;
+        };
+        let shelf = self.rules.get_mut(rule).expect("the pattern was found under the rule");
+        let gone = shelf.kept.remove(index);
+        shelf.cells.remove(&gone.cells);
+        if shelf.kept.is_empty() {
+            self.rules.remove(rule);
         }
-        found.is_some()
+        self.changed.insert(rule.clone());
+        true
+    }
+
+    /// Takes a rule's patterns from another collection, in place of what was held of the
+    /// rule: what its file says, read again. Nothing of the rule is left to write.
+    pub fn take(&mut self, rule: &BlockRule, mut from: Collection) {
+        match from.rules.remove(rule) {
+            Some(shelf) => self.rules.insert(rule.clone(), shelf),
+            None => self.rules.remove(rule),
+        };
+        self.changed.remove(rule);
     }
 }
 
@@ -350,16 +393,27 @@ mod tests {
         assert_eq!(collection.find(&rotation, &moved), Some(0));
         let shifted: Vec<Cell> = ship.cells.iter().map(|&(x, y)| (x + 1, y)).collect();
         assert_eq!((collection.find(&rotation, &shifted), collection.find(&critters, &ship.cells)), (None, None));
-        assert_eq!(collection.keep(Kept::new(&critters, Sort::Oscillator, &ship.cells, 4, (0, 0))), Ok(1));
-        assert_eq!(collection.keep(Kept::new(&rotation, Sort::StillLife, &cells("2o$2o"), 1, (0, 0))), Ok(2));
+        // Each rule's are in a place of their own.
+        assert_eq!(collection.keep(Kept::new(&critters, Sort::Oscillator, &ship.cells, 4, (0, 0))), Ok(0));
+        assert_eq!(collection.keep(Kept::new(&rotation, Sort::StillLife, &cells("2o$2o"), 1, (0, 0))), Ok(1));
         // Each rule has its own, sort by sort.
         let of = |collection: &Collection, rule: &BlockRule, sort| collection.of(rule, sort).count();
         assert_eq!(of(&collection, &rotation, Sort::Spaceship), 1);
         assert_eq!((of(&collection, &rotation, Sort::StillLife), of(&collection, &rotation, Sort::Oscillator)), (1, 0));
         assert_eq!((of(&collection, &critters, Sort::Oscillator), of(&collection, &critters, Sort::Spaceship)), (1, 0));
         // What was kept can be let go of.
+        assert!(collection.is_kept(&rotation, &moved) && !collection.is_kept(&rotation, &shifted));
         assert!(collection.forget(&rotation, &moved) && !collection.forget(&rotation, &moved));
         assert_eq!((collection.all().len(), of(&collection, &rotation, Sort::Spaceship)), (2, 0));
+        assert!(!collection.is_kept(&rotation, &moved));
+        // A rule's patterns taken from another collection are in place of what was held.
+        let mut other = Collection::default();
+        other.keep(Kept::new(&rotation, Sort::Oscillator, &cells("o"), 4, (0, 0))).unwrap();
+        collection.take(&rotation, other);
+        assert_eq!(collection.under(&rotation).len(), 1);
+        assert_eq!(of(&collection, &critters, Sort::Oscillator), 1);
+        collection.take(&critters, Collection::default());
+        assert_eq!((collection.all().len(), collection.under(&critters).len()), (1, 0));
     }
 
     #[test]
@@ -425,7 +479,10 @@ mod tests {
         assert_eq!(wrong("spaceship\to\t4\tup"), "line 2: \"up\" is no way to move");
         assert_eq!(wrong("spaceship\t\t4"), "line 2: a pattern has cells");
         assert!(wrong("spaceship\t2x\t4").starts_with("line 2: "));
-        // The sorts by what a pattern does.
+        // The sorts by what a pattern does, and by name, one or several.
+        assert_eq!("still-lifes".parse::<Sort>(), Ok(Sort::StillLife));
+        assert_eq!("Spaceships".parse::<Sort>(), Ok(Sort::Spaceship));
+        assert!("ships".parse::<Sort>().is_err());
         assert_eq!(Sort::of((0, 0), true), Sort::StillLife);
         assert_eq!(Sort::of((0, 0), false), Sort::Oscillator);
         assert_eq!(Sort::of((2, 0), false), Sort::Spaceship);

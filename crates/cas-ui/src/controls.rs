@@ -534,16 +534,27 @@ pub enum Scrolls {
     Cards,
 }
 
+impl Scrolls {
+    /// How far apart the things in it are.
+    pub const fn gap(self) -> f32 {
+        match self {
+            Scrolls::Rows => 4.0,
+            Scrolls::Body => 12.0,
+            Scrolls::Cards => GUTTER,
+        }
+    }
+}
+
 /// A node that scrolls when what is in it is higher than the room it has, and its scrollbar,
 /// which is there only then. `area` is put on the node that scrolls: the name it goes by, a
 /// mark to find it by, what is in it.
 pub fn scrolling(what: Scrolls, area: impl Scene) -> impl Scene {
-    // The room kept beside what scrolls, the gap between the things in it, and how far out
-    // and how wide the scrollbar is.
-    let (room, gap, right, width) = match what {
-        Scrolls::Rows => (10.0, 4.0, 0.0, 6.0),
-        Scrolls::Body => (0.0, 12.0, -10.0, 6.0),
-        Scrolls::Cards => (0.0, GUTTER, -6.0, 4.0),
+    // The room kept beside what scrolls, and how far out and how wide the scrollbar is.
+    let gap = what.gap();
+    let (room, right, width) = match what {
+        Scrolls::Rows => (10.0, 0.0, 6.0),
+        Scrolls::Body => (0.0, -10.0, 6.0),
+        Scrolls::Cards => (0.0, -6.0, 4.0),
     };
     bsn! {
         // The frame holds the scrollbar; what is in the other node scrolls.
